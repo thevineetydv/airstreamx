@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /upload
+Disallow: /api/
+Disallow: /?
+Disallow: /*?
+Disallow: /*#
+
+User-agent: Googlebot
+Crawl-delay: 1
+Request-rate: 30/1m
+
+User-agent: Bingbot
+Crawl-delay: 2
+Request-rate: 15/1m
+
+Sitemap: https://airstreamx.com/sitemap.xml
+Sitemap: https://airstreamx.com/video-sitemap.xml
+Sitemap: https://airstreamx.com/creator-sitemap.xml
+Sitemap: https://airstreamx.com/category-sitemap.xml

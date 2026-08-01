@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Env files — never commit real secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Vercel
+.vercel/
+
+# Editor/OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+vite-dev.err
+vite-dev.out
+npm-debug.log*
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Misc temp/stray files
+status
+status.txt
+status.tmp
+modified_files
+modified_files.txt
+
+# Test screenshots from responsive testing — regenerate on demand,
+# don't need to live in version control
+responsive-test-screenshots/

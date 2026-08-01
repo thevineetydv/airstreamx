@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" width="280" height="56">
+  <defs>
+    <linearGradient id="triGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f87171" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Badge background -->
+  <rect x="0" y="0" width="56" height="56" rx="13" fill="#050a10" />
+  <rect x="0" y="0" width="56" height="56" rx="13" fill="none" stroke="#ef4444" stroke-width="1.5"
+    opacity="0.65" />
+
+  <!-- Play triangle -->
+  <polygon points="10,12 40,28 10,44" fill="url(#triGrad)" filter="url(#glow)" />
+
+  <!-- Stream bar -->
+  <rect x="44" y="12" width="6" height="32" rx="3" fill="#ef4444" opacity="0.9" />
+
+  <!-- Wordmark: Air (white) Stream (cyan) X (italic cyan) -->
+  <!-- "Air" -->
+  <text
+    x="72" y="37"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="28"
+    font-weight="900"
+    letter-spacing="-0.03em"
+    fill="#ffffff">Air</text>
+
+  <!-- "Stream" -->
+  <text
+    x="113" y="37"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="28"
+    font-weight="900"
+    letter-spacing="-0.03em"
+    fill="#ef4444">Stream</text>
+
+  <!-- "X" italic -->
+  <text
+    x="244" y="37"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="28"
+    font-weight="900"
+    font-style="italic"
+    letter-spacing="-0.03em"
+    fill="#ef4444"
+    filter="url(#glow)">X</text>
+</svg>

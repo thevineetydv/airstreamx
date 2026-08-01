@@ -1,0 +1,251 @@
+/* ===========================
+   TAILWIND CSS
+   =========================== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================
+   CLS PREVENTION — ASPECT RATIO LOCKS
+   =========================== */
+
+/* ✅ Video thumbnails (16:9 aspect ratio) */
+.video-thumbnail {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  overflow: hidden;
+}
+
+/* ✅ Short video thumbnails (9:16 aspect ratio) */
+.short-thumbnail {
+  aspect-ratio: 9 / 16;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  overflow: hidden;
+}
+
+/* ✅ Avatar circles (1:1 aspect ratio) */
+.avatar-image {
+  aspect-ratio: 1;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* ✅ Video player container (16:9 aspect ratio) */
+.video-player-container {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: auto;
+  position: relative;
+  overflow: hidden;
+  background-color: #000;
+}
+
+/* ✅ Video player iframe/video element */
+.video-player-container video,
+.video-player-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ✅ Skeleton cards match content dimensions */
+.skeleton-card {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  background: linear-gradient(to right, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+  background-size: 200% 100%;
+}
+
+/* ===========================
+   CUSTOM STYLES (Red Theme)
+   =========================== */
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  /* ✅ CLS Prevention: Use font-display swap to show fallback while loading */
+  font-display: swap;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #000; /* default fallback */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Typography */
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* ── Global button reset ──────────────────────────────────────────────────
+   IMPORTANT: Do NOT set background-color or border here.
+   These get applied to EVERY <button> in the app and override Tailwind
+   classes, inline styles, and component-level styling — causing buttons
+   like the notification bell, subscribe button etc. to render with a
+   dark #1a1a1a background regardless of what the component specifies.
+
+   Only set safe typographic/cursor/transition defaults here.
+   All visual styling (colors, borders, padding) belongs in components.
+──────────────────────────────────────────────────────────────────────── */
+button {
+  border-radius: 8px;
+  border: none;                /* was: 1px solid transparent — caused border flicker */
+  padding: 0;                  /* was: 0.6em 1.2em — overrode compact icon buttons */
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background: none;            /* was: #1a1a1a — this was the bug hiding the bell */
+  cursor: pointer;
+  transition: border-color 0.25s, background 0.3s ease;
+}
+button:hover {
+  border-color: transparent;   /* was: #646cff — don't force purple on hover */
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* ===== THEME SYSTEM ===== */
+
+/* Dark theme */
+.theme-dark {
+  background-color: #000;
+  color: #fff;
+}
+
+/* Neon theme */
+.theme-neon {
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  color: #e0f7ff;
+}
+
+/* Smooth transition for all themes */
+.theme-dark,
+.theme-neon {
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+/* Neon UI accents */
+.theme-neon header,
+.theme-neon aside,
+.theme-neon .card,
+.theme-neon section {
+  background-color: rgba(20, 20, 40, 0.9);
+  border: 1px solid rgba(0, 242, 255, 0.2);
+}
+
+/* Neon text glow utility */
+.neon-glow {
+  text-shadow: 0 0 5px #00f2ff,
+               0 0 10px #00f2ff,
+               0 0 20px #00f2ff,
+               0 0 40px #00f2ff;
+}
+
+/* ===== SCROLLBAR ===== */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.custom-scrollbar:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+}
+
+/* 🔥 Subtle glowing animation for video hover preview */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 0, 70, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 0, 70, 0.6);
+  }
+}
+
+.glow-preview {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+.upload-modal {
+  animation: fadeIn 0.25s ease-in-out;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================= */
+/* YouTube-style Center Control */
+/* ============================= */
+
+.yt-center-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.yt-center-btn:hover {
+  transform: scale(1.12);
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.yt-center-btn svg {
+  margin-left: 4px; /* play icon centering like YouTube */
+}
