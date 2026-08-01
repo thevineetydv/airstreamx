@@ -748,7 +748,7 @@ useEffect(() => {
               <div
                 className={`relative w-full bg-black shadow-2xl overflow-hidden ${isTheater ? "rounded-none sm:rounded-3xl" : "rounded-xl sm:rounded-2xl"
                   }`}
-                style={{ zIndex: 1 }}
+                style={{ zIndex: 20, isolation: "isolate" }}
               >
                 <VideoPlayer
                   ref={playerRef}

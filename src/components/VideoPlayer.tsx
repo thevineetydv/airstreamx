@@ -626,14 +626,16 @@ const Controls: React.FC<any> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute bottom-full right-0 mb-2 shadow-2xl z-[100]"
+                  className="absolute bottom-full right-0 mb-2 shadow-2xl z-[9999]"
                   style={{
-                    width: 280,
-                    background: "rgba(28,28,28,0.97)",
+                    width: 240,
+                    maxHeight: "min(50vh, 300px)",
+                    background: "rgba(28,28,28,0.98)",
                     backdropFilter: "blur(20px)",
                     borderRadius: 12,
                     border: "1px solid rgba(255,255,255,0.1)",
-                    overflow: "hidden",
+                    overflowY: "auto",
+                    overflowX: "hidden",
                   }}
                   onClick={e => e.stopPropagation()}
                 >
@@ -650,15 +652,15 @@ const Controls: React.FC<any> = ({
                         { icon: "🖥", label: "Theater mode", value: isTheaterMode, toggle: () => onToggleTheater() },
                       ].map(row => (
                         <button key={row.label} onClick={row.toggle}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">
-                          <span className="text-base w-5 flex-shrink-0 text-center">{row.icon}</span>
-                          <span className="flex-1 text-sm text-white/85 font-medium">{row.label}</span>
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors text-left">
+                          <span className="text-sm w-4 flex-shrink-0 text-center">{row.icon}</span>
+                          <span className="flex-1 text-xs text-white/85 font-medium">{row.label}</span>
                           <div className="relative flex-shrink-0 transition-all duration-300"
-                            style={{ width: 44, height: 24, borderRadius: 999, background: row.value ? "#ef4444" : "rgba(255,255,255,0.2)" }}>
-                            <div className="absolute top-1 transition-all duration-300"
+                            style={{ width: 36, height: 20, borderRadius: 999, background: row.value ? "#ef4444" : "rgba(255,255,255,0.2)" }}>
+                            <div className="absolute top-0.5 transition-all duration-300"
                               style={{
-                                width: 16, height: 16, borderRadius: "50%", background: "#fff",
-                                boxShadow: "0 1px 4px rgba(0,0,0,0.3)", left: row.value ? 24 : 4
+                                width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                                boxShadow: "0 1px 4px rgba(0,0,0,0.3)", left: row.value ? 19 : 3
                               }} />
                           </div>
                         </button>
@@ -668,20 +670,20 @@ const Controls: React.FC<any> = ({
 
                       {/* Speed → sub-panel */}
                       <button onClick={() => setSettingsView("speed")}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                        <span className="text-base w-5 flex-shrink-0 text-center">⚡</span>
-                        <span className="flex-1 text-sm text-white/85 font-medium">Playback speed</span>
-                        <span className="text-sm text-white/40 mr-1">{playbackRate === 1 ? "Normal" : `${playbackRate}×`}</span>
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                        <span className="text-sm w-4 flex-shrink-0 text-center">⚡</span>
+                        <span className="flex-1 text-xs text-white/85 font-medium">Playback speed</span>
+                        <span className="text-xs text-white/40 mr-1">{playbackRate === 1 ? "Normal" : `${playbackRate}×`}</span>
                         <span className="text-white/40 text-xs">›</span>
                       </button>
 
                       {/* Quality → sub-panel */}
                       {levels.length > 0 && (
                         <button onClick={() => setSettingsView("quality")}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                          <span className="text-base w-5 flex-shrink-0 text-center">🎬</span>
-                          <span className="flex-1 text-sm text-white/85 font-medium">Quality</span>
-                          <span className="text-sm text-white/40 mr-1">
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                          <span className="text-sm w-4 flex-shrink-0 text-center">🎬</span>
+                          <span className="flex-1 text-xs text-white/85 font-medium">Quality</span>
+                          <span className="text-xs text-white/40 mr-1">
                             {currentLevel === -1 ? "Auto" : `${levels[currentLevel]?.height}p`}
                           </span>
                           <span className="text-white/40 text-xs">›</span>
@@ -690,16 +692,16 @@ const Controls: React.FC<any> = ({
 
                       {isPiPSupported && (
                         <button onClick={() => { onTogglePiP(); setShowQuality(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                          <span className="text-base w-5 flex-shrink-0 text-center">⧉</span>
-                          <span className="flex-1 text-sm text-white/85 font-medium">Picture in picture</span>
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                          <span className="text-sm w-4 flex-shrink-0 text-center">⧉</span>
+                          <span className="flex-1 text-xs text-white/85 font-medium">Picture in picture</span>
                         </button>
                       )}
 
                       <button onClick={() => { onShowHelp(); setShowQuality(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 pb-4 hover:bg-white/5 transition-colors">
-                        <span className="text-base w-5 flex-shrink-0 text-center">⌨️</span>
-                        <span className="flex-1 text-sm text-white/85 font-medium">Keyboard shortcuts</span>
+                        className="w-full flex items-center gap-2.5 px-3 py-2 pb-3 hover:bg-white/5 transition-colors">
+                        <span className="text-sm w-4 flex-shrink-0 text-center">⌨️</span>
+                        <span className="flex-1 text-xs text-white/85 font-medium">Keyboard shortcuts</span>
                       </button>
                     </div>
                   )}
@@ -708,17 +710,17 @@ const Controls: React.FC<any> = ({
                   {settingsView === "speed" && (
                     <div>
                       <button onClick={() => setSettingsView("main")}
-                        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors"
                         style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                        <span className="text-white/50 text-sm">‹</span>
-                        <span className="text-sm text-white/85 font-semibold">Playback speed</span>
+                        <span className="text-white/50 text-xs">‹</span>
+                        <span className="text-xs text-white/85 font-semibold">Playback speed</span>
                       </button>
                       {PLAYBACK_SPEEDS.map(sp => (
                         <button key={sp} onClick={() => { onSetRate(sp); setSettingsView("main"); }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                          <span className="w-5 flex-shrink-0 flex items-center justify-center text-red-400"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                          <span className="w-4 flex-shrink-0 flex items-center justify-center text-red-400"
                             style={{ visibility: playbackRate === sp ? "visible" : "hidden" }}>✓</span>
-                          <span className={`text-sm font-medium ${playbackRate === sp ? "text-red-400" : "text-white/85"}`}>
+                          <span className={`text-xs font-medium ${playbackRate === sp ? "text-red-400" : "text-white/85"}`}>
                             {sp === 1 ? "Normal" : `${sp}×`}
                           </span>
                         </button>
@@ -730,23 +732,23 @@ const Controls: React.FC<any> = ({
                   {settingsView === "quality" && (
                     <div>
                       <button onClick={() => setSettingsView("main")}
-                        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors"
                         style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                        <span className="text-white/50 text-sm">‹</span>
-                        <span className="text-sm text-white/85 font-semibold">Quality</span>
+                        <span className="text-white/50 text-xs">‹</span>
+                        <span className="text-xs text-white/85 font-semibold">Quality</span>
                       </button>
                       <button onClick={() => { onSetLevel(-1); setSettingsView("main"); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                        <span className="w-5 flex-shrink-0 flex items-center justify-center text-red-400"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                        <span className="w-4 flex-shrink-0 flex items-center justify-center text-red-400"
                           style={{ visibility: currentLevel === -1 ? "visible" : "hidden" }}>✓</span>
-                        <span className={`text-sm font-medium ${currentLevel === -1 ? "text-red-400" : "text-white/85"}`}>Auto</span>
+                        <span className={`text-xs font-medium ${currentLevel === -1 ? "text-red-400" : "text-white/85"}`}>Auto</span>
                       </button>
                       {levels.map((l: any, i: number) => (
                         <button key={i} onClick={() => { onSetLevel(i); setSettingsView("main"); }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-                          <span className="w-5 flex-shrink-0 flex items-center justify-center text-red-400"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors">
+                          <span className="w-4 flex-shrink-0 flex items-center justify-center text-red-400"
                             style={{ visibility: currentLevel === i ? "visible" : "hidden" }}>✓</span>
-                          <span className={`text-sm font-medium ${currentLevel === i ? "text-red-400" : "text-white/85"}`}>
+                          <span className={`text-xs font-medium ${currentLevel === i ? "text-red-400" : "text-white/85"}`}>
                             {l.height}p
                           </span>
                         </button>
