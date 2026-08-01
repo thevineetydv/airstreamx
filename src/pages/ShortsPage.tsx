@@ -445,41 +445,12 @@ function SideActions({
 
   return (
     <>
-      {/* TikTok-style right column: avatar+sub → like → comment → save → share → more */}
-      <div className="flex flex-col items-center gap-4">
-
-        {/* Avatar — links to channel. Subscribe is handled by the compact
-            pill below, scaled down to fit the TikTok side-rail width.    */}
-        <div className="flex flex-col items-center gap-1.5 mb-1">
-          <Link
-            to={`/@${short.handle || short.uploader_email?.split("@")[0] || "creator"}`}
-            onClick={e => e.stopPropagation()}
-          >
-            <div
-              className={`w-11 h-11 rounded-full bg-gradient-to-br ${getAvatarColor(short.uploader_email)} flex items-center justify-center text-sm font-bold text-white`}
-              style={{ border: "2px solid rgba(255,255,255,0.7)" }}
-            >
-              {getDisplayName(short)[0]}
-            </div>
-          </Link>
-
-          {/* Compact SubscriptionButton — using CSS `zoom` instead of
-              `transform: scale()`. transform only scales the paint, not the
-              layout box, so a declared height like 28px will clip the real
-              (larger) button underneath it. `zoom` actually shrinks the
-              layout box itself, so it sizes correctly and can never get
-              clipped by an ancestor's overflow, no matter how tall the
-              real button + subscriber-count badge turns out to be. */}
-          <div
-            style={{ zoom: 0.62 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <SubscriptionButton
-              channelId={short.uploader_email}
-              channelName={getDisplayName(short)}
-            />
-          </div>
-        </div>
+      {/* TikTok-style right column: like → comment → save → share → more.
+          Avatar + Subscribe moved to a horizontal row at bottom-left
+          (near the caption), matching YouTube Shorts' actual layout —
+          the creator identity/subscribe action lives with the caption,
+          not stacked at the top of the action rail. */}
+      <div className={`flex flex-col items-center ${isMobile ? "gap-3" : "gap-4"}`}>
 
         {/* Like */}
         <motion.button
@@ -896,11 +867,28 @@ function ShortPlayer({
         </button>
       </div>
 
-      {/* ── Mobile: Side actions overlaid on video (TikTok style) ── */}
+      {/* ── Mobile: Side actions overlaid on video (TikTok style) ──
+          Vertically CENTERED (top:50% + translateY), not bottom-anchored.
+          Bottom-anchoring made this column grow upward from the bottom —
+          on shorter viewports its total height (avatar+subscribe, like,
+          comment, save, share, more) pushed it high enough to collide
+          with the top-right mute button. Centering it guarantees no
+          collision regardless of screen height, and matches the
+          standard TikTok/Reels rail placement. maxHeight + overflow-y
+          is a safety net for unusually short screens. */}
       {isMobile && (
         <div
-          className="absolute pointer-events-auto"
-          style={{ zIndex: 20, right: 10, bottom: 80 }}
+          className="absolute pointer-events-auto flex flex-col justify-center"
+          style={{
+            zIndex: 20,
+            right: 10,
+            top: "50%",
+            transform: "translateY(-50%)",
+            maxHeight: "calc(100dvh - 140px)",
+            overflowY: "auto",
+            overflowX: "hidden",
+            scrollbarWidth: "none",
+          }}
           onClick={e => e.stopPropagation()}
         >
           <SideActions
@@ -923,35 +911,37 @@ function ShortPlayer({
         className="absolute left-3 z-10 pointer-events-none"
         style={{ bottom: isMobile ? 20 : 32, right: isMobile ? 80 : 16 }}
       >
-        {/* Creator info — desktop only (subscribe lives in the right-side SideActions rail) */}
-        {!isMobile && (
+        {/* Creator info + Subscribe — one horizontal row, avatar + name +
+            compact Subscribe button, sitting with the caption at
+            bottom-left. Matches YouTube Shorts' actual layout instead of
+            stacking Subscribe at the top of the side rail. */}
+        <div className="flex items-center gap-2 mb-2 pointer-events-auto w-fit">
           <Link
             to={`/@${short.handle || short.uploader_email?.split("@")[0] || "creator"}`}
-            className="flex items-center gap-2 mb-2 pointer-events-auto w-fit"
+            className="flex items-center gap-2 min-w-0"
             onClick={e => e.stopPropagation()}
           >
             <div
-              className={`w-7 h-7 rounded-full bg-gradient-to-br ${getAvatarColor(short.uploader_email)} flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0`}
+              className={`${isMobile ? "w-8 h-8 text-xs" : "w-7 h-7 text-[11px]"} rounded-full bg-gradient-to-br ${getAvatarColor(short.uploader_email)} flex items-center justify-center font-bold text-white flex-shrink-0`}
               style={{ border: "1.5px solid rgba(255,255,255,0.5)" }}
             >
               {getDisplayName(short)[0]}
             </div>
-            <span className="text-white text-xs font-semibold">
+            <span className={`text-white ${isMobile ? "text-sm" : "text-xs"} font-bold drop-shadow-md truncate max-w-[140px]`}>
               {getDisplayName(short)}
             </span>
           </Link>
-        )}
 
-        {/* Creator name on mobile */}
-        {isMobile && (
-          <Link to={`/@${short.handle || short.uploader_email?.split("@")[0] || "creator"}`}
-            className="flex items-center gap-1.5 mb-1.5 pointer-events-auto"
-            onClick={e => e.stopPropagation()}>
-            <span className="text-white text-sm font-bold drop-shadow-md">
-              {getDisplayName(short)}
-            </span>
-          </Link>
-        )}
+          {/* Compact SubscriptionButton — CSS `zoom` shrinks the real
+              layout box (unlike `transform: scale`, which only scales the
+              paint and would clip against a declared height). */}
+          <div style={{ zoom: 0.6 }} onClick={e => e.stopPropagation()} className="flex-shrink-0">
+            <SubscriptionButton
+              channelId={short.uploader_email}
+              channelName={getDisplayName(short)}
+            />
+          </div>
+        </div>
 
         {/* Title — expandable */}
         <button
