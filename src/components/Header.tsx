@@ -479,6 +479,32 @@ export default function Header({
 <SidebarItem icon={PlaySquare} label="Watch Later" onClick={() => { navigate("/watch-later"); setOpenSidebar(false); }} />
                 </nav>
 
+                {/* ── Compact footer links, YouTube-style ──
+                    Lives inside the drawer rather than at the bottom of
+                    the page — this is a scrolling-feed SPA, so a normal
+                    page footer is barely ever seen. The drawer is
+                    always one tap away, so links here actually get found. */}
+                <div className="px-4 pt-4 mt-2 border-t border-white/10">
+                  <nav className="flex flex-wrap gap-x-3 gap-y-2 mb-4">
+                    {[
+                      { label: "About", to: "/about" },
+                      { label: "How it works", to: "/how-it-works" },
+                      { label: "FAQ", to: "/faq" },
+                    ].map((link) => (
+                      <button
+                        key={link.to}
+                        onClick={() => { navigate(link.to); setOpenSidebar(false); }}
+                        className="text-xs text-gray-400 hover:text-white transition-colors"
+                      >
+                        {link.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <p className="text-[11px] text-gray-600 pb-2">
+                    © {new Date().getFullYear()} AirStreamX
+                  </p>
+                </div>
+
               </div>
             </motion.div>
           </>

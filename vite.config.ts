@@ -77,14 +77,6 @@ terserOptions: {
         target: process.env.VITE_API_BASE || 'http://localhost:5000',
         changeOrigin: true,
       },
-      '/upload': {
-        target: process.env.VITE_API_BASE || 'http://localhost:5000',
-        changeOrigin: true,
-      },
-      '/live': {
-        target: process.env.VITE_API_BASE || 'http://localhost:5000',
-        changeOrigin: true,
-      },
       '/hls': {
         target: process.env.VITE_API_BASE || 'http://localhost:5000',
         changeOrigin: true,

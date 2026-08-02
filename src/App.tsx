@@ -24,6 +24,8 @@ import ShortsPage from "./pages/ShortsPage";
 
 // ─── Lazy load non-critical pages ─────────────────────────────────────────────
 const Dashboard        = lazy(() => import("./pages/Dashboard"));
+const AboutPage        = lazy(() => import("./pages/AboutPage"));
+const HowItWorksPage    = lazy(() => import("./pages/HowItWorksPage"));
 const ChannelPage      = lazy(() => import("./pages/ChannelPage"));
 const MissionConsole   = lazy(() => import("./pages/MissionConsole"));
 const SettingsPage     = lazy(() => import("./pages/Settings"));
@@ -36,7 +38,6 @@ const ClipGenerator    = lazy(() => import("./pages/ClipGenerator"));
 const Library          = lazy(() => import("./pages/Library"));
 const History          = lazy(() => import("./pages/History"));
 const Liked            = lazy(() => import("./pages/Liked"));
-const UploadPage       = lazy(() => import("./pages/UploadPage"));
 
 // ─── SEO / discovery pages ────────────────────────────────────────────────────
 // FIX #3: Removed duplicate `Trending` import — only TrendingPage is used
@@ -225,7 +226,6 @@ export default function App() {
                   <Route path="/history"     element={<History />} />
                   <Route path="/liked"       element={<Liked />} />
                   <Route path="/watch-later" element={<WatchLaterPage />} />
-                  <Route path="/upload"      element={<UploadPage />} />
 
                   {/* ─── LIVE ─────────────────────────────────────── */}
                   <Route path="/live"                    element={<LiveStreamsBrowser />} />
@@ -247,6 +247,12 @@ export default function App() {
                   <Route path="/category/:slug"      element={<CategoryPage />} />
                   <Route path="/faq"                 element={<FAQPage />} />
                   <Route path="/creators/:handle"    element={<CreatorDetailPage />} />
+
+                  {/* ─── ABOUT / HOW IT WORKS ─────────────────────── */}
+                  {/* Must also come BEFORE the /:handle wildcard below,
+                      same reason as every other named route on this list. */}
+                  <Route path="/about"         element={<AboutPage />} />
+                  <Route path="/how-it-works"  element={<HowItWorksPage onUploadClick={() => setShowUploadModal(true)} />} />
 
                   {/* ─── MISC ─────────────────────────────────────── */}
                   <Route path="/home-example" element={<HomeFeed searchQuery={q} />} />
