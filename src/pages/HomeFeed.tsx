@@ -6,6 +6,7 @@ import ShortsSection from "../components/ShortsSection";
 import { API_URL } from "../utils/constants";
 import { channelUrl } from "../utils/channelUrl";
 import { useCachedData } from "../utils/useCachedData";
+import { invalidateCache } from "../utils/metadataCache";
 
 /* ─────────────────────────────────────────────────────────────
  * CATEGORIES
@@ -695,7 +696,22 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     setHasMore(true);
   }, [cacheKey]);
 
-  const videos = [...baseVideos, ...moreVideos];
+  // Dedupe by ID before rendering — guards against the same video showing
+  // up twice if a later page's fetch overlaps with an earlier one (e.g.
+  // new uploads landing between page fetches shift offset-based
+  // pagination, or two videos share an identical sort-key timestamp).
+  // Keeps the FIRST occurrence's position so ordering stays stable.
+  const videos = (() => {
+    const seen = new Set<string>();
+    const combined: any[] = [];
+    for (const v of [...baseVideos, ...moreVideos]) {
+      const id = String(v.id ?? v.public_id ?? "");
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      combined.push(v);
+    }
+    return combined;
+  })();
 
   useEffect(() => {
     if (!loading && videos.length >= totalResults) setHasMore(false);
