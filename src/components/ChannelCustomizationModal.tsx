@@ -22,7 +22,7 @@ import {
   Link as LinkIcon, Mail, Pencil, Plus, Trash2,
   Copy, Info, Youtube, Save, Eye,
   Image as ImageIcon, Upload, RefreshCw, ExternalLink,
-  CheckCircle2, Loader2, Lock,
+  CheckCircle2, Loader2, Lock, Wallet,
 } from "lucide-react";
 import { registerHandle } from "../utils/channelUrl";
 import { API_URL } from "../utils/constants";
@@ -48,6 +48,7 @@ export interface ChannelCustomization {
   handle: string;
   description: string;
   contactEmail: string;
+  upiId?: string;
   links: ChannelLink[];
   avatarDataUrl?: string;
   avatarFileName?: string;
@@ -171,6 +172,20 @@ function validateChannelName(n: string): string | null {
 }
 
 /**
+ * validateUpiId — loose format check, same pattern as the database's
+ * CHECK constraint (name@bank). Doesn't verify the ID actually exists
+ * — only a test transaction or NPCI API can do that — just catches
+ * obviously-wrong input before it's saved. Empty is valid (optional field).
+ */
+function validateUpiId(id: string): string | null {
+  if (!id.trim()) return null;
+  if (!/^[\w.-]{2,}@[\w.-]{2,}$/.test(id.trim())) {
+    return "Doesn't look like a valid UPI ID (should be like yourname@bank).";
+  }
+  return null;
+}
+
+/**
  * isHandleTaken — checks via the backend API.
  * The localStorage scan has been removed; handle uniqueness is now
  * enforced server-side by the UNIQUE constraint on channel_customizations.handle.
@@ -282,6 +297,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   const [handle, setHandle] = useState("");
   const [description, setDescription] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [upiId, setUpiId] = useState("");
   const [links, setLinks] = useState<ChannelLink[]>([]);
   const [avatarDataUrl, setAvatarDataUrl] = useState("");
   const [avatarFileName, setAvatarFileName] = useState("");
@@ -293,6 +309,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   // Validation
   const [nameError, setNameError] = useState<string | null>(null);
   const [handleError, setHandleError] = useState<string | null>(null);
+  const [upiIdError, setUpiIdError] = useState<string | null>(null);
   const [handleAvail, setHandleAvail] = useState<boolean | null>(null);
   const [watermarkError, setWatermarkError] = useState<string | null>(null);
 
@@ -310,7 +327,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   useEffect(() => {
     if (!isOpen || !email) return;
     setSaved(false); setTab("basic"); setWatermarkError(null);
-    setNameError(null); setHandleError(null); setHandleAvail(null);
+    setNameError(null); setHandleError(null); setHandleAvail(null); setUpiIdError(null);
 
     const defaultHandle = email.split("@")[0].toLowerCase().replace(/[^a-z0-9_.]/g, "");
 
@@ -339,6 +356,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         setOriginalHandle(currentHandle);
         setDescription(s?.description ?? "");
         setContactEmail(s?.contactEmail ?? "");
+        setUpiId(s?.upiId ?? "");
         setLinks(s?.links ?? []);
         setAvatarDataUrl(s?.avatarDataUrl ?? "");
         setAvatarFileName(s?.avatarFileName ?? "");
@@ -463,11 +481,12 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     const nErr = validateChannelName(channelName);
     const handleChanged = handle.toLowerCase() !== originalHandle.toLowerCase();
     const hErr = handleChanged ? validateHandle(handle) : null;
+    const uErr = validateUpiId(upiId);
     const switchingBack = handleChanged && cooldown.heldHandles.some(
       h => h.handle.toLowerCase() === handle.trim().toLowerCase()
     );
-    setNameError(nErr); setHandleError(hErr);
-    if (nErr || hErr) return;
+    setNameError(nErr); setHandleError(hErr); setUpiIdError(uErr);
+    if (nErr || hErr || uErr) return;
     if (handleChanged && handleAvail === false) { setHandleError("This handle is already taken."); return; }
     if (handleChanged && cooldown.locked && !switchingBack) {
       setHandleError(`You've used both changes for this 10-day window. ${cooldown.daysUntilSlot} day${cooldown.daysUntilSlot !== 1 ? "s" : ""} until a slot reopens.`);
@@ -494,6 +513,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
       handle: handle.trim(),
       description: description.trim(),
       contactEmail: contactEmail.trim(),
+      upiId: upiId.trim() || undefined,
       links: links.filter(l => l.url.trim()),
       // avatarDataUrl / bannerDataUrl hold Cloudinary URLs (returned from
       // the /api/upload/image endpoint) — NOT raw base64 data URIs.
@@ -571,6 +591,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         handle: data.handle,
         description: data.description,
         contactEmail: data.contactEmail,
+        upiId: data.upiId || "",
         links: data.links,
       };
 
@@ -1029,6 +1050,37 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
                             <strong>{contactEmail}</strong> will be publicly visible on your channel's About page.
                           </p>
                         </motion.div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[12px] font-medium text-gray-300 block mb-1.5">
+                        UPI ID <span className="text-gray-600 font-normal">(so viewers can tip you directly)</span>
+                      </label>
+                      <div className="relative">
+                        <Wallet size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          value={upiId}
+                          onChange={e => { setUpiId(e.target.value); setUpiIdError(null); }}
+                          type="text" maxLength={100}
+                          placeholder="yourname@upi"
+                          className="w-full bg-white/[0.04] border border-white/10 focus:border-red-500/40 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition"
+                        />
+                      </div>
+                      <FieldError msg={upiIdError} />
+                      {upiId && !upiIdError && (
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                          className="flex items-start gap-2 mt-3 p-3 bg-emerald-500/8 border border-emerald-500/20 rounded-xl">
+                          <Eye size={13} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-[11px] text-emerald-300 leading-relaxed">
+                            Viewers will be able to tip you directly via this UPI ID from the "Support Creator" button on your videos.
+                          </p>
+                        </motion.div>
+                      )}
+                      {!upiId && (
+                        <p className="text-[11px] text-gray-500 mt-2">
+                          Leave blank if you don't want to accept tips yet — you can add this anytime.
+                        </p>
                       )}
                     </div>
 

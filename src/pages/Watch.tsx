@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import VideoPlayer from "../components/VideoPlayer";
 import { getAuth } from "firebase/auth";
+import { useAuth } from "../context/AuthContext";
+import { LoginRequiredModal } from "../components/LoginRequiredModal";
 import CreatorCard from "../components/CreatorCard";
 import { API_URL, LS } from "../utils/constants";
 import { cachedFetch } from "../utils/metadataCache";
@@ -170,6 +172,7 @@ interface Video {
   handle?: string;
   watermark_url?: string;
   banner_url?: string;
+  upi_id?: string;
 }
 
 interface Comment {
@@ -212,19 +215,35 @@ async function enrichVideoWithChannelData(video: Video): Promise<Video> {
  *    the parser to error at `import.meta.env` (line 869).
  * ───────────────────────────────────────────────────────────── */
 
-function TipButton() {
+function TipButton({ creatorUpiId, creatorName }: { creatorUpiId?: string; creatorName?: string }) {
   const [open, setOpen] = useState(false);
   const [desktopCopied, setDesktopCopied] = useState(false);
-  const upiId = (import.meta.env.VITE_UPI_ID as string | undefined) || "demomerchant@upi";
-  const qrData = `upi://pay?pa=${upiId}&pn=Creator&cu=INR&tn=Thanks!`;
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // upi:// links only do anything on a phone with a UPI app registered
-  // to handle that scheme — on desktop, clicking a quick-amount button
-  // previously just did nothing with zero feedback. This check lets us
-  // fall back to something that actually works on desktop.
+  // Tips require the viewer to be signed in (accountability + consistency
+  // with every other engagement action on this page). Using the app's
+  // shared AuthContext — same as Header.tsx — instead of calling Firebase
+  // directly: this is already reactive (updates correctly on login/logout
+  // without a page reload) and avoids duplicating that logic here.
+  const { user, login } = useAuth();
+  const isLoggedIn = Boolean(user);
+
+  // No fallback to a shared/demo UPI ID anymore — that was silently
+  // sending every tip on the platform to the same account regardless of
+  // which creator's video was being watched. If a creator hasn't set up
+  // their own UPI ID yet, we say so clearly instead of taking payment
+  // that would never reach them.
+  const hasUpi = Boolean(creatorUpiId?.trim());
+  const upiId = creatorUpiId?.trim() || "";
+  const payeeName = creatorName || "Creator";
+  const qrData = hasUpi
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&cu=INR&tn=Thanks!`
+    : "";
+
   const isMobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const pay = (amount: number) => {
+    if (!hasUpi || !isLoggedIn) return;
     if (!isMobile) {
       navigator.clipboard?.writeText(upiId);
       setDesktopCopied(true);
@@ -233,7 +252,7 @@ function TipButton() {
     }
     window.location.href =
       `upi://pay?pa=${encodeURIComponent(upiId)}` +
-      `&pn=${encodeURIComponent("Creator")}` +
+      `&pn=${encodeURIComponent(payeeName)}` +
       `&am=${amount}&cu=INR` +
       `&tn=${encodeURIComponent("Thanks!")}`;
   };
@@ -241,12 +260,23 @@ function TipButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!isLoggedIn) { setShowLoginModal(true); return; }
+          setOpen(true);
+        }}
         className="flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-red-500 to-red-600 rounded-full hover:opacity-90 transition text-xs sm:text-sm font-medium"
       >
         <span className="hidden sm:inline">💝 Tip</span>
         <span className="sm:hidden">💝</span>
       </button>
+
+      {showLoginModal && (
+        <LoginRequiredModal
+          message="Please sign in to tip creators — it keeps things accountable for both you and them."
+          onClose={() => setShowLoginModal(false)}
+          onLogin={() => { setShowLoginModal(false); login(); }}
+        />
+      )}
 
       <AnimatePresence>
         {open && (
@@ -269,34 +299,48 @@ function TipButton() {
                 <h3 className="text-base sm:text-lg font-semibold">Support Creator</h3>
                 <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
               </div>
-              <div className="flex justify-center mb-5">
-                <img
-                  alt="UPI QR"
-                  className="w-36 sm:w-44 h-36 sm:h-44 rounded-lg bg-white p-2"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrData)}`}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {[49, 99, 199].map((amt) => (
-                  <button
-                    key={amt}
-                    onClick={() => pay(amt)}
-                    className="px-2 sm:px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-xs sm:text-sm font-medium"
-                  >
-                    ₹{amt}
-                  </button>
-                ))}
-              </div>
-              {!isMobile && (
-                <p className="text-xs text-gray-400 -mt-2 mb-4">
-                  {desktopCopied
-                    ? "UPI ID copied — paste it in your UPI app 📋"
-                    : "On desktop? Scan the QR with your phone, or tap an amount to copy the UPI ID."}
-                </p>
+
+              {!hasUpi ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-gray-300 mb-1">
+                    {payeeName} hasn't set up tips yet.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Once they add a UPI ID in their channel settings, you'll be able to support them here.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-center mb-5">
+                    <img
+                      alt="UPI QR"
+                      className="w-36 sm:w-44 h-36 sm:h-44 rounded-lg bg-white p-2"
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrData)}`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {[49, 99, 199].map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => pay(amt)}
+                        className="px-2 sm:px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-xs sm:text-sm font-medium"
+                      >
+                        ₹{amt}
+                      </button>
+                    ))}
+                  </div>
+                  {!isMobile && (
+                    <p className="text-xs text-gray-400 -mt-2 mb-4">
+                      {desktopCopied
+                        ? "UPI ID copied — paste it in your UPI app 📋"
+                        : "On desktop? Scan the QR with your phone, or tap an amount to copy the UPI ID."}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400">
+                    UPI ID: <span className="text-gray-200 break-all">{upiId}</span>
+                  </p>
+                </>
               )}
-              <p className="text-xs text-gray-400">
-                UPI ID: <span className="text-gray-200 break-all">{upiId}</span>
-              </p>
             </motion.div>
           </motion.div>
         )}
@@ -829,7 +873,7 @@ useEffect(() => {
                     </AnimatePresence>
                   </div>
 
-                  <TipButton />
+                  <TipButton creatorUpiId={current.upi_id} creatorName={current.channel_name} />
 
                   <div className="relative ml-auto" ref={moreMenuRef}>
                     <button

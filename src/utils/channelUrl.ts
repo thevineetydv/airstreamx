@@ -68,6 +68,9 @@ export interface ChannelCustomization {
   avatar_url?: string;
   banner_url?: string;
   watermark_url?: string;
+  // The creator's own UPI ID, so tips/support payments go to THEM
+  // specifically — not a shared platform-wide fallback address.
+  upi_id?: string;
   links?: {
     id: string;
     label: string;
@@ -110,4 +113,17 @@ export function getChannelWatermark(
 ): string {
   if (!channel) return "";
   return channel.watermark_url || "";
+}
+
+/**
+ * getChannelUpiId — the creator's own UPI ID, if they've set one.
+ * Returns "" (not a fallback ID) when missing, so callers can decide
+ * what to do — e.g. TipButton should hide/disable itself rather than
+ * silently sending money to the wrong place.
+ */
+export function getChannelUpiId(
+  channel: ChannelCustomization | null | undefined
+): string {
+  if (!channel) return "";
+  return channel.upi_id || "";
 }
