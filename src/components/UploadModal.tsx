@@ -26,12 +26,14 @@ import {
   Play,
   Pause,
   RotateCcw,
-  Trash2
+  Trash2,
+  ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth } from "firebase/auth";
 import { API_URL } from "../utils/constants";
 import { useNotifications } from "../context/NotificationContext";
+import { useUpload } from "../context/UploadContext";
 import { Link } from 'react-router-dom';
 
 /**
@@ -56,6 +58,18 @@ interface VideoMetadata {
 
 export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const { addNotification, startVideoReadyPolling } = useNotifications();
+
+  // Upload progress + xhr now live in UploadContext, not local state —
+  // this is what makes "minimize and keep browsing while it uploads"
+  // possible. Everything else here (wizard step, title, tags, thumbnail
+  // choice, etc.) stays local since none of it needs to survive the
+  // modal closing — by the time an upload starts, those choices are
+  // already locked in and sent to the server.
+  const {
+    uploading, progress, uploadSpeed, timeRemaining, processingStage,
+    xhrRef, beginUpload, updateProgress, finishUpload, cancelUpload,
+  } = useUpload();
+
   const [step, setStep] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -80,16 +94,11 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [generatingAI, setGeneratingAI] = useState(false);
 
-  // Status States
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [uploadSpeed, setUploadSpeed] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  // Status States — NOT uploading/progress/uploadSpeed/timeRemaining/
+  // processingStage anymore; those come from context above.
   const [error, setError] = useState("");
   const [videoPreview, setVideoPreview] = useState("");
-  const [processingStage, setProcessingStage] = useState("");
 
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -326,11 +335,16 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   };
 
   const handleClose = () => {
+    // Visibility (this modal showing) and uploading (the xhr in
+    // UploadContext) are fully decoupled now — closing this view never
+    // touches the xhr. If an upload is in progress, it keeps running in
+    // the background and UploadProgressWidget picks up showing it.
     if (uploading) {
-      if (!confirm("Upload in progress. Are you sure you want to cancel?")) {
-        return;
-      }
-      xhrRef.current?.abort();
+      addNotification({
+        type: "info",
+        title: "Upload minimized",
+        message: "Your video keeps uploading in the background — check the progress card in the bottom-right corner, or click it to reopen this window.",
+      });
     }
     onClose();
   };
@@ -367,11 +381,22 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // If this modal mounts while an upload is already in flight (e.g. the
+  // user reopened it via the floating widget after minimizing), jump
+  // straight to the progress view instead of defaulting back to step 1 —
+  // `step` is local state and always starts at 1 on a fresh mount, but
+  // `uploading` (from context) correctly reflects that we're mid-upload.
+  useEffect(() => {
+    if (uploading) setStep(2);
+  }, []);
+
+  const [preparing, setPreparing] = useState(false);
+
   const startUpload = async () => {
     if (!file) return setError("Please select a video file.");
     if (!title.trim()) return setError("Please add a title for your video.");
 
-    setUploading(true);
+    setPreparing(true);
     setError("");
     uploadStartTime.current = Date.now();
     lastLoaded.current = 0;
@@ -382,7 +407,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
       if (!user) {
         setError("Please login first to upload.");
-        setUploading(false);
+        setPreparing(false);
         return;
       }
 
@@ -495,7 +520,8 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       formData.append("category", category);
 
       const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
+      beginUpload(xhr, title.trim() || file.name);
+      setPreparing(false);
 
       const uploadEndpoint = `${import.meta.env.VITE_DIRECT_UPLOAD_URL || API_URL}/upload`;
 	  xhr.open("POST", uploadEndpoint, true);
@@ -507,36 +533,34 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
           const currentProgress = Math.round((e.loaded / e.total) * 100);
-          setProgress(currentProgress);
 
           // Calculate upload speed
           const now = Date.now();
           const timeDiff = (now - lastTime) / 1000; // seconds
           const bytesDiff = e.loaded - lastLoadedBytes;
 
+          let speed = uploadSpeed;
+          let remaining = timeRemaining;
+
           if (timeDiff > 0.5) { // Update every 500ms
-            const speed = bytesDiff / timeDiff; // bytes per second
-            setUploadSpeed(speed);
+            speed = bytesDiff / timeDiff; // bytes per second
 
             // Calculate time remaining
             const bytesRemaining = e.total - e.loaded;
-            const secondsRemaining = bytesRemaining / speed;
-            setTimeRemaining(Math.round(secondsRemaining));
+            remaining = Math.round(bytesRemaining / speed);
 
             lastTime = now;
             lastLoadedBytes = e.loaded;
           }
 
-          // Update processing stage
-          if (currentProgress < 30) {
-            setProcessingStage("Uploading video...");
-          } else if (currentProgress < 60) {
-            setProcessingStage("Processing metadata...");
-          } else if (currentProgress < 90) {
-            setProcessingStage("Generating thumbnails...");
-          } else {
-            setProcessingStage("Finalizing...");
-          }
+          // Processing stage
+          const stage =
+            currentProgress < 30 ? "Uploading video..." :
+            currentProgress < 60 ? "Processing metadata..." :
+            currentProgress < 90 ? "Generating thumbnails..." :
+            "Finalizing...";
+
+          updateProgress(currentProgress, speed, remaining, stage);
         }
       };
 
@@ -564,6 +588,8 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             startVideoReadyPolling(videoId, title || file?.name || "Your video");
           }
 
+          finishUpload();
+
           // Close modal immediately
           if (onUploaded) onUploaded();
         } else {
@@ -579,13 +605,13 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
           } catch {
             setError(`Upload failed (${xhr.status}): ${resp || xhr.statusText}`);
           }
-          setUploading(false);
+          finishUpload();
         }
       };
 
       xhr.onerror = () => {
         setError("Network error. Please check your connection and try again.");
-        setUploading(false);
+        finishUpload();
         addNotification({
           type: "error",
           title: "Upload failed",
@@ -595,14 +621,15 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
       xhr.ontimeout = () => {
         setError("Upload timed out. Please try again.");
-        setUploading(false);
+        finishUpload();
       };
 
       xhr.send(formData);
     } catch (err) {
       console.error("Upload Process Error:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred during upload.");
-      setUploading(false);
+      setPreparing(false);
+      finishUpload();
     }
   };
 
@@ -794,10 +821,21 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
               )}
               <button
                 onClick={handleClose}
-                disabled={uploading}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-500 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+                title={uploading ? "Minimize — upload continues in the background" : "Close"}
+                className={
+                  uploading
+                    ? "flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-medium"
+                    : "p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-500 hover:text-white"
+                }
               >
-                <X size={20} />
+                {uploading ? (
+                  <>
+                    <ChevronDown size={16} />
+                    Minimize
+                  </>
+                ) : (
+                  <X size={20} />
+                )}
               </button>
             </div>
           </div>
@@ -1160,11 +1198,11 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         </button>
                         <button
                           onClick={startUpload}
-                          disabled={!title.trim()}
+                          disabled={!title.trim() || preparing || uploading}
                           className="flex-[2] bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:opacity-30 py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-red-600/30 transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed"
                         >
                           <Zap size={16} className="inline mr-2" />
-                          Publish Now
+                          {preparing ? "Preparing..." : "Publish Now"}
                         </button>
                       </>
                     ) : (
@@ -1218,9 +1256,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         <button
                           onClick={() => {
                             if (confirm("Are you sure you want to cancel this upload?")) {
-                              xhrRef.current?.abort();
-                              setUploading(false);
-                              setProgress(0);
+                              cancelUpload();
                             }
                           }}
                           className="w-full text-xs uppercase font-bold text-zinc-600 hover:text-red-500 transition-colors tracking-widest py-2"
@@ -1292,9 +1328,6 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         setDescription("");
                         setTags("");
                         setVideoMetadata(null);
-                        setProgress(0);
-                        setUploadSpeed(0);
-                        setTimeRemaining(0);
                       }}
                       className="px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-2xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-red-600/30"
                     >

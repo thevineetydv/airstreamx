@@ -6,6 +6,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Toast from "./components/Toast";
 import { useAppLogic } from "./useAppLogic";
 import UploadModal from "./components/UploadModal";
+import { UploadProvider, useUpload } from "./context/UploadContext";
+import UploadProgressWidget from "./components/UploadProgressWidget";
 import { NotificationProvider } from "./context/NotificationContext";
 import { clearStaleChannelCache } from "./utils/clearStaleChannelCache";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -90,14 +92,14 @@ const ScrollToTop = () => {
 };
 
 // ─── App ──────────────────────────────────────────────────────────────────────
-export default function App() {
+function AppContent() {
   const {
     toast, setToast, q, setQ,
     theme, setTheme, themeCls,
     fileInputRef, uploading, isFullscreen,
   } = useAppLogic();
 
-  const [showUploadModal, setShowUploadModal] = React.useState(false);
+  const { isModalOpen: showUploadModal, openModal, closeModal } = useUpload();
   const [online, setOnline]                   = React.useState(navigator.onLine);
   const [refreshKey, setRefreshKey]           = React.useState(0);
   const location = useLocation();
@@ -129,7 +131,7 @@ export default function App() {
   }, [isFullscreen]);
 
   const handleUploadSuccess = React.useCallback(() => {
-    setShowUploadModal(false);
+    closeModal();
     setRefreshKey(k => k + 1);
   }, []);
 
@@ -153,7 +155,7 @@ export default function App() {
               setQ={setQ}
               themeCls={themeCls}
               fileInputRef={fileInputRef}
-              handleUploadClick={() => setShowUploadModal(true)}
+              handleUploadClick={() => openModal()}
               uploading={uploading}
             />
           )}
@@ -197,7 +199,7 @@ export default function App() {
                         setQ={setQ}
                         themeCls={themeCls}
                         fileInputRef={fileInputRef}
-                        handleUploadClick={() => setShowUploadModal(true)}
+                        handleUploadClick={() => openModal()}
                         uploading={uploading}
                       />
                     }
@@ -212,7 +214,7 @@ export default function App() {
                         setQ={setQ}
                         themeCls={themeCls}
                         fileInputRef={fileInputRef}
-                        handleUploadClick={() => setShowUploadModal(true)}
+                        handleUploadClick={() => openModal()}
                         uploading={uploading}
                       />
                     }
@@ -252,7 +254,7 @@ export default function App() {
                   {/* Must also come BEFORE the /:handle wildcard below,
                       same reason as every other named route on this list. */}
                   <Route path="/about"         element={<AboutPage />} />
-                  <Route path="/how-it-works"  element={<HowItWorksPage onUploadClick={() => setShowUploadModal(true)} />} />
+                  <Route path="/how-it-works"  element={<HowItWorksPage onUploadClick={() => openModal()} />} />
 
                   {/* ─── MISC ─────────────────────────────────────── */}
                   <Route path="/home-example" element={<HomeFeed searchQuery={q} />} />
@@ -294,7 +296,7 @@ export default function App() {
           </main>
 
           {!isFullscreen && !isWatchPage && !isLivePage && (
-            <BottomNav onUploadClick={() => setShowUploadModal(true)} />
+            <BottomNav onUploadClick={() => openModal()} />
           )}
 
           {toast && (
@@ -303,13 +305,27 @@ export default function App() {
 
           {showUploadModal && (
             <UploadModal
-              onClose={() => setShowUploadModal(false)}
+              onClose={() => closeModal()}
               onUploaded={handleUploadSuccess}
             />
           )}
+
+          <UploadProgressWidget />
         </div>
       </ErrorBoundary>
     </NotificationProvider>
+  );
+}
+
+// ─── App — the real default export ─────────────────────────────────────────
+// Thin wrapper so AppContent (which calls useUpload()) is a descendant of
+// UploadProvider. Upload progress state needs to live above AppContent,
+// not inside it, so it survives regardless of what AppContent re-renders.
+export default function App() {
+  return (
+    <UploadProvider>
+      <AppContent />
+    </UploadProvider>
   );
 }
 

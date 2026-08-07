@@ -11,9 +11,11 @@ import {
   useState,
   useCallback,
   useRef,
+  useEffect,
   ReactNode,
 } from "react";
 import { API_URL } from "../utils/constants";
+import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 
 // ─────────────────────────────────────────────
 // Types
@@ -77,10 +79,38 @@ const MAX_POLL_ATTEMPTS = 72;    // give up after 6 minutes
 // ─────────────────────────────────────────────
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const STORAGE_KEY = "airstream_notifications";
+
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return []; // corrupted/blocked storage — fall back to empty, don't crash
+    }
+  });
+
+  // Keep localStorage in sync whenever notifications change (new one
+  // added, marked read, cleared, etc.) — this is what survives a
+  // page refresh; before this, the whole list lived only in memory
+  // and vanished the moment the tab reloaded.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+    } catch {
+      // Storage full or blocked (private browsing) — notifications
+      // still work for the current session, just won't persist.
+    }
+  }, [notifications]);
 
   // Track active polling timers so we never duplicate-poll the same video
   const pollingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const stopPolling = useCallback((key: string) => {
+    const timer = pollingTimers.current.get(key);
+    if (timer) clearTimeout(timer);
+    pollingTimers.current.delete(key);
+  }, []);
 
   // ── Core helpers ─────────────────────────────
 
@@ -177,6 +207,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     [addNotification]
   );
 
+  // ── Real-time push (SSE) — the primary path now, YouTube-style ──
+  // Fires the instant the server pushes an event, no 5s polling delay.
+  // Polling above still runs as an automatic fallback (e.g. if SSE is
+  // blocked by a corporate firewall/proxy) — stopPolling() here just
+  // prevents a duplicate notification if both happen to fire.
+  useRealtimeNotifications((videoId, videoTitle) => {
+    const key = String(videoId);
+    stopPolling(key);
+    addNotification({
+      type: "success",
+      title: "🎉 Your video is live!",
+      message: `"${videoTitle}" has finished processing and is now public.`,
+      href: `/watch/${key}`,
+    });
+  });
+
   // ─────────────────────────────────────────────
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -209,4 +255,3 @@ export function useNotifications(): NotificationContextValue {
   }
   return ctx;
 }
-
