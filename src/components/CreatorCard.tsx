@@ -155,19 +155,19 @@ export default function CreatorCard({
   if (compact) {
     return (
       <div
-        className={`flex items-center justify-between gap-4 p-4 bg-[#181818] rounded-2xl border border-white/5 ${className}`}
+        className={`flex items-center justify-between gap-3 p-3 bg-[#181818] rounded-xl border border-white/5 ${className}`}
       >
         {/* Clickable avatar + name → channel */}
         <Link
           to={resolvedPath}
-          className="flex items-center gap-3 min-w-0 group/creator"
+          className="flex items-center gap-2.5 min-w-0 group/creator"
           aria-label={`Visit ${resolvedName}'s channel`}
         >
           {/* Avatar with hover ring */}
           <motion.div
             whileHover={{ scale: 1.06 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className={`w-11 h-11 rounded-full bg-gradient-to-br ${creator.avatarGradient} flex-shrink-0 overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#181818] transition-all`}
+            className={`w-9 h-9 rounded-full bg-gradient-to-br ${creator.avatarGradient} flex-shrink-0 overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#181818] transition-all`}
           >
             {resolvedAvatarUrl ? (
               <img
@@ -179,7 +179,7 @@ export default function CreatorCard({
                 }}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center font-bold text-white text-base">
+              <div className="w-full h-full flex items-center justify-center font-bold text-white text-sm">
                 {(resolvedName[0] ?? "?").toUpperCase()}
               </div>
             )}
@@ -187,18 +187,20 @@ export default function CreatorCard({
 
           {/* Name + sub count */}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-2 break-words">
+            <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-1 break-words">
               {resolvedName}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
+            <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
               {fmtSubs(displayCount, displayLoaded)}
             </p>
           </div>
         </Link>
 
-        {/* Subscribe button (separate — does NOT navigate) */}
+        {/* Subscribe button (separate — does NOT navigate). Zoomed down
+            slightly — the full-size button was the biggest contributor
+            to this row feeling bulky. */}
         {showSubscribe && (
-          <div className="flex-shrink-0" ref={subBtnWrapperRef}>
+          <div className="flex-shrink-0" style={{ zoom: 0.85 }} ref={subBtnWrapperRef}>
             <SubscriptionButton
               channelId={resolvedChannelId}
               channelName={resolvedName}

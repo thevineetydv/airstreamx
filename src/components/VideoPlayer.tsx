@@ -461,10 +461,13 @@ const KeyboardShortcuts: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   </motion.div>
 );
 
-const ResumePrompt: React.FC<{ progress: any; onResume: () => void; onStart: () => void }> = ({ progress, onResume, onStart }) => (
+const ResumePrompt: React.FC<{ progress: any; onResume: () => void; onStart: () => void; secondsLeft: number }> = ({ progress, onResume, onStart, secondsLeft }) => (
   <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
     className="absolute top-3 right-3 z-50 bg-black/85 backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 shadow-xl flex items-center gap-2">
-    <span className="text-white text-xs whitespace-nowrap">Resume <span className="font-bold text-red-400">{formatTime(progress.time)}</span>?</span>
+    <span className="text-white text-xs whitespace-nowrap">
+      Resume <span className="font-bold text-red-400">{formatTime(progress.time)}</span>?
+      <span className="text-gray-500 ml-1">({secondsLeft}s)</span>
+    </span>
     <button onClick={onResume} className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-md transition active:scale-95">Resume</button>
     <button onClick={onStart} className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-md transition active:scale-95">Start over</button>
   </motion.div>
@@ -884,7 +887,6 @@ const VideoEndScreen: React.FC<{
       if (nextVideo && autoplay) {
         const nextId = nextVideo.public_id || nextVideo.id;
         if (nextId) {
-          console.log("[AutoPlay] ✅ DISMISSING END SCREEN & NAVIGATING TO:", nextId);
           onDismiss(); // Close the end screen FIRST
           setTimeout(() => {
             navigate(`/watch?v=${nextId}`);
@@ -896,25 +898,13 @@ const VideoEndScreen: React.FC<{
 
   // Countdown timer
   useEffect(() => {
-    console.log("[AutoPlay] Timer effect: autoplay=", autoplay, "nextVideo=", !!nextVideo, "count=", count);
-    
-    if (!autoplay || !nextVideo || count === null || count <= 0) {
-      console.log("[AutoPlay] Timer skipped - returning early");
-      return;
-    }
+    if (!autoplay || !nextVideo || count === null || count <= 0) return;
 
-    console.log("[AutoPlay] ⏱️ Starting countdown from:", count);
-    
     timerRef.current = setInterval(() => {
-      setCount(c => {
-        const next = c === null || c <= 1 ? 0 : c - 1;
-        console.log("[AutoPlay] ⏳ Count:", c, "→", next);
-        return next;
-      });
+      setCount(c => (c === null || c <= 1 ? 0 : c - 1));
     }, 1000);
 
     return () => {
-      console.log("[AutoPlay] Clearing timer");
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [autoplay, nextVideo, count]);
@@ -922,7 +912,6 @@ const VideoEndScreen: React.FC<{
   // Initialize countdown
   useEffect(() => {
     if (autoplay && nextVideo) {
-      console.log("[AutoPlay] 🎬 Initializing - setting count to TOTAL");
       setCount(TOTAL);
     } else {
       setCount(null);
@@ -1247,6 +1236,13 @@ const VideoPlayer = forwardRef<any, any>(
     const [isTheaterMode, setIsTheaterMode] = useState(() => getStoredValue(STORAGE_KEYS.THEATER_MODE, 0) === 1);
     const [showEndScreen, setShowEndScreen] = useState(false);
 
+    // Floating "Subscribe" overlay — previously always rendered with no
+    // timer at all ({true && (...)}), so it sat on screen for the entire
+    // video. Now it shows once, briefly, after playback actually starts,
+    // then fades out and stays gone for the rest of this viewing.
+    const [showSubscribeOverlay, setShowSubscribeOverlay] = useState(false);
+    const hasShownSubscribeOverlay = useRef(false);
+
     const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const playIconTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1271,8 +1267,30 @@ const VideoPlayer = forwardRef<any, any>(
       if (p && p.time > 10 && p.time < p.duration - 30) { setResumeProgress(p); setShowResume(true); }
     }, [video?.id]);
 
+    useEffect(() => {
+      if (state.isPlaying && !hasShownSubscribeOverlay.current) {
+        hasShownSubscribeOverlay.current = true;
+        setShowSubscribeOverlay(true);
+        const t = setTimeout(() => setShowSubscribeOverlay(false), 6000);
+        return () => clearTimeout(t);
+      }
+    }, [state.isPlaying]);
+
     const handleResume = useCallback(() => { if (resumeProgress) actions.seekAbs(resumeProgress.time); setShowResume(false); }, [resumeProgress, actions]);
     const handleStartOver = useCallback(() => setShowResume(false), []);
+
+    // Auto-dismiss the resume prompt if the person never taps either
+    // button — it was previously staying on screen over the video
+    // indefinitely. Defaults to Resume (not Start Over) since that's the
+    // safer choice: it preserves progress rather than silently discarding it.
+    const [resumeSecondsLeft, setResumeSecondsLeft] = useState(8);
+    useEffect(() => {
+      if (!showResume) return;
+      setResumeSecondsLeft(8);
+      const t = setTimeout(() => { handleResume(); }, 8000);
+      const tick = setInterval(() => setResumeSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+      return () => { clearTimeout(t); clearInterval(tick); };
+    }, [showResume, handleResume]);
 
     const toggleTheaterMode = useCallback(() => {
       const m = !isTheaterMode; setIsTheaterMode(m);
@@ -1431,7 +1449,7 @@ useImperativeHandle(ref, () => ({
                  tall on small phones but still immersive on big screens */
               ...(isTheaterMode ? { height: "clamp(42vw, 56svh, 80vh)" } : {}),
             }}
-            onMouseMove={resetHide} onMouseEnter={resetHide} onDoubleClick={handleDoubleClick}>
+            onMouseMove={resetHide} onMouseEnter={resetHide} onTouchStart={resetHide} onDoubleClick={handleDoubleClick}>
 
 
             <AnimatePresence>
@@ -1444,7 +1462,7 @@ useImperativeHandle(ref, () => ({
             </AnimatePresence>
 
             <AnimatePresence>
-              {showResume && resumeProgress && <ResumePrompt progress={resumeProgress} onResume={handleResume} onStart={handleStartOver} />}
+              {showResume && resumeProgress && <ResumePrompt progress={resumeProgress} onResume={handleResume} onStart={handleStartOver} secondsLeft={resumeSecondsLeft} />}
             </AnimatePresence>
 
             <AnimatePresence>
@@ -1476,8 +1494,10 @@ useImperativeHandle(ref, () => ({
               }}
             />
 
-            {/* Floating Subscribe Overlay */}
-            {true && (
+            {/* Floating Subscribe Overlay — appears once for 6s after playback
+             * starts, then fades out for the rest of this viewing session. */}
+            <AnimatePresence>
+              {showSubscribeOverlay && (
               <motion.button
                 initial={{ opacity: 0, scale: 0.85, y: 20 }}
                 animate={{
@@ -1485,6 +1505,7 @@ useImperativeHandle(ref, () => ({
                   y: [0, -6, 0],
                   scale: [1, 1.04, 1],
                 }}
+                exit={{ opacity: 0, scale: 0.85, y: 20, transition: { duration: 0.3 } }}
                 transition={{
                   duration: 3,
                   repeat: Infinity,
@@ -1546,7 +1567,8 @@ useImperativeHandle(ref, () => ({
                   Subscribe
                 </span>
               </motion.button>
-            )}
+              )}
+            </AnimatePresence>
 
             {channelWatermark && (
               <img
