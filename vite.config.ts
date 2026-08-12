@@ -87,7 +87,24 @@ terserOptions: {
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-	  injectRegister: 'script-defer',
+      // Registration is now handled manually in main.tsx via
+      // `virtual:pwa-register`, so we control exactly when the page
+      // reloads once a new service worker takes over. The basic
+      // auto-injected script (injectRegister: 'script-defer') updates
+      // the service worker in the background but never reloads an
+      // already-open tab — that's why new features required a manual
+      // refresh to appear. Setting this to false avoids double
+      // registration now that main.tsx does it explicitly.
+      injectRegister: false,
+      workbox: {
+        // Explicit rather than relying on autoUpdate's implicit
+        // defaults — new SW activates immediately instead of waiting
+        // for all tabs to close, and takes control of open tabs right
+        // away.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+      },
       includeAssets: ['favicon.ico', 'favicon-192x192.png', 'favicon-512x512.png'],
       manifest: {
         name: 'AirStreamX',
