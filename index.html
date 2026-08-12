@@ -52,8 +52,8 @@
        TWITTER CARD
   ========================== -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@airstreamx" />
-  <meta name="twitter:creator" content="@airstreamx" />
+  <meta name="twitter:site" content="@AirStreamXTV" />
+  <meta name="twitter:creator" content="@AirStreamXTV" />
   <meta name="twitter:title" content="AirstreamX — Free Video Streaming Platform India" />
   <meta name="twitter:description" content="AI-powered video streaming platform. Stream, share, and grow your audience." />
   <meta name="twitter:image" content="https://airstreamx.com/og-image.png" />
@@ -78,7 +78,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180x180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" />
-  <link rel="manifest" href="/manifest.json" />
+  <!-- No manual manifest link here — vite-plugin-pwa (configured in
+       vite.config.ts) auto-injects its own manifest link at build time.
+       Hand-declaring one too risked two conflicting manifests. -->
   <!-- =========================
        PERFORMANCE OPTIMIZATION
   ========================== -->
@@ -87,15 +89,13 @@
   <link rel="dns-prefetch" href="https://www.google-analytics.com" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<!-- Bas yeh ek line rakho: -->
-<link
-  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=optional"
-  rel="stylesheet"
-  media="print"
-  onload="this.media='all'"
-/>
+  <!-- FIX: this used to be duplicated — the same Inter font family was
+       being requested twice (once with display=optional, once with
+       display=swap), costing an extra network round-trip for no
+       benefit. Only one is needed; keeping display=optional as the
+       comment below originally intended. -->
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=optional"
     rel="stylesheet"
     media="print"
     onload="this.media='all'"
@@ -229,7 +229,7 @@
   "url": "https://airstreamx.com",
   "logo": "https://airstreamx.com/favicon-512x512.png",
   "sameAs": [
-    "https://twitter.com/airstreamx"
+    "https://twitter.com/AirStreamXTV"
   ],
   "contactPoint": {
     "@type": "ContactPoint",
@@ -341,17 +341,28 @@
   <!-- MAIN APP -->
   <script type="module" src="/src/main.tsx"></script>
 
-  <!-- Hide loading screen once app mounts -->
+  <!-- Hide loading screen once the app has actually painted — not on
+       the generic `load` event, which waits for every sub-resource
+       (fonts, images) and isn't tied to whether the UI is visible.
+       main.tsx dispatches 'app:ready' right after React's first paint.
+       window.load and the 4s timeout are safety fallbacks only, in
+       case that event is ever missed for some reason. -->
   <script type="module">
-    window.addEventListener('load', () => {
+    let hidden = false;
+    function hideLoader() {
+      if (hidden) return;
+      hidden = true;
       const el = document.getElementById('loading-screen');
       if (el) {
         setTimeout(() => {
           el.classList.add('hidden');
           setTimeout(() => el.remove(), 400);
-        }, 500);
+        }, 150);
       }
-    });
+    }
+    window.addEventListener('app:ready', hideLoader);
+    window.addEventListener('load', hideLoader);
+    setTimeout(hideLoader, 4000);
   </script>
 
 </body>
