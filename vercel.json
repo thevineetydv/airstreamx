@@ -13,7 +13,7 @@
       "destination": "https://backend.airstreamx.com/og-preview"
     },
     {
-      "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
