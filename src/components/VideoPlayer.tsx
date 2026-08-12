@@ -1243,6 +1243,18 @@ const VideoPlayer = forwardRef<any, any>(
     const [showSubscribeOverlay, setShowSubscribeOverlay] = useState(false);
     const hasShownSubscribeOverlay = useRef(false);
 
+    // "Tap to unmute" prompt — browsers block autoplay-with-sound when a
+    // video is opened via an external link (WhatsApp, Instagram, etc. count
+    // as a fresh page load, not a genuine in-page click), so our autoplay
+    // fallback force-mutes the video to satisfy that policy. Without this
+    // prompt, the person just hears nothing and assumes the video is
+    // broken — they have no way to know why or how to fix it.
+    const [showUnmutePrompt, setShowUnmutePrompt] = useState(false);
+
+    useEffect(() => {
+      if (!state.isMuted) setShowUnmutePrompt(false);
+    }, [state.isMuted]);
+
     const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const playIconTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1315,7 +1327,14 @@ const VideoPlayer = forwardRef<any, any>(
       } catch { }
       el.setAttribute("playsinline", "true"); el.preload = "auto";
 
-      const safePlay = () => { if (!autoPlay) return; el.play().catch(() => { el.muted = true; el.play().catch(() => { }); }); };
+      const safePlay = () => {
+        if (!autoPlay) return;
+        el.play().catch(() => {
+          el.muted = true;
+          setShowUnmutePrompt(true);
+          el.play().catch(() => { });
+        });
+      };
 
       if (video.url.endsWith(".m3u8")) {
         const live = /\/hls\/live\/|\/live\//.test(video.url);
@@ -1493,6 +1512,29 @@ useImperativeHandle(ref, () => ({
                 willChange: 'auto',
               }}
             />
+
+            {/* "Tap to unmute" banner — shown when the browser's autoplay
+             * policy silently forced a mute (e.g. opened from a WhatsApp
+             * link). Without this, the person just hears nothing and has
+             * no idea why or how to fix it. */}
+            <AnimatePresence>
+              {showUnmutePrompt && (
+                <motion.button
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.toggleMute();
+                    setShowUnmutePrompt(false);
+                  }}
+                  className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-black/85 backdrop-blur-md border border-white/20 rounded-full pl-3 pr-4 py-2 shadow-xl active:scale-95 transition-transform"
+                >
+                  <VolumeX size={16} className="text-white flex-shrink-0" />
+                  <span className="text-white text-xs sm:text-sm font-medium whitespace-nowrap">Tap to unmute</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
 
             {/* Floating Subscribe Overlay — appears once for 6s after playback
              * starts, then fades out for the rest of this viewing session. */}
