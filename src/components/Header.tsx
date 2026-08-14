@@ -34,36 +34,86 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
   const gradId = `axLogoGrad-${uid}`;
   const glowId = `axLogoGlow-${uid}`;
 
+  // ── Independence Day (14–16 Aug) kite doodle ─────────────────
+  // A small tricolor kite floats beside the logo for a few days around
+  // 15 August, then disappears on its own — no manual removal needed,
+  // and it naturally reappears next year. Deliberately subtle: small,
+  // gently swaying, doesn't compete with the actual brand mark.
+  const now = new Date();
+  const showKite = now.getMonth() === 7 && now.getDate() >= 14 && now.getDate() <= 16;
+
   return (
-    <div
-      style={{ width: size, height: size }}
-      className="rounded-[10px] flex items-center justify-center bg-[#050a10] border border-red-500/60 shadow-[0_0_12px_rgba(239,68,68,0.35)] flex-shrink-0"
-    >
-      <svg
-        width={size * 0.61}
-        height={size * 0.61}
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+    <div className="relative inline-flex" style={{ width: size, height: size }}>
+      <div
+        style={{ width: size, height: size }}
+        className="rounded-[10px] flex items-center justify-center bg-[#050a10] border border-red-500/60 shadow-[0_0_12px_rgba(239,68,68,0.35)] flex-shrink-0"
       >
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#f87171" />
-            <stop offset="100%" stopColor="#ef4444" />
-          </linearGradient>
-          <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="1.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        {/* Play triangle */}
-        <polygon points="4,6 21,16 4,26" fill={`url(#${gradId})`} filter={`url(#${glowId})`} />
-        {/* Pause bar */}
-        <rect x="24" y="6" width="4" height="20" rx="2" fill="#ef4444" opacity="0.9" />
-      </svg>
+        <svg
+          width={size * 0.61}
+          height={size * 0.61}
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#f87171" />
+              <stop offset="100%" stopColor="#ef4444" />
+            </linearGradient>
+            <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {/* Play triangle */}
+          <polygon points="4,6 21,16 4,26" fill={`url(#${gradId})`} filter={`url(#${glowId})`} />
+          {/* Pause bar */}
+          <rect x="24" y="6" width="4" height="20" rx="2" fill="#ef4444" opacity="0.9" />
+        </svg>
+      </div>
+
+      {showKite && (
+        <motion.svg
+          aria-hidden
+          width={size * 0.62}
+          height={size * 0.62}
+          viewBox="0 0 40 40"
+          className="absolute pointer-events-none"
+          style={{ top: -size * 0.42, right: -size * 0.32 }}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{
+            opacity: 1,
+            y: [0, -3, 0, 2, 0],
+            rotate: [-6, 4, -6],
+          }}
+          transition={{
+            opacity: { duration: 0.4 },
+            y: { duration: 3.2, repeat: Infinity, ease: "easeInOut" },
+            rotate: { duration: 3.2, repeat: Infinity, ease: "easeInOut" },
+          }}
+        >
+          {/* Kite string, curving down toward the logo mark */}
+          <path
+            d="M14 22 Q 6 30 -2 34"
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="1"
+            fill="none"
+          />
+          {/* Diamond kite body — tricolor */}
+          <g transform="translate(20,16) rotate(20)">
+            <path d="M0,-13 L9,0 L0,13 L-9,0 Z" fill="#FF9933" stroke="#0a0000" strokeWidth="0.6" />
+            <path d="M-9,0 L9,0 L0,13 Z" fill="#138808" />
+            <path d="M-9,0 L9,0 L0,-13 Z" fill="#FF9933" />
+            <rect x="-9" y="-1.3" width="18" height="2.6" fill="#FFFFFF" />
+            <line x1="0" y1="-13" x2="0" y2="13" stroke="#0a0000" strokeWidth="0.5" opacity="0.4" />
+          </g>
+          {/* Small tail ribbons */}
+          <path d="M12 27 l3 2 M15 29 l3 2 M18 31 l3 2" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
+        </motion.svg>
+      )}
     </div>
   );
 }
@@ -562,7 +612,7 @@ export default function Header({
           </a>
 
           {/* Search bar */}
-<div className="hidden md:block md:flex-1 min-w-0" ref={searchRef}>
+<div className="hidden md:flex md:flex-1 min-w-0 items-center gap-2" ref={searchRef}>
             <div className="relative w-full max-w-full md:max-w-2xl">
               <form onSubmit={onSubmit}>
                 <div className={`flex items-center transition-all ${searchFocused ? "ring-2 ring-red-500 shadow-lg shadow-red-500/30" : ""} rounded-full overflow-hidden`}>
@@ -594,23 +644,6 @@ export default function Header({
                   </button>
                 </div>
               </form>
-
-              {/* Voice search */}
-              <button
-                onClick={handleVoiceSearch}
-                disabled={!voiceSupported}
-                aria-label={isListening ? "Stop listening" : "Voice search"}
-                className={`hidden md:flex absolute right-[-52px] top-0 h-10 w-10 items-center justify-center rounded-full transition-all group ${isListening
-                  ? "bg-red-500 shadow-lg shadow-red-500/50 animate-pulse"
-                  : voiceSupported
-                    ? "bg-[#110000]/50 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/50"
-                    : "bg-[#110000]/30 cursor-not-allowed opacity-50"
-                  }`}
-              >
-                {isListening
-                  ? <MicOff className="w-5 h-5 text-white" />
-                  : <Mic className={`w-5 h-5 transition-colors ${voiceSupported ? "text-gray-300 group-hover:text-white" : "text-gray-600"}`} />}
-              </button>
 
               {/* Listening indicator */}
               <AnimatePresence>
@@ -677,6 +710,27 @@ export default function Header({
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Voice search — now a real flex sibling instead of being
+                absolutely positioned with a hardcoded right offset. That
+                approach broke at different screen widths because it never
+                actually reserved layout space; flexbox now does that
+                automatically regardless of viewport size. */}
+            <button
+              onClick={handleVoiceSearch}
+              disabled={!voiceSupported}
+              aria-label={isListening ? "Stop listening" : "Voice search"}
+              className={`flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full transition-all group ${isListening
+                ? "bg-red-500 shadow-lg shadow-red-500/50 animate-pulse"
+                : voiceSupported
+                  ? "bg-[#110000]/50 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/50"
+                  : "bg-[#110000]/30 cursor-not-allowed opacity-50"
+                }`}
+            >
+              {isListening
+                ? <MicOff className="w-5 h-5 text-white" />
+                : <Mic className={`w-5 h-5 transition-colors ${voiceSupported ? "text-gray-300 group-hover:text-white" : "text-gray-600"}`} />}
+            </button>
           </div>
 
           {/* ── Right actions ──────────────────────── */}

@@ -21,6 +21,77 @@ const CATEGORIES = [
 const PAGE_SIZE = 24;
 
 /* ─────────────────────────────────────────────────────────────
+ * INDEPENDENCE DAY — FLOATING KITES
+ * A subtle, once-per-session celebratory touch around 15 August.
+ * Kites (patang) rather than generic confetti/flag clipart — a more
+ * distinctive, culturally specific nod that fits the platform's
+ * India-first positioning without looking like a stock holiday banner.
+ * ───────────────────────────────────────────────────────────── */
+
+function isIndependenceDayWindow(): boolean {
+  const now = new Date();
+  return now.getMonth() === 7 && now.getDate() >= 13 && now.getDate() <= 16; // August 13–16
+}
+
+function Kite({ delay, left, size, tint }: { delay: number; left: string; size: number; tint: string }) {
+  return (
+    <motion.div
+      aria-hidden
+      className="absolute top-0 pointer-events-none"
+      style={{ left }}
+      initial={{ y: -80, x: 0, opacity: 0, rotate: -8 }}
+      animate={{
+        y: "70vh",
+        x: [0, 24, -16, 12, 0],
+        opacity: [0, 1, 1, 1, 0],
+        rotate: [-8, 6, -6, 4, 0],
+      }}
+      transition={{ duration: 6, delay, ease: "easeInOut" }}
+    >
+      <svg width={size} height={size} viewBox="0 0 40 50" fill="none">
+        <path d="M20 2 L36 20 L20 38 L4 20 Z" fill={tint} opacity="0.9" />
+        <path d="M20 2 L20 38 M4 20 L36 20" stroke="#fff" strokeWidth="0.5" opacity="0.5" />
+        <path
+          d="M20 38 Q22 42 19 45 Q23 47 20 50"
+          stroke={tint}
+          strokeWidth="1.2"
+          fill="none"
+          opacity="0.7"
+        />
+      </svg>
+    </motion.div>
+  );
+}
+
+function FloatingKites() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!isIndependenceDayWindow()) return;
+    // Once per browser session — a returning visitor navigating between
+    // pages shouldn't see this replay every single time they land back
+    // on the homepage.
+    try {
+      if (sessionStorage.getItem("independence_kites_shown") === "1") return;
+      sessionStorage.setItem("independence_kites_shown", "1");
+    } catch { }
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 7000);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 overflow-hidden pointer-events-none" aria-hidden>
+      <Kite delay={0} left="12%" size={38} tint="#FF9933" />
+      <Kite delay={0.6} left="55%" size={30} tint="#FFFFFF" />
+      <Kite delay={1.1} left="80%" size={34} tint="#138808" />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
  * SHIMMER
  * ───────────────────────────────────────────────────────────── */
 
@@ -113,7 +184,7 @@ function formatVideoTitle(title: string): string {
   return title
     .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
     .replace(
-      /[_\s]+(4K|2K|1080p|720p|480p|360p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi,
+      /[_\s]+(8K|4K|2K|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi,
       ""
     )
     .replace(/_/g, " ")
@@ -461,6 +532,20 @@ const ThumbnailWithPreview = React.memo(function ThumbnailWithPreview({
  * HERO VIDEO
  * ───────────────────────────────────────────────────────────── */
 
+/**
+ * HeroSkeleton — shown only while we're still waiting to find out
+ * whether an admin-featured video exists. Matches HeroVideo's exact
+ * height classes so nothing below it (the Shorts row) shifts upward
+ * during that brief window and then jumps back down once the real
+ * hero mounts — that jump was being misread as "a short flashing in
+ * the featured section."
+ */
+function HeroSkeleton() {
+  return (
+    <div className="relative w-full h-[42vh] sm:h-[48vh] md:h-[58vh] min-h-[32vh] max-h-[70vh] rounded-3xl overflow-hidden mb-10 bg-[#141414] animate-pulse" />
+  );
+}
+
 function HeroVideo({ video }: { video: any }) {
   const displayName = getDisplayName(video);
   return (
@@ -486,6 +571,10 @@ function HeroVideo({ video }: { video: any }) {
           className="w-full h-full object-cover scale-105 group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+        {/* Extra scrim anchored right behind the text block — the gradient
+            above alone wasn't always enough on bright thumbnails (light
+            skies, white backgrounds), leaving title/CTA text hard to read. */}
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-br from-red-600/20 via-transparent to-red-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
         {video.duration && (
@@ -500,7 +589,7 @@ function HeroVideo({ video }: { video: any }) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <span className="inline-block px-2.5 py-0.5 bg-red-500/80 backdrop-blur-sm rounded-full text-[10px] md:text-xs font-semibold mb-2 shadow-lg shadow-red-500/50">
+            <span className="inline-block px-2.5 py-0.5 bg-white/10 backdrop-blur-sm border border-white/25 text-gray-200 rounded-full text-[10px] md:text-xs font-semibold mb-2">
               Featured
             </span>
           </motion.div>
@@ -533,7 +622,7 @@ function HeroVideo({ video }: { video: any }) {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
-            className="mt-3 md:mt-5 inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 px-4 py-2 md:px-6 md:py-3 rounded-full text-xs md:text-sm font-semibold shadow-lg transition-all duration-300"
+            className="mt-3 md:mt-5 inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 md:px-6 md:py-3 rounded-full text-xs md:text-sm font-semibold shadow-lg transition-all duration-300"
           >
             <svg
               className="w-3 h-3 md:w-4 md:h-4"
@@ -568,12 +657,20 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
   const channelCacheRef = useRef<Record<string, { channelName: string; avatarUrl: string }>>({});
 // ── Admin-set featured video (from featured_videos table) ──
   const [adminFeatured, setAdminFeatured] = useState<any>(null);
+  // Distinguishes "haven't checked yet" from "checked, nothing pinned" —
+  // without this, the hero briefly rendered whatever the algorithmic
+  // fallback picked (e.g. a totally different video) for the split
+  // second before this fetch resolved, then flashed to the real pinned
+  // video. Now we simply don't compute a fallback until we actually
+  // know one way or the other.
+  const [adminFeaturedLoading, setAdminFeaturedLoading] = useState(true);
 
   useEffect(() => {
     fetch(`${API_URL}/api/featured/current`)
       .then((r) => r.json())
       .then((data) => setAdminFeatured(data.featured || null))
-      .catch(() => setAdminFeatured(null));
+      .catch(() => setAdminFeatured(null))
+      .finally(() => setAdminFeaturedLoading(false));
   }, []);
   // ── Debounce search input so we don't fire a request on every keystroke ──
   // (category changes are NOT debounced — switching tabs should feel instant)
@@ -771,9 +868,40 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     }
   }, [videos]);
 
-  // Admin-set featured video takes priority. Falls back to the newest
-  // video (videos[0]) only if no admin featured video is currently active.
-  const featuredVideo = adminFeatured || videos[0];
+  // Admin-set featured video takes priority (editorial pick — see
+  // /api/featured/current in server.js). If nothing is currently pinned,
+  // we used to fall back to `videos[0]` — literally "whatever was most
+  // recently uploaded," with zero quality check. That's how a raw
+  // filename and an internal test account ended up as the homepage hero.
+  //
+  // Instead: pick the highest-engagement (views) video among ones that
+  // actually have a real branded channel name set. A video whose
+  // channel_name is empty, is a raw email, or is still the generic
+  // "Creator" placeholder means that uploader never customized their
+  // channel — not something we want to spotlight as the site's first
+  // impression. If nothing qualifies, the hero section simply doesn't
+  // render (see the `featuredVideo &&` guard below) rather than showing
+  // something low-quality.
+  const scoredFallback = [...videos]
+    .filter((v) => {
+      const name = (v.channel_name || "").trim();
+      if (!name) return false;
+      if (name.includes("@")) return false;
+      if (name.toLowerCase() === "creator") return false;
+      // Extra-strict short-video guard, specifically for the hero pick.
+      // The general feed filter treats "duration unknown" as "assume
+      // it's fine" (lenient, reasonable for a grid). For the hero,
+      // being wrong is much more visible, so we require a CONFIRMED
+      // duration over 60s — an unknown/missing duration (e.g. a short
+      // still mid-processing) is excluded rather than assumed safe.
+      if (!v.duration || v.duration <= 60) return false;
+      const title = (v.title || "").toLowerCase();
+      if (title.includes("#shorts") || title.includes("shorts")) return false;
+      return true;
+    })
+    .sort((a, b) => (b.views || 0) - (a.views || 0))[0];
+
+  const featuredVideo = adminFeatured || (adminFeaturedLoading ? null : scoredFallback) || null;
 
   const displayedVideos =
     !searchQuery && featuredVideo
@@ -840,8 +968,11 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
   return (
     <div className="p-3 md:p-6 lg:p-8 pb-24 md:pb-8">
 
+      <FloatingKites />
+
       {/* Hero */}
-      {!searchQuery && featuredVideo && <HeroVideo video={featuredVideo} />}
+      {!searchQuery && adminFeaturedLoading && <HeroSkeleton />}
+      {!searchQuery && !adminFeaturedLoading && featuredVideo && <HeroVideo video={featuredVideo} />}
 
       {/* Shorts */}
       <ShortsSection />
