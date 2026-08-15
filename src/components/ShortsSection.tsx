@@ -152,7 +152,8 @@ export default function ShortsSection() {
                 src={short.thumbnail}
                 alt={short.title}
                 className="short-thumbnail group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
+                loading={i < 3 ? "eager" : "lazy"}
+                fetchPriority={i === 0 ? "high" : undefined}
                 width={144}
                 height={256}
                 decoding="async"
