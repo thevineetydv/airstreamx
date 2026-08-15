@@ -104,6 +104,34 @@ terserOptions: {
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+
+        // Workbox's default precache behavior grabs EVERY built JS file
+        // up front, including route-specific chunks (page-ShortsPage-*.js,
+        // page-ChannelPage-*.js, etc.) that React.lazy() was specifically
+        // splitting out so they'd only load on actual navigation. Without
+        // this exclusion, the service worker force-downloads all of them
+        // in the background on the very first visit regardless — quietly
+        // defeating the code-splitting, and showing up in performance
+        // audits as if the homepage were loading ~180KB+ of Shorts-page
+        // JS it never needed.
+        globIgnores: ['**/page-*.js'],
+
+        // Instead, page-specific chunks are cached the first time they're
+        // actually requested (i.e. the first time someone navigates
+        // there), then served from cache on repeat visits.
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/page-.*\.js$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'route-chunks',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              },
+            },
+          },
+        ],
       },
       includeAssets: ['favicon.ico', 'favicon-192x192.png', 'favicon-512x512.png'],
       manifest: {
