@@ -22,7 +22,7 @@ if (typeof window !== "undefined" && "requestIdleCallback" in window) {
 // ─── Eager load critical pages (visible on first paint) ───────────────────────
 import HomeFeed from "./pages/HomeFeed";
 import WatchPage from "./pages/Watch";
-import ShortsPage from "./pages/ShortsPage";
+const ShortsPage       = lazy(() => import("./pages/ShortsPage"));
 
 // ─── Lazy load non-critical pages ─────────────────────────────────────────────
 const Dashboard        = lazy(() => import("./pages/Dashboard"));

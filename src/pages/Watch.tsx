@@ -74,10 +74,17 @@ function CommentAvatar({
   const [broken, setBroken] = useState(false);
   const letter = (email || "U").charAt(0).toUpperCase();
   if (avatarUrl && !broken) {
+    // Cloudinary avatars were loading at full upload resolution for a
+    // tiny 32-40px circle — resizing to 80px (2x for retina) cuts that
+    // download significantly with no visible quality loss at this size.
+    const resizedUrl = cloudinaryResize(avatarUrl, 80) || avatarUrl;
     return (
       <img
-        src={avatarUrl}
+        src={resizedUrl}
         alt={email || "User"}
+        loading="lazy"
+        width={80}
+        height={80}
         onError={() => setBroken(true)}
         className={`${sizeClass} rounded-full object-cover flex-shrink-0`}
       />
@@ -110,7 +117,7 @@ function formatVideoTitle(title: string): string {
   if (!title) return "Untitled";
   return title
     .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
-    .replace(/[_\s]+(4K|2K|1080p|720p|480p|360p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi, "")
+    .replace(/[_\s]+(8K|4K|2K|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi, "")
     .replace(/_/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -2027,7 +2034,8 @@ useEffect(() => {
                                             </button>
                                           </>
                                         )}
-                                        {current?.uploader_email && current.uploader_email === currentUserEmail && (
+                                        {current?.uploader_email && currentUserEmail &&
+                                          current.uploader_email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase() && (
                                           <button
                                             onClick={() => pinComment(c.id)}
                                             disabled={pinningCommentId === c.id}

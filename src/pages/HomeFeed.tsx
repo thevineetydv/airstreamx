@@ -851,23 +851,6 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     return () => observer.disconnect();
   }, [loadMore, loading]);
 
-  useEffect(() => {
-    if (videos.length > 0 && videos[0]?.thumbnail) {
-      const existing = document.querySelector(
-        `link[rel="preload"][href="${videos[0].thumbnail}"]`
-      );
-
-      if (!existing) {
-        const link = document.createElement("link");
-        link.rel = "preload";
-        link.as = "image";
-        link.href = videos[0].thumbnail;
-        link.fetchPriority = "high";
-        document.head.appendChild(link);
-      }
-    }
-  }, [videos]);
-
   // Admin-set featured video takes priority (editorial pick — see
   // /api/featured/current in server.js). If nothing is currently pinned,
   // we used to fall back to `videos[0]` — literally "whatever was most
@@ -900,6 +883,36 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       return true;
     })
     .sort((a, b) => (b.views || 0) - (a.views || 0))[0];
+
+  // Preload target: whichever video WOULD be the hero if we didn't need
+  // to wait for adminFeatured to resolve — a speculative best guess, not
+  // necessarily what's actually rendered. This decouples "start the
+  // image download" from "show the image," so the LCP image request can
+  // begin the moment we have a reasonable candidate instead of waiting
+  // for the /api/featured/current round-trip to finish. If the final
+  // pick differs, the cost is one extra thumbnail-sized request —
+  // cheap, and far better than an 8s LCP.
+  //
+  // Previously this preloaded videos[0] (not necessarily the hero at
+  // all) at its raw/original resolution (not the 960w Cloudinary size
+  // the real <img> tag actually requests) — a URL mismatch means the
+  // browser treats it as a completely unrelated request, so it did
+  // nothing to help LCP despite looking like a preload was in place.
+  useEffect(() => {
+    const preloadTarget = adminFeatured || scoredFallback;
+    if (!preloadTarget?.thumbnail) return;
+
+    const href = cloudinaryResize(preloadTarget.thumbnail, 960);
+    const existing = document.querySelector(`link[rel="preload"][href="${href}"]`);
+    if (existing) return;
+
+    const link = document.createElement("link");
+    link.rel = "preload";
+    link.as = "image";
+    link.href = href;
+    link.fetchPriority = "high";
+    document.head.appendChild(link);
+  }, [adminFeatured, scoredFallback]);
 
   const featuredVideo = adminFeatured || (adminFeaturedLoading ? null : scoredFallback) || null;
 
