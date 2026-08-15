@@ -56,19 +56,29 @@ export default function ShortsSection() {
   if (loading) {
     return (
       <div className="mb-8">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-32 h-5 bg-[#110000] rounded animate-pulse" />
+        {/* Header skeleton — CLS FIX: same wrapper divs + minHeight:40px
+            as the real header below, instead of a single short bar.
+            The real header is two flex groups each pinned to 40px min
+            height; the old skeleton was just one ~20px title bar, so
+            swapping to real content added ~20px here alone. */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
+            <div className="w-7 h-7 rounded-lg bg-[#110000] animate-pulse" />
+            <div className="w-20 h-5 bg-[#110000] rounded animate-pulse" />
+          </div>
+          <div className="flex items-center gap-2" style={{ minHeight: "40px" }} />
         </div>
-        {/* ✅ CLS Prevention: Skeleton matches actual card dimensions (9:16 aspect) */}
-        <div className="flex gap-3 overflow-hidden">
+
+        {/* Carousel skeleton — CLS FIX: matches the real row's
+            minHeight (296px) and contain:strict exactly, instead of a
+            plain overflow-hidden div with no explicit height. */}
+        <div
+          className="flex gap-3 overflow-hidden pb-2"
+          style={{ minHeight: "296px", contain: "strict" }}
+        >
           {[...Array(5)].map((_, i) => (
             <div key={i} className="flex-shrink-0 w-36">
-              {/* Skeleton thumbnail with 9:16 aspect ratio to prevent layout shift */}
-              <div
-                className="aspect-[9/16] bg-[#110000] rounded-xl mb-2 animate-pulse"
-                style={{ containIntrinsicSize: "auto 9rem" }}
-              />
-              {/* Skeleton text lines */}
+              <div className="aspect-[9/16] bg-[#110000] rounded-xl mb-2 animate-pulse" />
               <div className="h-3 bg-[#1a0000] rounded w-3/4 mb-1 animate-pulse" />
               <div className="h-3 bg-[#110000] rounded w-1/2 animate-pulse" />
             </div>
@@ -122,13 +132,13 @@ export default function ShortsSection() {
       <div
         ref={scrollRef}
         className="flex gap-3 overflow-x-auto scrollbar-hide pb-2"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none", minHeight: "296px",contain: "strict" }}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", minHeight: "296px", contain: "strict" }}
       >
         {shorts.map((short, i) => (
           <motion.div
             key={short.id}
-initial={{ opacity: 0 }}
-animate={{ opacity: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: i * 0.04 }}
             className="flex-shrink-0 w-36 cursor-pointer group"
             onClick={() => navigate(`/shorts/${short.id}`)}
@@ -176,4 +186,3 @@ animate={{ opacity: 1 }}
     </div>
   );
 }
-
