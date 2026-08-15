@@ -152,10 +152,19 @@ terserOptions: {
 	    {
       name: 'non-blocking-css',
       transformIndexHtml(html) {
+        // Was: /<link rel="stylesheet" href="([^"]+\.css)">/g — this only
+        // matched that EXACT attribute order with nothing else present.
+        // If Vite injected the tag with attributes in a different order,
+        // or added extras like `crossorigin`, the regex silently failed
+        // to match (no error, just no transform) — which is exactly why
+        // Lighthouse kept flagging the CSS as render-blocking despite
+        // this plugin's existence. Now it captures href regardless of
+        // where it falls among the tag's attributes.
         return html.replace(
-          /<link rel="stylesheet" href="([^"]+\.css)">/g,
-          `<link rel="preload" as="style" href="$1" onload="this.onload=null;this.rel='stylesheet'">
-          <noscript><link rel="stylesheet" href="$1"></noscript>`
+          /<link\s+rel="stylesheet"([^>]*?)\shref="([^"]+\.css)"([^>]*)>/g,
+          (_match, before, href, after) =>
+            `<link rel="preload" as="style" href="${href}" onload="this.onload=null;this.rel='stylesheet'">
+          <noscript><link rel="stylesheet" href="${href}"></noscript>`
         );
       }
     }
