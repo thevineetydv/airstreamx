@@ -1058,7 +1058,7 @@ export default function ShortsPage({
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [commentCounts, setCommentCounts] = useState<Record<number, number | null>>({});
   const [ambientMode, setAmbientMode] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   /* Swipe drag state */

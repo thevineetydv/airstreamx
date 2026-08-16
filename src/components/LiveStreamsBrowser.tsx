@@ -56,11 +56,12 @@ const LiveStreamsBrowser: React.FC = () => {
     if (showRefreshing) setRefreshing(true);
     try {
       const res = await fetch(`${API_URL}/live/active`);
-      if (!res.ok) throw new Error("Failed to fetch live streams");
+      if (!res.ok) throw new Error(`Failed to fetch live streams (HTTP ${res.status})`);
       const data = await res.json();
       setStreams(data.streams ?? []);
       setError(null);
-    } catch {
+    } catch (err) {
+      console.error("Live streams fetch failed:", err);
       setError("Failed to load live streams. Please try again.");
     } finally {
       setLoading(false);
@@ -221,4 +222,3 @@ const LiveStreamsBrowser: React.FC = () => {
 };
 
 export default LiveStreamsBrowser;
-
