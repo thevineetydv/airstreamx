@@ -650,18 +650,18 @@ function ShortPlayer({
     const video = videoRef.current; if (!video) return;
     if (isActive) {
       const t = setTimeout(() => {
-        // Always attempt autoplay muted first — this is the one thing
-        // browsers reliably allow regardless of user gesture history.
-        video.muted = true;
         video.volume = 1;
+        video.muted = muted;
         video.play().then(() => {
           setPlaying(true);
-          // If the person had sound on for the previous short, apply
-          // that here — toggling mute on a video that's already
-          // playing is treated far more leniently by autoplay policies
-          // than starting a new element unmuted from scratch.
-          if (!muted) video.muted = false;
-        }).catch(() => setPlaying(false));
+        }).catch(() => {
+          // Browser blocked autoplay-with-sound for this element (common
+          // on scroll-triggered advances, since the gesture context is
+          // weaker than a direct click). Fall back to guaranteed muted
+          // playback rather than leaving the video paused.
+          video.muted = true;
+          video.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+        });
       }, 80);
       return () => clearTimeout(t);
     } else { video.pause(); setPlaying(false); }
@@ -1068,7 +1068,7 @@ export default function ShortsPage({
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [commentCounts, setCommentCounts] = useState<Record<number, number | null>>({});
   const [ambientMode, setAmbientMode] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   /* Swipe drag state */
