@@ -135,6 +135,7 @@ terserOptions: {
       },
       includeAssets: ['favicon.ico', 'favicon-192x192.png', 'favicon-512x512.png'],
       manifest: {
+        id: '/',
         name: 'AirStreamX',
         short_name: 'AirStreamX',
         description: 'Music & Video Streaming Platform',
@@ -146,7 +147,26 @@ terserOptions: {
         icons: [
           { src: '/favicon-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
-        ]
+        ],
+        // Richer install prompt — one mobile ("narrow") screenshot and
+        // one desktop ("wide") screenshot. These files need to actually
+        // exist in /public before this works — see instructions below.
+        screenshots: [
+          {
+            src: '/screenshots/mobile-home.png',
+            sizes: '1080x1920',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'AirStreamX home feed on mobile',
+          },
+          {
+            src: '/screenshots/desktop-home.png',
+            sizes: '1920x1080',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'AirStreamX home feed on desktop',
+          },
+        ],
       }
     }),
 	    {
