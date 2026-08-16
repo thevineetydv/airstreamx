@@ -4,9 +4,6 @@ Disallow: /dashboard
 Disallow: /settings
 Disallow: /upload
 Disallow: /api/
-Disallow: /?
-Disallow: /*?
-Disallow: /*#
 
 User-agent: Googlebot
 Crawl-delay: 1
