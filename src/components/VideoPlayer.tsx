@@ -207,7 +207,7 @@ const SpritePreview: React.FC<{
       exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.1 }}
       style={{
         position: "absolute", bottom: "calc(100% + 20px)",
-        left, transform: "translateX(-50%)",
+        left, x: "-50%",
         width: FRAME_W, pointerEvents: "none", zIndex: 60,
       }}
     >
