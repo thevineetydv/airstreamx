@@ -13,6 +13,17 @@ export default defineConfig({
   },
   build: {
 	  cssCodeSplit: false,
+    // Prevent Vite from auto-injecting <link rel="modulepreload"> for
+    // route-specific chunks that React.lazy() intentionally split out.
+    // Without this, Vite/Rollup can still decide a lazy chunk is
+    // "reachable" and preload it on every page anyway (e.g. ShortsPage's
+    // ~190KB chunk was being preloaded on the homepage), quietly
+    // defeating the code-splitting from App.tsx.
+    modulePreload: {
+      resolveDependencies: (filename, deps) => {
+        return deps.filter(dep => !dep.includes('page-ShortsPage'));
+      }
+    },
     // Enable code splitting for better caching and parallel loading
     rollupOptions: {
      output: {

@@ -10,7 +10,6 @@ import { UploadProvider, useUpload } from "./context/UploadContext";
 import UploadProgressWidget from "./components/UploadProgressWidget";
 import { NotificationProvider } from "./context/NotificationContext";
 import { clearStaleChannelCache } from "./utils/clearStaleChannelCache";
-import AdminDashboard from "./pages/AdminDashboard";
 
 // ✅ Defer cache clearing to avoid blocking initial load
 if (typeof window !== "undefined" && "requestIdleCallback" in window) {
@@ -23,6 +22,7 @@ if (typeof window !== "undefined" && "requestIdleCallback" in window) {
 import HomeFeed from "./pages/HomeFeed";
 import WatchPage from "./pages/Watch";
 const ShortsPage       = lazy(() => import("./pages/ShortsPage"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 // ─── Lazy load non-critical pages ─────────────────────────────────────────────
 const Dashboard        = lazy(() => import("./pages/Dashboard"));
