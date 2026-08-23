@@ -240,6 +240,7 @@ interface Video {
   watermark_url?: string;
   banner_url?: string;
   upi_id?: string;
+  is_made_for_kids?: boolean;
 }
 
 interface Comment {
@@ -440,6 +441,7 @@ export default function Watch() {
   const [copied, setCopied] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [showComments, setShowComments] = useState(true);
+  const [showKidsCommentInfo, setShowKidsCommentInfo] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsTotal, setCommentsTotal] = useState(0);
   const [commentsOffset, setCommentsOffset] = useState(0);
@@ -1821,6 +1823,31 @@ useEffect(() => {
                   </div>
                 )}
 
+              {current?.is_made_for_kids ? (
+                <div className="mt-4 sm:mt-6">
+                  <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 mb-3">
+                    <MessageSquare size={20} /> Comments
+                  </h3>
+                  <div className="bg-[#181818] rounded-xl p-4 sm:p-5 text-sm text-gray-300">
+                    <p>Comments are turned off for this video.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowKidsCommentInfo(v => !v)}
+                      className="text-red-400 hover:text-red-300 text-xs font-medium mt-2"
+                    >
+                      {showKidsCommentInfo ? "Hide" : "Why?"} {showKidsCommentInfo ? "▲" : "▼"}
+                    </button>
+                    {showKidsCommentInfo && (
+                      <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                        The creator has marked this video as made for kids. To help protect
+                        children's privacy, we turn off comments on these videos an open
+                        comment box is a place personal information (like a name or location)
+                        could accidentally get shared.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
               <div className="mt-4 sm:mt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                   <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
@@ -2156,6 +2183,7 @@ useEffect(() => {
                   )}
                 </AnimatePresence>
               </div>
+              )}
             </div>
           </div>
 

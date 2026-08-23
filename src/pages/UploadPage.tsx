@@ -31,6 +31,10 @@ interface VideoMetadata {
   description: string;
   tags: string[];
   thumbnail?: File;
+  // COPPA compliance — starts undefined (not false), so submission can
+  // require an explicit answer rather than silently assuming "not made
+  // for kids" when the creator never actually saw the question.
+  madeForKids?: boolean;
 }
 
 export default function UploadPage() {
@@ -53,6 +57,7 @@ export default function UploadPage() {
   });
   const [tagInput, setTagInput] = useState("");
   const [thumbnailPreview, setThumbnailPreview] = useState<string>("");
+  const [showKidsFactors, setShowKidsFactors] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const thumbnailRef = useRef<HTMLInputElement>(null);
@@ -153,6 +158,10 @@ export default function UploadPage() {
       setError("Please enter a video title");
       return;
     }
+    if (metadata.madeForKids === undefined) {
+      setError("Please tell us whether this video is made for kids before publishing.");
+      return;
+    }
 
     // Get Firebase token properly — localStorage.getItem("firebaseToken") is unreliable
     const auth = getAuth();
@@ -173,6 +182,7 @@ export default function UploadPage() {
     formData.append("title", metadata.title.trim());
     formData.append("description", metadata.description.trim());
     formData.append("tags", JSON.stringify(metadata.tags));
+    formData.append("is_made_for_kids", metadata.madeForKids ? "true" : "false");
 
     // Convert thumbnail to base64 with resize to stay under multer fieldSize limit
     if (metadata.thumbnail) {
@@ -574,6 +584,70 @@ export default function UploadPage() {
                                 </button>
                               </span>
                             ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* COPPA — Made for Kids declaration. Required,
+                          not defaulted, matching the legal requirement
+                          that creators self-certify. */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Is this video for kids?
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setMetadata(prev => ({ ...prev, madeForKids: true }))}
+                            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${metadata.madeForKids === true
+                              ? "bg-red-500/20 border-red-500 text-white"
+                              : "bg-black/50 border-gray-700 text-gray-400 hover:border-gray-500"
+                              }`}
+                          >
+                            Yes, it's made for kids
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMetadata(prev => ({ ...prev, madeForKids: false }))}
+                            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${metadata.madeForKids === false
+                              ? "bg-red-500/20 border-red-500 text-white"
+                              : "bg-black/50 border-gray-700 text-gray-400 hover:border-gray-500"
+                              }`}
+                          >
+                            No, not made for kids
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          This is required by law. If you pick "Yes," comments and
+                          personalized suggestions won't be shown on this video.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowKidsFactors(v => !v)}
+                          className="text-xs text-red-400 hover:text-red-300 mt-2 font-medium"
+                        >
+                          {showKidsFactors ? "Hide" : "Not sure? Tap for simple questions"} {showKidsFactors ? "▲" : "▼"}
+                        </button>
+                        {showKidsFactors && (
+                          <div className="mt-2 p-3 bg-black/50 rounded-lg border border-gray-700 text-xs text-gray-400 space-y-1.5">
+                            <p className="text-gray-300 font-semibold mb-2">
+                              Ask yourself these simple questions:
+                            </p>
+                            <ul className="list-disc list-inside space-y-1">
+                              <li>What is this video actually about?</li>
+                              <li>Are there cartoons or kid-friendly visuals?</li>
+                              <li>Does it show toys, games, or things kids do?</li>
+                              <li>Is the music the kind kids listen to?</li>
+                              <li>How old are the people shown in the video?</li>
+                              <li>Any characters or actors that kids especially love?</li>
+                              <li>Does the way it's written/spoken feel aimed at kids?</li>
+                              <li>Are any ads on it aimed at kids?</li>
+                              <li>Do you already know most of your viewers are kids?</li>
+                            </ul>
+                            <p className="text-gray-500 pt-1">
+                              A kid watching your video doesn't make it "for kids" —
+                              this is about who you made it for.
+                            </p>
                           </div>
                         )}
                       </div>

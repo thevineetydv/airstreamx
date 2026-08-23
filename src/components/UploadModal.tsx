@@ -27,7 +27,8 @@ import {
   Pause,
   RotateCcw,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth } from "firebase/auth";
@@ -88,6 +89,11 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const [visibility, setVisibility] = useState("Public");
   const [tags, setTags] = useState("");
   const [category, setCategory] = useState("Entertainment");
+  // COPPA compliance — starts unanswered (null), not defaulted to false,
+  // so the person must make an explicit choice before publishing rather
+  // than an unset field silently meaning "not made for kids."
+  const [madeForKids, setMadeForKids] = useState<boolean | null>(null);
+  const [showKidsFactors, setShowKidsFactors] = useState(false);
 
   // AI/Enhancement States
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
@@ -239,6 +245,9 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         setTags(d.tags || "");
         setCategory(d.category || "Entertainment");
         setVisibility(d.visibility || "Public");
+        // Made-for-kids is intentionally NOT restored from draft — it's
+        // a legal self-certification, not a saved preference, so it
+        // should require a fresh, conscious answer each session.
       } catch (e) {
         console.error("Draft parse error", e);
       }
@@ -395,6 +404,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const startUpload = async () => {
     if (!file) return setError("Please select a video file.");
     if (!title.trim()) return setError("Please add a title for your video.");
+    if (madeForKids === null) return setError("Please tell us whether this video is made for kids before publishing.");
 
     setPreparing(true);
     setError("");
@@ -518,6 +528,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
       formData.append("visibility", visibility.toLowerCase());
       formData.append("tags", tags);
       formData.append("category", category);
+      formData.append("is_made_for_kids", madeForKids ? "true" : "false");
 
       const xhr = new XMLHttpRequest();
       beginUpload(xhr, title.trim() || file.name);
@@ -1147,6 +1158,71 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         {visibility === "Private" && "Only you can view this video."}
                       </p>
                     </div>
+                  </div>
+
+                  {/* COPPA — Made for Kids declaration.
+                      Required, not defaulted, matching the legal
+                      requirement that creators self-certify rather than
+                      the platform assuming an answer on their behalf. */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+                      <Shield size={14} /> Is this video for kids?
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setMadeForKids(true)}
+                        className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${madeForKids === true
+                          ? "bg-red-500/15 border-red-500 text-white"
+                          : "bg-[#0a0000] border-white/5 text-zinc-400 hover:bg-[#110000]"
+                          }`}
+                      >
+                        Yes, it's made for kids
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMadeForKids(false)}
+                        className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${madeForKids === false
+                          ? "bg-red-500/15 border-red-500 text-white"
+                          : "bg-[#0a0000] border-white/5 text-zinc-400 hover:bg-[#110000]"
+                          }`}
+                      >
+                        No, not made for kids
+                      </button>
+                    </div>
+                    <p className="text-xs text-zinc-500 px-1">
+                      This is required by law. If you pick "Yes," comments and
+                      personalized suggestions won't be shown on this video.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowKidsFactors(v => !v)}
+                      className="text-xs text-red-400 hover:text-red-300 px-1 font-medium"
+                    >
+                      {showKidsFactors ? "Hide" : "Not sure? Tap for simple questions"} {showKidsFactors ? "▲" : "▼"}
+                    </button>
+                    {showKidsFactors && (
+                      <div className="p-3 bg-[#0a0000]/50 rounded-xl border border-white/5 text-xs text-zinc-400 space-y-1.5">
+                        <p className="text-zinc-300 font-semibold mb-2">
+                          Ask yourself these simple questions:
+                        </p>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>What is this video actually about?</li>
+                          <li>Are there cartoons or kid-friendly visuals?</li>
+                          <li>Does it show toys, games, or things kids do?</li>
+                          <li>Is the music the kind kids listen to?</li>
+                          <li>How old are the people shown in the video?</li>
+                          <li>Any characters or actors that kids especially love?</li>
+                          <li>Does the way it's written/spoken feel aimed at kids?</li>
+                          <li>Are any ads on it aimed at kids?</li>
+                          <li>Do you already know most of your viewers are kids?</li>
+                        </ul>
+                        <p className="text-zinc-500 pt-1">
+                          A kid watching your video doesn't make it "for kids" —
+                          this is about who you made it for.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tags */}
