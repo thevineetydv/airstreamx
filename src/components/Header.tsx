@@ -23,6 +23,84 @@ import {
 // Shared logo — single source of truth
 // Use this EVERYWHERE: header, sidebar, favicon fallback
 // ─────────────────────────────────────────────
+/**
+ * BirthdayConfetti — a personal touch, not a platform-wide feature.
+ * Unlike the Independence Day kite (relevant to every visitor), a
+ * founder's birthday means nothing to a random viewer and would just
+ * look confusing on a growing platform. So this only ever renders when
+ * BOTH the date is Aug 23 AND the logged-in account is Vineet's own —
+ * everyone else sees the completely normal header, always.
+ */
+function BirthdayConfetti() {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const now = new Date();
+    const isBirthday = now.getMonth() === 7 && now.getDate() === 23; // Aug 23
+    const isFounder = user?.email?.toLowerCase() === "vineetsitm09@gmail.com";
+    if (!isBirthday || !isFounder) return;
+
+    // Once per browser session — a page reload right after dismissing
+    // it shouldn't immediately trigger the whole thing again.
+    try {
+      if (sessionStorage.getItem("birthday_shown_2026") === "1") return;
+      sessionStorage.setItem("birthday_shown_2026", "1");
+    } catch { }
+
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 5000);
+    return () => clearTimeout(t);
+  }, [user?.email]);
+
+  if (!show) return null;
+
+  const confettiColors = ["#ef4444", "#f87171", "#fbbf24", "#60a5fa", "#34d399"];
+  const pieces = Array.from({ length: 28 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.6,
+    duration: 2.2 + Math.random() * 1.4,
+    color: confettiColors[i % confettiColors.length],
+    rotate: Math.random() * 360,
+    drift: (Math.random() - 0.5) * 120,
+  }));
+
+  return (
+    <div className="fixed inset-0 z-[999] pointer-events-none overflow-hidden">
+      {pieces.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ y: -30, x: 0, opacity: 1, rotate: 0 }}
+          animate={{ y: "110vh", x: p.drift, opacity: [1, 1, 0], rotate: p.rotate }}
+          transition={{ duration: p.duration, delay: p.delay, ease: "easeIn" }}
+          style={{
+            position: "absolute",
+            left: `${p.left}%`,
+            top: 0,
+            width: 8,
+            height: 14,
+            backgroundColor: p.color,
+            borderRadius: 2,
+          }}
+        />
+      ))}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: -10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.4 }}
+        className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md border border-red-500/30 rounded-2xl px-6 py-4 shadow-2xl text-center"
+      >
+        <p className="text-white font-bold text-lg whitespace-nowrap">
+          🎉 Happy Birthday, Vineet! 🎂
+        </p>
+        <p className="text-gray-400 text-xs mt-1">— from the platform you built</p>
+      </motion.div>
+    </div>
+  );
+}
+
 export function AirStreamXLogo({ size = 36 }: { size?: number }) {
   // Unique per instance — this component is intentionally rendered more
   // than once at a time (e.g. the responsive mobile/desktop pair below,
@@ -483,6 +561,8 @@ export default function Header({
 
   return (
     <>
+      <BirthdayConfetti />
+
       {/* ── Slide-in sidebar ─────────────────── */}
       <AnimatePresence>
         {openSidebar && (
