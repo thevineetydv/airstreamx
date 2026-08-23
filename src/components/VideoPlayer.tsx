@@ -461,18 +461,6 @@ const KeyboardShortcuts: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   </motion.div>
 );
 
-const ResumePrompt: React.FC<{ progress: any; onResume: () => void; onStart: () => void; secondsLeft: number }> = ({ progress, onResume, onStart, secondsLeft }) => (
-  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-    className="absolute top-3 right-3 z-50 bg-black/85 backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 shadow-xl flex items-center gap-2">
-    <span className="text-white text-xs whitespace-nowrap">
-      Resume <span className="font-bold text-red-400">{formatTime(progress.time)}</span>?
-      <span className="text-gray-500 ml-1">({secondsLeft}s)</span>
-    </span>
-    <button onClick={onResume} className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-md transition active:scale-95">Resume</button>
-    <button onClick={onStart} className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-md transition active:scale-95">Start over</button>
-  </motion.div>
-);
-
 /* ─────────────────────────────────────────────────────────────────────────
  * CONTROLS
  * ───────────────────────────────────────────────────────────────────────── */
@@ -1231,8 +1219,6 @@ const VideoPlayer = forwardRef<any, any>(
     const [showCursor, setShowCursor] = useState(true);
     const [ripple, setRipple] = useState<any>(null);
     const [showHelp, setShowHelp] = useState(false);
-    const [showResume, setShowResume] = useState(false);
-    const [resumeProgress, setResumeProgress] = useState<any>(null);
     const [isTheaterMode, setIsTheaterMode] = useState(() => getStoredValue(STORAGE_KEYS.THEATER_MODE, 0) === 1);
     const [showEndScreen, setShowEndScreen] = useState(false);
 
@@ -1274,12 +1260,6 @@ const VideoPlayer = forwardRef<any, any>(
     const spriteUrl = useMemo(() => deriveSpriteUrl(video?.url), [video?.url]);
 
     useEffect(() => {
-      if (!video?.id) return;
-      const p = getWatchProgress(video.id);
-      if (p && p.time > 10 && p.time < p.duration - 30) { setResumeProgress(p); setShowResume(true); }
-    }, [video?.id]);
-
-    useEffect(() => {
       if (state.isPlaying && !hasShownSubscribeOverlay.current) {
         hasShownSubscribeOverlay.current = true;
         setShowSubscribeOverlay(true);
@@ -1287,22 +1267,6 @@ const VideoPlayer = forwardRef<any, any>(
         return () => clearTimeout(t);
       }
     }, [state.isPlaying]);
-
-    const handleResume = useCallback(() => { if (resumeProgress) actions.seekAbs(resumeProgress.time); setShowResume(false); }, [resumeProgress, actions]);
-    const handleStartOver = useCallback(() => setShowResume(false), []);
-
-    // Auto-dismiss the resume prompt if the person never taps either
-    // button — it was previously staying on screen over the video
-    // indefinitely. Defaults to Resume (not Start Over) since that's the
-    // safer choice: it preserves progress rather than silently discarding it.
-    const [resumeSecondsLeft, setResumeSecondsLeft] = useState(8);
-    useEffect(() => {
-      if (!showResume) return;
-      setResumeSecondsLeft(8);
-      const t = setTimeout(() => { handleResume(); }, 8000);
-      const tick = setInterval(() => setResumeSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-      return () => { clearTimeout(t); clearInterval(tick); };
-    }, [showResume, handleResume]);
 
     const toggleTheaterMode = useCallback(() => {
       const m = !isTheaterMode; setIsTheaterMode(m);
@@ -1352,7 +1316,33 @@ const VideoPlayer = forwardRef<any, any>(
           });
           hlsRef.current = hls;
           hls.loadSource(video.url); hls.attachMedia(el);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => { actions.setLevels(hls.levels); if (startTime > 0) el.currentTime = startTime; safePlay(); });
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            actions.setLevels(hls.levels);
+
+            // Data Saver (Settings page toggle) — caps the initial
+            // quality at 480p to reduce mobile data usage. Picks the
+            // highest level that's still <= 480p, or the lowest
+            // available level if the ladder never dips that low.
+            // This only sets the starting point — people can still
+            // manually pick a higher quality from the quality menu.
+            try {
+              const dataSaverOn = localStorage.getItem("data_saver_mode") === "1";
+              if (dataSaverOn && hls.levels.length > 0) {
+                let bestIdx = 0;
+                let bestHeight = 0;
+                hls.levels.forEach((lvl, idx) => {
+                  if (lvl.height <= 480 && lvl.height > bestHeight) {
+                    bestHeight = lvl.height;
+                    bestIdx = idx;
+                  }
+                });
+                actions.setLevel(bestIdx);
+              }
+            } catch { }
+
+            if (startTime > 0) el.currentTime = startTime;
+            safePlay();
+          });
           hls.on(Hls.Events.ERROR, (_, d) => {
             if (d.fatal) {
               if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
@@ -1481,7 +1471,6 @@ useImperativeHandle(ref, () => ({
             </AnimatePresence>
 
             <AnimatePresence>
-              {showResume && resumeProgress && <ResumePrompt progress={resumeProgress} onResume={handleResume} onStart={handleStartOver} secondsLeft={resumeSecondsLeft} />}
             </AnimatePresence>
 
             <AnimatePresence>
