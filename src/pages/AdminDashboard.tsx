@@ -44,7 +44,7 @@ interface FeaturedEntry {
   is_active: boolean;
 }
 
-type Tab = "videos" | "featured";
+type Tab = "videos" | "featured" | "maintenance";
 type SortKey = "created_at" | "views" | "likes" | "title";
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -361,6 +361,12 @@ export default function AdminDashboard() {
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
+  // ── Maintenance tab ──
+  const [health, setHealth] = useState<any>(null);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [refreshingScores, setRefreshingScores] = useState(false);
+
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
   }, []);
@@ -568,6 +574,60 @@ export default function AdminDashboard() {
     }
   };
 
+  // ── Maintenance actions ──────────────────────────────────────────
+  const fetchHealth = useCallback(async () => {
+    setLoadingHealth(true);
+    try {
+      const res = await fetch(`${API_URL}/health`);
+      const data = await res.json();
+      setHealth(data);
+    } catch {
+      showToast("Failed to load server health", "error");
+    } finally {
+      setLoadingHealth(false);
+    }
+  }, [showToast]);
+
+  const clearCache = useCallback(async () => {
+    setClearingCache(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/api/admin/cache/clear`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed");
+      showToast(
+        `Cache cleared (${data.cleared.videos} video, ${data.cleared.search} search, ${data.cleared.customizations} channel entries)`
+      );
+      fetchHealth();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to clear cache", "error");
+    } finally {
+      setClearingCache(false);
+    }
+  }, [showToast, fetchHealth]);
+
+  const refreshScores = useCallback(async () => {
+    setRefreshingScores(true);
+    try {
+      const res = await fetch(`${API_URL}/api/recommendations/refresh-scores`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
+      showToast("Recommendation scores refreshed");
+    } catch {
+      showToast("Failed to refresh scores", "error");
+    } finally {
+      setRefreshingScores(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (tab === "maintenance") fetchHealth();
+  }, [tab, fetchHealth]);
+
   /* ── Loading / Access denied ── */
   if (checking) {
     return (
@@ -613,7 +673,7 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="px-4 sm:px-6 flex gap-1 border-b border-white/5">
-        {(["videos", "featured"] as Tab[]).map(t => (
+        {(["videos", "featured", "maintenance"] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -623,7 +683,7 @@ export default function AdminDashboard() {
                 : "border-transparent text-gray-500 hover:text-gray-300"
             }`}
           >
-            {t === "featured" ? "⭐ Featured" : "🎬 Videos"}
+            {t === "featured" ? "⭐ Featured" : t === "maintenance" ? "🧹 Maintenance" : "🎬 Videos"}
           </button>
         ))}
       </div>
@@ -910,6 +970,116 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ══ MAINTENANCE TAB ══ */}
+        {tab === "maintenance" && (
+          <div className="space-y-6">
+            {/* Server health */}
+            <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-white">Server health</p>
+                <button
+                  onClick={fetchHealth}
+                  disabled={loadingHealth}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition disabled:opacity-50"
+                >
+                  {loadingHealth ? "Checking…" : "↺ Refresh"}
+                </button>
+              </div>
+
+              {!health && loadingHealth && (
+                <p className="text-sm text-gray-500">Loading…</p>
+              )}
+
+              {health && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Status</p>
+                    <p className={`text-sm font-bold ${health.status === "healthy" ? "text-emerald-400" : "text-red-400"}`}>
+                      {health.status}
+                    </p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">DB latency</p>
+                    <p className="text-sm font-bold text-white">{health.services?.database?.latency ?? "—"}</p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">MinIO latency</p>
+                    <p className="text-sm font-bold text-white">{health.services?.minio?.latency ?? "—"}</p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Uptime</p>
+                    <p className="text-sm font-bold text-white">
+                      {health.uptime ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Video cache</p>
+                    <p className="text-sm font-bold text-white">{health.cache?.video ?? 0} entries</p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Search cache</p>
+                    <p className="text-sm font-bold text-white">{health.cache?.search ?? 0} entries</p>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3 col-span-2">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Memory (RSS)</p>
+                    <p className="text-sm font-bold text-white">
+                      {health.memory?.rss ? `${(health.memory.rss / 1024 / 1024).toFixed(0)} MB` : "—"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Cleanup actions */}
+            <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+              <p className="text-sm font-semibold text-white mb-1">Cleanup actions</p>
+              <p className="text-xs text-gray-500 mb-4">
+                App-level only — clears in-memory caches and recalculates scores.
+                Doesn't touch the server, disk, or database itself.
+              </p>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4 p-3 bg-black/30 rounded-lg">
+                  <div>
+                    <p className="text-sm text-white">Clear caches</p>
+                    <p className="text-xs text-gray-500">
+                      Forces fresh data on the next request instead of serving stale cached results.
+                    </p>
+                  </div>
+                  <button
+                    onClick={clearCache}
+                    disabled={clearingCache}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium transition disabled:opacity-50 flex-shrink-0"
+                  >
+                    {clearingCache ? "Clearing…" : "Clear now"}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 p-3 bg-black/30 rounded-lg">
+                  <div>
+                    <p className="text-sm text-white">Refresh recommendation scores</p>
+                    <p className="text-xs text-gray-500">
+                      Recalculates trending/engagement scores used by the "For you" feed.
+                    </p>
+                  </div>
+                  <button
+                    onClick={refreshScores}
+                    disabled={refreshingScores}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex-shrink-0"
+                  >
+                    {refreshingScores ? "Refreshing…" : "Refresh now"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Need to free server disk space or update packages? That's OS-level maintenance —
+              do it over SSH, not from here.
+            </p>
           </div>
         )}
       </div>
