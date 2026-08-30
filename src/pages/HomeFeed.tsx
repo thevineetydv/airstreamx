@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Bell } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type Hls from "hls.js";
@@ -848,33 +848,6 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     return combined;
   })();
 
-  // ── Category discovery rows (YouTube-style) ──────────────────
-  // Only relevant on the default "All" homepage — once someone has
-  // filtered to one category or is searching, showing per-category
-  // rows again would be redundant. Requires at least 3 videos in a
-  // category before it gets its own row; with only 1-2 videos, a
-  // dedicated row looks sparse and broken rather than like discovery.
-  const videosByCategory = useMemo(() => {
-    if (category !== "All" || searchQuery) return [];
-    const groups: Record<string, any[]> = {};
-    for (const v of videos) {
-      const cat = v.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(v);
-    }
-    const MIN_PER_ROW = 3;
-    // Preserve the same order as the CATEGORIES tab list where possible,
-    // so rows appear in a familiar, predictable sequence rather than
-    // whatever order categories happened to first appear in the data.
-    const orderedNames = [
-      ...CATEGORIES.filter((c) => c !== "All" && groups[c]?.length >= MIN_PER_ROW),
-      ...Object.keys(groups).filter(
-        (c) => !CATEGORIES.includes(c) && groups[c].length >= MIN_PER_ROW
-      ),
-    ];
-    return orderedNames.map((name) => ({ name, items: groups[name] }));
-  }, [videos, category, searchQuery]);
-
   useEffect(() => {
     if (!loading && videos.length >= totalResults) setHasMore(false);
   }, [loading, videos.length, totalResults]);
@@ -1082,15 +1055,6 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
         </div>
       </div>
 
-      {/* Category discovery rows — YouTube-style browsing so a visitor
-          can find "almost every type of video" without hunting through
-          category tabs one at a time. Only shown on the default "All"
-          view; disappears once someone filters to one category or
-          searches, since it would just repeat what's already visible. */}
-      {videosByCategory.map((row) => (
-        <CategoryRow key={row.name} name={row.name} items={row.items} onSeeAll={handleCategoryChange} />
-      ))}
-
       {/* Searching shimmer — only when we have NOTHING cached to show yet.
           If we already have cached videos on screen, a background
           revalidation should NOT hide them — that would defeat the
@@ -1227,65 +1191,6 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       )}
       </>
       )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────
- * CATEGORY DISCOVERY ROW
- * A horizontally-scrolling row of videos for one category, shown on
- * the default homepage so visitors see a spread across "almost every
- * type of video" rather than one flat list dominated by whatever was
- * uploaded most recently.
- * ───────────────────────────────────────────────────────────── */
-
-function CategoryRow({ name, items, onSeeAll }: { name: string; items: any[]; onSeeAll: (c: string) => void }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scroll = (dir: "left" | "right") => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir === "left" ? -320 : 320, behavior: "smooth" });
-  };
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-white font-bold text-lg">{name}</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onSeeAll(name)}
-            className="text-sm text-red-400 hover:text-red-300 transition font-medium"
-          >
-            See all →
-          </button>
-          <button
-            onClick={() => scroll("left")}
-            aria-label="Scroll left"
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition hidden sm:flex"
-          >
-            <ChevronLeft className="w-4 h-4 text-white" />
-          </button>
-          <button
-            onClick={() => scroll("right")}
-            aria-label="Scroll right"
-            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition hidden sm:flex"
-          >
-            <ChevronRight className="w-4 h-4 text-white" />
-          </button>
-        </div>
-      </div>
-      <div
-        ref={scrollRef}
-        className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide pb-2"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        {items.map((v) => (
-          <div key={v.id} className="flex-shrink-0 w-[220px] md:w-[280px]">
-            <VideoCard video={v} />
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
