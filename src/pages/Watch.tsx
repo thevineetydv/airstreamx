@@ -6,7 +6,7 @@ import {
   MessageSquare, Eye, Calendar,
   ChevronDown, ChevronUp, Copy, Check,
   Pencil, Trash2, X as XIcon,
-  ThumbsUp, ThumbsDown, Pin, AlertTriangle,
+  ThumbsUp, ThumbsDown, Pin, AlertTriangle, BarChart3,
 } from "lucide-react";
 import VideoPlayer from "../components/VideoPlayer";
 import { getAuth } from "firebase/auth";
@@ -438,6 +438,20 @@ export default function Watch() {
   const [showDescription, setShowDescription] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  // ── Edit video (owner-only, like YouTube's "Edit video" on your own
+  // upload) — quick title/description edit without leaving the watch page.
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [savingVideoEdit, setSavingVideoEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // ── Analytics (owner-only) ──
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [showComments, setShowComments] = useState(true);
@@ -1579,6 +1593,84 @@ useEffect(() => {
     mentionQuery, mentionTargetIsReply, filteredMentionCandidates, handleReplyTextChange, selectMention,
   ]);
 
+  // ── Own-video check (like YouTube showing "Edit video" only to the
+  // uploader) — same email-comparison pattern used elsewhere on this page.
+  const isVideoOwner = Boolean(
+    current?.uploader_email && currentUserEmail &&
+    current.uploader_email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
+  );
+
+  const openEditModal = useCallback(() => {
+    if (!current) return;
+    setEditTitle(current.title || "");
+    setEditDescription(current.description || "");
+    setEditError(null);
+    setShowEditModal(true);
+  }, [current]);
+
+  const saveVideoEdit = useCallback(async () => {
+    if (!current?.id || savingVideoEdit) return;
+    if (!editTitle.trim()) { setEditError("Title cannot be empty."); return; }
+
+    setSavingVideoEdit(true);
+    setEditError(null);
+    try {
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/videos/${current.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data?.error || "Failed to update video.");
+        return;
+      }
+      // Reflect the change immediately without a full page reload.
+      setCurrent((prev) => prev ? {
+        ...prev,
+        title: data.video?.title ?? editTitle.trim(),
+        description: data.video?.description ?? editDescription.trim(),
+      } : prev);
+      setShowEditModal(false);
+    } catch {
+      setEditError("Network error — please try again.");
+    } finally {
+      setSavingVideoEdit(false);
+    }
+  }, [current, editTitle, editDescription, savingVideoEdit]);
+
+  const openAnalyticsModal = useCallback(async () => {
+    if (!current?.id) return;
+    setShowAnalyticsModal(true);
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/videos/${current.id}/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAnalyticsError(data?.error || "Failed to load analytics.");
+        return;
+      }
+      setAnalyticsData(data);
+    } catch {
+      setAnalyticsError("Network error — please try again.");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [current?.id]);
+
   const handleShare = useCallback((platform: string) => {
     const url = window.location.href;
     const text = `Check out: ${current?.title}`;
@@ -1760,6 +1852,26 @@ useEffect(() => {
                   </div>
 
                   <TipButton creatorUpiId={current.upi_id} creatorName={current.channel_name} />
+
+                  {isVideoOwner && (
+                    <button
+                      onClick={openAnalyticsModal}
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm"
+                    >
+                      <BarChart3 size={15} />
+                      <span className="hidden sm:inline">Analytics</span>
+                    </button>
+                  )}
+
+                  {isVideoOwner && (
+                    <button
+                      onClick={openEditModal}
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm"
+                    >
+                      <Pencil size={15} />
+                      <span className="hidden sm:inline">Edit video</span>
+                    </button>
+                  )}
 
                   <div className="relative ml-auto" ref={moreMenuRef}>
                     <button
@@ -2243,6 +2355,146 @@ useEffect(() => {
 
         </div>
       </div>
+
+      {/* ── Edit Video modal (owner-only) ── */}
+      <AnimatePresence>
+        {showEditModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !savingVideoEdit && setShowEditModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#181818] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Pencil size={18} /> Edit video
+                </h2>
+                <button
+                  onClick={() => !savingVideoEdit && setShowEditModal(false)}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition"
+                >
+                  <XIcon size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">Title</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    maxLength={255}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
+                    placeholder="Video title"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">Description</label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    maxLength={5000}
+                    rows={5}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50 resize-none"
+                    placeholder="Video description"
+                  />
+                </div>
+
+                {editError && (
+                  <p className="text-xs text-red-400 flex items-center gap-1.5">
+                    <AlertTriangle size={13} /> {editError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    disabled={savingVideoEdit}
+                    className="px-4 py-2 text-sm text-gray-300 hover:text-white transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveVideoEdit}
+                    disabled={savingVideoEdit || !editTitle.trim()}
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
+                  >
+                    {savingVideoEdit ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Analytics modal (owner-only) ── */}
+      <AnimatePresence>
+        {showAnalyticsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowAnalyticsModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#181818] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BarChart3 size={18} /> Analytics
+                </h2>
+                <button
+                  onClick={() => setShowAnalyticsModal(false)}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition"
+                >
+                  <XIcon size={18} />
+                </button>
+              </div>
+
+              {analyticsLoading && (
+                <p className="text-sm text-gray-400 text-center py-8">Loading…</p>
+              )}
+
+              {!analyticsLoading && analyticsError && (
+                <p className="text-sm text-red-400 text-center py-8">{analyticsError}</p>
+              )}
+
+              {!analyticsLoading && !analyticsError && analyticsData && (
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Views", value: analyticsData.views },
+                    { label: "Likes", value: analyticsData.likes },
+                    { label: "Dislikes", value: analyticsData.dislikes },
+                    { label: "Comments", value: analyticsData.comments },
+                    { label: "Avg. watched", value: `${analyticsData.avg_watch_pct}%` },
+                    { label: "Watch sessions", value: analyticsData.watch_events },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-black/30 border border-white/5 rounded-xl p-4">
+                      <p className="text-2xl font-black text-white">{stat.value}</p>
+                      <p className="text-xs text-gray-400 mt-1">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

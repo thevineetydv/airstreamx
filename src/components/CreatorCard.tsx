@@ -12,11 +12,12 @@
  *   className      – extra classes on the root wrapper
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useCreatorProfile } from "../hooks/useCreatorProfile";
 import { SubscriptionButton } from "./SubscriptionButton";
+import { useAuth } from "../context/AuthContext";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,12 @@ export default function CreatorCard({
   className = "",
 }: CreatorCardProps) {
   const creator = useCreatorProfile(email);
+  const { user } = useAuth();
+
+  // You can't subscribe to yourself — matches YouTube. Comparing emails
+  // (both lowercased) rather than IDs since that's the identifier this
+  // component already works with throughout.
+  const isOwnChannel = !!user?.email && !!email && user.email.toLowerCase() === email.toLowerCase();
 
   // Override with directly passed props (more reliable than fetch)
   const resolvedHandle    = handle || creator.handle || (email?.includes("@") ? email.split("@")[0] : email) || "creator";
@@ -114,39 +121,10 @@ export default function CreatorCard({
   const resolvedChannelId = channelId || email || "";
   const resolvedPath      = `/@${resolvedHandle.replace(/^@/, "")}`;
 
-  // liveCount: synced from SubscriptionButton's rendered count.
-  // SubscriptionButton shows "Subscribed 2" — we observe its DOM text after mount
-  // to extract the number, since onSubscriptionChange only fires on user interaction.
+  // liveCount is now populated purely via SubscriptionButton's own
+  // onSubscriptionChange callback (fired both on click AND after its
+  // initial status fetch) — no DOM-reading needed.
   const [liveCount, setLiveCount] = useState<number | null>(null);
-  const subBtnWrapperRef = useRef<HTMLDivElement>(null);
-
-  // Read count from SubscriptionButton's rendered text via MutationObserver
-  useEffect(() => {
-    const wrapper = subBtnWrapperRef.current;
-    if (!wrapper) return;
-
-    const extractCount = () => {
-      const text = wrapper.textContent ?? "";
-      // SubscriptionButton renders text like "Subscribe", "Subscribed 2", etc.
-      const match = text.match(/(\d+)/);
-      if (match) {
-        const n = parseInt(match[1], 10);
-        if (!isNaN(n)) setLiveCount(n);
-      }
-    };
-
-    // Run once after first paint (SubscriptionButton may be async)
-    const t = setTimeout(extractCount, 800);
-
-    // Also observe DOM changes (when SubscriptionButton updates its count)
-    const observer = new MutationObserver(extractCount);
-    observer.observe(wrapper, { childList: true, subtree: true, characterData: true });
-
-    return () => {
-      clearTimeout(t);
-      observer.disconnect();
-    };
-  }, [email]);
 
   const displayCount = liveCount !== null ? liveCount : creator.subscriberCount;
   const displayLoaded = liveCount !== null ? true : !creator.loading;
@@ -198,9 +176,15 @@ export default function CreatorCard({
 
         {/* Subscribe button (separate — does NOT navigate). Zoomed down
             slightly — the full-size button was the biggest contributor
-            to this row feeling bulky. */}
-        {showSubscribe && (
-          <div className="flex-shrink-0" style={{ zoom: 0.85 }} ref={subBtnWrapperRef}>
+            to this row feeling bulky. Replaced with a plain label on
+            your own channel — you can't subscribe to yourself. */}
+        {showSubscribe && isOwnChannel && (
+          <span className="flex-shrink-0 text-xs text-gray-500 font-medium px-3 py-2">
+            This is your channel
+          </span>
+        )}
+        {showSubscribe && !isOwnChannel && (
+          <div className="flex-shrink-0" style={{ zoom: 0.85 }}>
             <SubscriptionButton
               channelId={resolvedChannelId}
               channelName={resolvedName}
@@ -254,8 +238,12 @@ export default function CreatorCard({
         </div>
       </Link>
 
-      {showSubscribe && (
-        <div ref={subBtnWrapperRef}>
+      {showSubscribe && isOwnChannel && (
+        <span className="text-xs text-gray-500 font-medium px-3 py-2">
+          This is your channel
+        </span>
+      )}
+      {showSubscribe && !isOwnChannel && (
         <SubscriptionButton
           channelId={resolvedChannelId}
           channelName={resolvedName}
@@ -264,7 +252,6 @@ export default function CreatorCard({
             if (typeof count === "number") setLiveCount(count);
           }}
         />
-        </div>
       )}
     </motion.div>
   );

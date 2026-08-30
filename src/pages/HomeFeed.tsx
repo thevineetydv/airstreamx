@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bell } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type Hls from "hls.js";
@@ -8,6 +8,7 @@ import { API_URL } from "../utils/constants";
 import { channelUrl } from "../utils/channelUrl";
 import { useCachedData } from "../utils/useCachedData";
 import { invalidateCache } from "../utils/metadataCache";
+import { useAuth } from "../context/AuthContext";
 
 /* ─────────────────────────────────────────────────────────────
  * CATEGORIES
@@ -651,6 +652,36 @@ interface HomeFeedProps {
 export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
   const [category, setCategory] = useState("All");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const { user } = useAuth();
+
+  // ── Subscriptions feed — guaranteed, purely chronological videos from
+  // every channel the person follows. No algorithm decides what shows up
+  // here; if you're subscribed, every upload appears, newest first. ──
+  const [subscriptionVideos, setSubscriptionVideos] = useState<any[]>([]);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (category !== "Subscriptions" || !user) return;
+    let cancelled = false;
+    setSubscriptionLoading(true);
+    setSubscriptionError(null);
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`${API_URL}/api/feed/subscriptions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!cancelled) setSubscriptionVideos(data.videos || []);
+      } catch {
+        if (!cancelled) setSubscriptionError("Couldn't load your subscriptions right now.");
+      } finally {
+        if (!cancelled) setSubscriptionLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [category, user]);
 
   // Channel customization cache (email -> {channelName, avatarUrl}).
   // This stays in a ref so it survives re-renders within ONE mount,
@@ -706,6 +737,12 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
    */
   const fetchVideoPage = useCallback(
     async (offset: number) => {
+      // Subscriptions isn't a real content category — its videos come
+      // from the dedicated subscription-feed effect above instead.
+      if (category === "Subscriptions") {
+        return { videos: [], total: 0 };
+      }
+
       const params = new URLSearchParams();
       if (debouncedSearch?.trim()) params.append("search", debouncedSearch.trim());
       if (category && category !== "All") params.append("category", category);
@@ -964,7 +1001,7 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
           className="mb-4 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse"
           style={{ height: "clamp(200px, 48vw, 65vh)" }}
         />
-        <CategoryTabs category={category} setCategory={handleCategoryChange} />
+        <CategoryTabs category={category} setCategory={handleCategoryChange} isLoggedIn={!!user} />
         <div className="grid gap-3 md:gap-6 mt-4 grid-cols-2 lg:grid-cols-3">
           {Array(6)
             .fill(0)
@@ -1012,11 +1049,11 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       <FloatingKites />
 
       {/* Hero */}
-      {!searchQuery && adminFeaturedLoading && <HeroSkeleton />}
-      {!searchQuery && !adminFeaturedLoading && featuredVideo && <HeroVideo video={featuredVideo} />}
+      {category !== "Subscriptions" && !searchQuery && adminFeaturedLoading && <HeroSkeleton />}
+      {category !== "Subscriptions" && !searchQuery && !adminFeaturedLoading && featuredVideo && <HeroVideo video={featuredVideo} />}
 
       {/* Shorts */}
-      <ShortsSection />
+      {category !== "Subscriptions" && <ShortsSection />}
 
       {/* Search banner */}
       {searchQuery && (
@@ -1038,7 +1075,7 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       {/* Category + view toggle */}
       <div className="flex items-center gap-2 mb-3 md:mb-6">
         <div className="flex-1 overflow-x-auto scrollbar-hide">
-          <CategoryTabs category={category} setCategory={handleCategoryChange} />
+          <CategoryTabs category={category} setCategory={handleCategoryChange} isLoggedIn={!!user} />
         </div>
         <div className="flex items-center flex-shrink-0">
           <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
@@ -1058,6 +1095,56 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
           If we already have cached videos on screen, a background
           revalidation should NOT hide them — that would defeat the
           whole point of caching (instant display on return visits). */}
+      {/* ── Subscriptions feed — purely chronological, no algorithm ──
+          Every video from every channel you follow, newest first.
+          Nothing here is ranked or filtered by engagement. */}
+      {category === "Subscriptions" && (
+        <>
+          {subscriptionLoading && (
+            <div className="grid gap-3 md:gap-6 grid-cols-2 lg:grid-cols-3">
+              {Array(6).fill(0).map((_, i) => <ShimmerCard key={i} />)}
+            </div>
+          )}
+
+          {!subscriptionLoading && subscriptionError && (
+            <div className="text-center py-16 px-4">
+              <p className="text-gray-400 text-sm">{subscriptionError}</p>
+            </div>
+          )}
+
+          {!subscriptionLoading && !subscriptionError && subscriptionVideos.length === 0 && (
+            <div className="text-center py-16 px-4">
+              <div className="w-16 h-16 bg-[#110000] rounded-full flex items-center justify-center mx-auto mb-4">
+                <Bell className="w-8 h-8 text-gray-600" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-300 mb-2">No subscriptions yet</h3>
+              <p className="text-gray-400 text-sm">
+                Subscribe to channels and their new uploads will always show up here.
+              </p>
+            </div>
+          )}
+
+          {!subscriptionLoading && subscriptionVideos.length > 0 && (
+            <motion.div
+              layout
+              className={
+                viewMode === "grid"
+                  ? "grid gap-3 md:gap-6 grid-cols-2 lg:grid-cols-3"
+                  : "flex flex-col gap-3"
+              }
+            >
+              {subscriptionVideos.map((v) =>
+                viewMode === "grid"
+                  ? <VideoCard key={v.id} video={v} />
+                  : <VideoCardList key={v.id} video={v} />
+              )}
+            </motion.div>
+          )}
+        </>
+      )}
+
+      {category !== "Subscriptions" && (
+      <>
       {isSearching && videos.length === 0 && (
         <div className="grid gap-3 md:gap-6 grid-cols-2 lg:grid-cols-3">
           {Array(6)
@@ -1138,6 +1225,8 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
             ))}
         </div>
       )}
+      </>
+      )}
     </div>
   );
 }
@@ -1205,9 +1294,24 @@ function CategoryRow({ name, items, onSeeAll }: { name: string; items: any[]; on
  * CATEGORY TABS
  * ───────────────────────────────────────────────────────────── */
 
-function CategoryTabs({ category, setCategory }: any) {
+function CategoryTabs({ category, setCategory, isLoggedIn }: any) {
   return (
     <div className="flex overflow-x-auto space-x-2 md:space-x-3 pb-1 scrollbar-hide">
+      {isLoggedIn && (
+        <motion.button
+          key="Subscriptions"
+          onClick={() => setCategory("Subscriptions")}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className={`px-3 md:px-5 py-1.5 md:py-3 text-xs md:text-sm rounded-full transition-all whitespace-nowrap font-medium min-h-[32px] md:min-h-[44px] flex items-center justify-center flex-shrink-0 gap-1.5
+            ${category === "Subscriptions"
+              ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/30"
+              : "bg-[#1a1a1a] text-gray-300 hover:bg-red-500/10 hover:text-red-400 border border-gray-800"
+            }`}
+        >
+          <Bell size={14} /> Subscriptions
+        </motion.button>
+      )}
       {CATEGORIES.map((c) => (
         <motion.button
           key={c}

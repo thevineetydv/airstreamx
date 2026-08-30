@@ -166,11 +166,18 @@ const fetchPublicCount = useCallback(async () => {
       });
       if (res.ok) {
         const data = await res.json();
+        const subscribed = data.subscribed ?? false;
         setSub({
-          subscribed: data.subscribed ?? false,
+          subscribed,
           notificationsEnabled: data.notifications_enabled ?? true,
           ...(typeof data.subscriber_count === "number" && { subscriberCount: data.subscriber_count }),
         });
+        // Let the parent (e.g. CreatorCard) know the real count on initial
+        // load too, not just after a click — this is what previously forced
+        // CreatorCard to scrape this component's rendered DOM text instead.
+        if (typeof data.subscriber_count === "number") {
+          onSubscriptionChange?.(subscribed, data.subscriber_count);
+        }
       } else if (res.status >= 500 && attempt < 3) {
         await backoffDelay(attempt);
         return checkSubscriptionStatus(attempt + 1);
@@ -180,7 +187,7 @@ const fetchPublicCount = useCallback(async () => {
     } finally {
       if (attempt === 0) setChecking(false);
     }
-  }, [channelId, getToken, resolveNumericId]);
+  }, [channelId, getToken, resolveNumericId, onSubscriptionChange]);
 
 useEffect(() => {
   if (!channelId) return;
@@ -249,6 +256,7 @@ useEffect(() => {
         onSubscriptionChange?.(true, optimisticCount);
         const bodies = [...(numId ? [{ channelId: numId }] : []), { channelId: String(channelId) }];
         let succeeded = false;
+        let serverMessage: string | null = null;
         for (const body of bodies) {
           if (signal.aborted) break;
           try {
@@ -266,13 +274,21 @@ useEffect(() => {
               succeeded = true;
               break;
             }
+            // Capture the server's actual reason (e.g. "Cannot subscribe to
+            // your own channel") before deciding whether to retry with the
+            // next body shape — a 400 here is a real, final answer, not a
+            // shape mismatch worth retrying.
+            try {
+              const errData = await res.json();
+              if (errData?.error) serverMessage = errData.error;
+            } catch { /* body wasn't JSON — fall through to generic message */ }
             if (res.status !== 404 && res.status !== 405) break;
           } catch (err) { if ((err as Error).name === "AbortError") return; }
         }
         if (!succeeded && !signal.aborted) {
           setSub(snapshot);
           onSubscriptionChange?.(snapshot.subscribed, snapshot.subscriberCount);
-          showError("Subscription failed");
+          showError(serverMessage || "Subscription failed");
         }
       }
     } catch (err) {
