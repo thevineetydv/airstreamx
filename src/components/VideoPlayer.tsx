@@ -58,9 +58,6 @@ const getStoredValue = (key: string, def: number): number => {
 const setStoredValue = (key: string, val: number) => {
   try { localStorage.setItem(key, String(val)); } catch { }
 };
-const getWatchProgress = (id: any) => {
-  try { const s = localStorage.getItem(`watch_progress_${id}`); return s ? JSON.parse(s) : null; } catch { return null; }
-};
 const setWatchProgress = (id: any, t: number, dur: number) => {
   try { localStorage.setItem(`watch_progress_${id}`, JSON.stringify({ time: t, duration: dur, timestamp: Date.now() })); } catch { }
 };
@@ -861,7 +858,14 @@ const VideoEndScreen: React.FC<{
   autoplay: boolean;
   onReplay: () => void;
   onDismiss: () => void;
-}> = ({ suggestions, autoplay, onReplay, onDismiss }) => {
+  endScreenElements?: Array<{
+    id: number;
+    type: "video" | "channel";
+    position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center";
+    video?: { id: number; public_id?: string; title: string; thumbnail: string; duration?: number };
+    channel?: { name: string; avatar_url?: string; handle?: string };
+  }>;
+}> = ({ suggestions, autoplay, onReplay, onDismiss, endScreenElements = [] }) => {
   const navigate = useNavigate();
   const TOTAL = 7;
   const nextVideo = suggestions[0] ?? null;
@@ -933,6 +937,90 @@ const VideoEndScreen: React.FC<{
           <X size={14} />
         </button>
       </div>
+
+      {/* ── Creator's end-screen elements — positioned grid, distinct
+          from the algorithmic "Up next" panel below. Each element sits
+          in its configured corner (or center); channel elements show
+          the uploader's own avatar+name, video elements show a
+          thumbnail card, matching how YouTube's own end-screen editor
+          separates these two element types. ── */}
+      {endScreenElements.length > 0 && (
+        <div style={{ position: "relative", padding: "0 16px", pointerEvents: "none" }}>
+          <div style={{ position: "relative", height: 0 }}>
+            {(["top-left", "top-right", "bottom-left", "bottom-right", "center"] as const).map((pos) => {
+              const elementsHere = endScreenElements.filter((e) => e.position === pos);
+              if (elementsHere.length === 0) return null;
+              const styleForPosition: React.CSSProperties =
+                pos === "top-left" ? { top: 8, left: 16 } :
+                pos === "top-right" ? { top: 8, right: 16 } :
+                pos === "bottom-left" ? { top: 100, left: 16 } :
+                pos === "bottom-right" ? { top: 100, right: 16 } :
+                { top: 8, left: "50%", transform: "translateX(-50%)" };
+              return (
+                <div key={pos} style={{ position: "absolute", ...styleForPosition, display: "flex", flexDirection: "column", gap: 6, pointerEvents: "auto", zIndex: 5 }}>
+                  {elementsHere.map((el) =>
+                    el.type === "video" && el.video ? (
+                      <motion.div
+                        key={el.id}
+                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        onClick={() => navigate(`/watch?v=${el.video!.public_id || el.video!.id}`)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8, padding: 6,
+                          borderRadius: 8, cursor: "pointer", width: 220,
+                          background: "rgba(20,20,20,0.92)", border: "1px solid rgba(255,255,255,0.12)",
+                        }}
+                        className="group hover:border-red-500/40 transition-colors"
+                      >
+                        <div style={{ position: "relative", width: 64, height: 36, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: "#0a0a0a" }}>
+                          <img src={el.video.thumbnail} alt={el.video.title}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            className="group-hover:scale-105 transition-transform"
+                          />
+                          {el.video.duration && (
+                            <div style={{ position: "absolute", bottom: 1, right: 1, background: "rgba(0,0,0,0.8)", borderRadius: 3, padding: "0px 3px", fontSize: 8, fontFamily: "monospace", color: "#fff" }}>
+                              {fmtDur(el.video.duration)}
+                            </div>
+                          )}
+                        </div>
+                        <p style={{
+                          fontSize: 11, color: "#fff", fontWeight: 600, minWidth: 0,
+                          overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical", lineHeight: 1.3,
+                        }}>
+                          {el.video.title}
+                        </p>
+                      </motion.div>
+                    ) : el.type === "channel" && el.channel ? (
+                      <motion.div
+                        key={el.id}
+                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        onClick={() => el.channel!.handle && navigate(`/channel/${el.channel!.handle}`)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
+                          borderRadius: 20, cursor: "pointer",
+                          background: "rgba(20,20,20,0.92)", border: "1px solid rgba(239,68,68,0.35)",
+                        }}
+                        className="hover:border-red-500/60 transition-colors"
+                      >
+                        {el.channel.avatar_url ? (
+                          <img src={el.channel.avatar_url} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                        )}
+                        <p style={{ fontSize: 12, color: "#fff", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {el.channel.name}
+                        </p>
+                      </motion.div>
+                    ) : null
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Two-panel body ── */}
       <div style={{ flex: 1, display: "flex", alignItems: "stretch", padding: "16px 16px 0 16px", gap: 14, minHeight: 0 }}>
@@ -1276,7 +1364,7 @@ const VideoPlayer = forwardRef<any, any>(
     useEffect(() => {
       const el = vRef.current; if (!el) return;
       const fn = () => {
-        if (suggestions.length > 0) setShowEndScreen(true);
+        if (suggestions.length > 0 || (video?.end_screen_elements?.length > 0)) setShowEndScreen(true);
         onVideoEnd?.();
       };
       el.addEventListener("ended", fn); return () => el.removeEventListener("ended", fn);
@@ -1619,14 +1707,14 @@ useImperativeHandle(ref, () => ({
             {state.error && <ErrorDisplay message={state.error} onRetry={() => { actions.clearError(); window.location.reload(); }} />}
 
             <AnimatePresence>
-              {showPlayPauseOverlay && !state.isBuffering && !state.error && (
+              {showPlayPauseOverlay && !state.error && (
                 <motion.div
                   key={state.isPlaying ? "play-flash" : "pause-flash"}
                   initial={{ opacity: 0, scale: 0.7 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.15 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="relative absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+                  className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
                 >
                   {/* YouTube-style: dark circle, smaller icon, no border */}
                   <div className="p-3.5 rounded-full bg-black/50 backdrop-blur-sm shadow-lg">
@@ -1670,10 +1758,11 @@ useImperativeHandle(ref, () => ({
 
             {/* ── Video End Screen ── */}
             <AnimatePresence>
-              {showEndScreen && suggestions.length > 0 && (
+              {showEndScreen && (suggestions.length > 0 || (video?.end_screen_elements?.length > 0)) && (
                 <VideoEndScreen
                   suggestions={suggestions}
                   autoplay={autoplayNext}
+                  endScreenElements={video?.end_screen_elements || []}
                   onReplay={() => {
                     setShowEndScreen(false);
                     actions.seekAbs(0);
