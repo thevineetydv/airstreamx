@@ -81,6 +81,33 @@ export default function AboutPage() {
           </p>
         </motion.div>
 
+        {/* ── Why we built this ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6 }}
+          className="mb-20"
+        >
+          <p className="inline-flex items-center gap-2 text-red-400 text-xs font-bold tracking-[0.2em] uppercase mb-5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            Why we built this
+          </p>
+          <p className="text-gray-300 text-lg leading-relaxed max-w-2xl mb-4">
+            AirStreamX didn't start as a business plan. It started with a simple, frustrating
+            observation — genuinely talented people, singers, teachers, local creators, putting
+            in real effort and getting nothing back, because the big platforms only start paying
+            once you've already made it.
+          </p>
+          <p className="text-gray-300 text-lg leading-relaxed max-w-2xl">
+            It's built by one person, coding nights and weekends around a full-time job — at a
+            time when a lot of us were thinking harder about India building more of its own
+            things. That frustration didn't go away. What came out of it isn't the biggest
+            platform yet. But it's a working one, built for the creator who's just getting
+            started — not just the one who already went viral.
+          </p>
+        </motion.div>
+
         {/* ── Principles ── */}
         <div className="grid sm:grid-cols-2 gap-5 mb-20">
           {PRINCIPLES.map((p, i) => (
