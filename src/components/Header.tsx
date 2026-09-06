@@ -850,69 +850,57 @@ export default function Header({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-52 bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl overflow-hidden z-50"
+                    className="absolute right-0 mt-2 w-48 bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
                   >
                     {/* Section label */}
-                    <div className="px-4 py-2.5 border-b border-white/5">
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Create</p>
+                    <div className="px-3.5 pt-2.5 pb-1">
+                      <p className="text-[11px] text-gray-500 font-semibold tracking-wide">Create</p>
                     </div>
 
-                    <div className="p-2 space-y-0.5">
+                    <div className="p-1.5">
 
                       {/* AI Clips */}
                       <button
                         onClick={() => createAction(() => navigate("/clip-generator"))}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all text-left group"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-500/15 group-hover:bg-violet-500/25 transition-colors flex-shrink-0">
-                          <Scissors className="w-4 h-4 text-violet-400" />
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
+                          <Scissors className="w-3.5 h-3.5 text-violet-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white group-hover:text-red-400 transition-colors">AI Clips</p>
-                          <p className="text-[11px] text-gray-400">Generate viral short clips</p>
-                        </div>
+                        <p className="text-sm font-medium text-white">AI Clips</p>
                       </button>
 
                       {/* Upload Video */}
                       <button
                         onClick={() => createAction(() => handleUploadClick())}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all text-left group"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/15 group-hover:bg-red-500/25 transition-colors flex-shrink-0">
-                          <Upload className="w-4 h-4 text-red-400" />
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
+                          <Upload className="w-3.5 h-3.5 text-red-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white group-hover:text-red-400 transition-colors">Upload video</p>
-                          <p className="text-[11px] text-gray-400">Share a video</p>
-                        </div>
+                        <p className="text-sm font-medium text-white">Upload video</p>
                       </button>
 
                       {/* Create Post — quick text + image/video post */}
                       <button
                         onClick={() => createAction(() => setShowCreatePostModal(true))}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all text-left group"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors flex-shrink-0">
-                          <FileText className="w-4 h-4 text-blue-400" />
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
+                          <FileText className="w-3.5 h-3.5 text-blue-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white group-hover:text-red-400 transition-colors">Create post</p>
-                          <p className="text-[11px] text-gray-400">Share text, photos, or a clip</p>
-                        </div>
+                        <p className="text-sm font-medium text-white">Create post</p>
                       </button>
 
                       {/* Go Live */}
                       <button
                         onClick={() => createAction(() => navigate("/go-live"))}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all text-left group"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/15 group-hover:bg-red-500/25 transition-colors flex-shrink-0">
-                          <Radio className="w-4 h-4 text-red-400" />
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
+                          <Radio className="w-3.5 h-3.5 text-red-400" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white group-hover:text-red-400 transition-colors">Go Live</p>
-                          <p className="text-[11px] text-gray-400">Start a live stream</p>
-                        </div>
+                        <p className="text-sm font-medium text-white">Go Live</p>
                       </button>
 
                     </div>
