@@ -16,7 +16,7 @@ import {
   Menu, Mic, MicOff, Search as SearchIcon, Upload,
   Loader2, Bell, History, Settings, User, LogOut, X,
   TrendingUp, Clock, Zap, Home, Library, ThumbsUp, PlaySquare,
-  Radio, ArrowRight, Scissors, Plus,
+  Radio, ArrowRight, Scissors, Plus, FileText,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────
@@ -199,6 +199,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { LoginRequiredModal } from "./LoginRequiredModal";
+import CreatePostModal from "./CreatePostModal";
 
 type SpeechRecognition = any;
 import { API_URL } from "../utils/constants";
@@ -338,6 +339,7 @@ export default function Header({
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openSidebar, setOpenSidebar] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);  // [FIX 1] was missing entirely
+  const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userHandle, setUserHandle] = useState<string | null>(null);
 
@@ -645,10 +647,16 @@ export default function Header({
       <header
         className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-all ${theme === "neon"
           ? "bg-black/80 border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)]"
-          : "bg-black/90 border-white/10"
+          : "bg-zinc-900/75 border-white/[0.15] shadow-[0_4px_20px_rgba(255,255,255,0.06)]"
           }`}
       >
-<div className="w-full px-2.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-start gap-1.5 sm:gap-2 md:gap-4">
+        {theme !== "neon" && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse at top left, rgba(255,255,255,0.1), transparent 70%)" }}
+          />
+        )}
+<div className="relative w-full px-2.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-start gap-1.5 sm:gap-2 md:gap-4">
           {/* Menu button */}
           <button
             aria-label="Open menu"
@@ -879,6 +887,20 @@ export default function Header({
                         </div>
                       </button>
 
+                      {/* Create Post — quick text + image/video post */}
+                      <button
+                        onClick={() => createAction(() => setShowCreatePostModal(true))}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all text-left group"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors flex-shrink-0">
+                          <FileText className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white group-hover:text-red-400 transition-colors">Create post</p>
+                          <p className="text-[11px] text-gray-400">Share text, photos, or a clip</p>
+                        </div>
+                      </button>
+
                       {/* Go Live */}
                       <button
                         onClick={() => createAction(() => navigate("/go-live"))}
@@ -1080,6 +1102,14 @@ export default function Header({
         <LoginRequiredModal
           onClose={() => setShowLoginModal(false)}
           onLogin={() => { setShowLoginModal(false); login(); }}
+        />
+      )}
+
+      {/* Create Post modal */}
+      {showCreatePostModal && (
+        <CreatePostModal
+          onClose={() => setShowCreatePostModal(false)}
+          onPosted={() => setShowCreatePostModal(false)}
         />
       )}
     </>

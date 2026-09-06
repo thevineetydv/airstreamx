@@ -10,7 +10,7 @@ import React, {
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward,
-  Loader2, Volume1, Rewind, FastForward, Heart, Settings,
+  Loader2, Volume1, Rewind, FastForward, Heart, Settings, Sparkles,
   ThumbsDown, HelpCircle, X,
 } from "lucide-react";
 import Hls from "hls.js";
@@ -468,8 +468,10 @@ const Controls: React.FC<any> = ({
   isFullscreen, onToggleFullscreen, likes, liked, onToggleLike, disliked,
   onToggleDislike, isPiPSupported, isAuthenticated, levels, currentLevel, onSetLevel,
   isTheaterMode, onToggleTheater, onShowHelp, spriteUrl,
+  onReactStart, onReactEnd, brightness, onSetBrightness,
 }) => {
   const [showQuality, setShowQuality] = useState(false);
+  const [isReacting, setIsReacting] = useState(false);
   const [settingsView, setSettingsView] = useState<"main" | "quality" | "speed">("main");
   const [stableVolume, setStableVolume] = useState(false);
   const [voiceBoost, setVoiceBoost] = useState(false);
@@ -597,6 +599,24 @@ const Controls: React.FC<any> = ({
             </button>
           </div>
 
+          {/* React button — press and hold to send a burst of emotion
+              particles. Nothing here is saved; it's purely expressive. */}
+          <motion.button
+            onPointerDown={() => { setIsReacting(true); onReactStart?.(); }}
+            onPointerUp={() => { setIsReacting(false); onReactEnd?.(); }}
+            onPointerLeave={() => { setIsReacting(false); onReactEnd?.(); }}
+            title="Press and hold to react"
+            animate={isReacting ? { scale: 1.15 } : { scale: 1 }}
+            transition={{ type: "spring", stiffness: 500, damping: 20 }}
+            className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors select-none
+              ${isReacting
+                ? "bg-gradient-to-br from-pink-500 to-orange-400 shadow-lg shadow-pink-500/40"
+                : "bg-white/10 hover:bg-white/20"}`}
+            style={{ touchAction: "none" }}
+          >
+            <Sparkles size={15} className="text-white" fill={isReacting ? "white" : "none"} />
+          </motion.button>
+
           {/* ⚙ YouTube-style Settings Panel — Speed, Quality, Theater, PiP all inside */}
           <div className="relative">
             <button
@@ -653,6 +673,27 @@ const Controls: React.FC<any> = ({
                           </div>
                         </button>
                       ))}
+
+                      {/* Brightness slider — a video-only visual filter,
+                          like YouTube's mobile brightness control */}
+                      <div className="px-3 py-2.5">
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <span className="text-sm w-4 flex-shrink-0 text-center">☀️</span>
+                          <span className="flex-1 text-xs text-white/85 font-medium">Brightness</span>
+                          <span className="text-xs text-white/40">{Math.round(brightness * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={1.5}
+                          step={0.05}
+                          value={brightness}
+                          onChange={(e) => onSetBrightness(parseFloat(e.target.value))}
+                          aria-label="Video brightness"
+                          className="w-full accent-red-500 cursor-pointer"
+                          style={{ height: 4 }}
+                        />
+                      </div>
 
                       <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 0" }} />
 
@@ -1334,6 +1375,71 @@ const VideoPlayer = forwardRef<any, any>(
     const playIconTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [showPlayPauseOverlay, setShowPlayPauseOverlay] = useState(false);
 
+    // ── Brightness — a CSS filter on the video element, like YouTube's
+    // mobile brightness slider. Persisted across sessions, just like
+    // the "ambient mode" toggle above it in the settings menu.
+    const [brightness, setBrightness] = useState(() => {
+      try { return parseFloat(localStorage.getItem("player_brightness") || "1"); } catch { return 1; }
+    });
+    const handleSetBrightness = useCallback((val: number) => {
+      setBrightness(val);
+      try { localStorage.setItem("player_brightness", String(val)); } catch { /* ignore */ }
+    }, []);
+
+    // ── Emotion reactions — press-and-hold burst, purely visual, never
+    // saved anywhere. Longer hold = more frequent + bigger particles, so
+    // the burst itself expresses how much someone is feeling the moment.
+    const REACTION_EMOJIS = ["❤️", "🔥", "😭", "🙌", "✨"];
+    const [reactionParticles, setReactionParticles] = useState<
+      Array<{ id: number; emoji: string; x: number; size: number; drift: number }>
+    >([]);
+    const reactionIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const reactionHoldStartRef = useRef<number>(0);
+    const reactionParticleId = useRef(0);
+
+    const spawnReactionParticle = useCallback(() => {
+      const heldMs = Date.now() - reactionHoldStartRef.current;
+      // Intensity ramps up the longer the button is held: starts small
+      // and sparse, grows bigger and denser — caps out so it never gets
+      // wildly out of hand on a very long hold.
+      const intensity = Math.min(heldMs / 1500, 1); // 0 → 1 over 1.5s
+      const size = 20 + intensity * 22; // 20px → 42px
+      const id = reactionParticleId.current++;
+      const emoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
+      const x = 50 + (Math.random() * 60 - 30); // spread around center, in %
+      const drift = Math.random() * 40 - 20; // horizontal float drift
+      setReactionParticles((prev) => [...prev.slice(-40), { id, emoji, x, size, drift }]);
+      // Self-cleanup after its float animation finishes
+      setTimeout(() => {
+        setReactionParticles((prev) => prev.filter((p) => p.id !== id));
+      }, 1600);
+    }, []);
+
+    const startReacting = useCallback(() => {
+      reactionHoldStartRef.current = Date.now();
+      spawnReactionParticle();
+      if (reactionIntervalRef.current) clearTimeout(reactionIntervalRef.current);
+      // Spawns faster the longer it's held — starts ~every 220ms, ramps
+      // down to ~every 90ms once fully "charged".
+      const tick = () => {
+        spawnReactionParticle();
+        const heldMs = Date.now() - reactionHoldStartRef.current;
+        const intensity = Math.min(heldMs / 1500, 1);
+        const delay = 220 - intensity * 130;
+        reactionIntervalRef.current = setTimeout(tick, delay) as any;
+      };
+      reactionIntervalRef.current = setTimeout(tick, 220) as any;
+    }, [spawnReactionParticle]);
+
+    const stopReacting = useCallback(() => {
+      if (reactionIntervalRef.current) {
+        clearTimeout(reactionIntervalRef.current);
+        reactionIntervalRef.current = null;
+      }
+    }, []);
+
+    useEffect(() => () => stopReacting(), [stopReacting]);
+
     const ambientColor = useAmbientColor(vRef, state.isPlaying);
     const isPiPSupported = typeof document !== "undefined" && document.pictureInPictureEnabled;
 
@@ -1575,6 +1681,30 @@ useImperativeHandle(ref, () => ({
               )}
             </AnimatePresence>
 
+            {/* ── Emotion reaction particles — float up from bottom-center
+                and fade out. Purely visual, nothing is saved. ── */}
+            <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
+              <AnimatePresence>
+                {reactionParticles.map((p) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0, y: 0, x: 0, scale: 0.5 }}
+                    animate={{ opacity: [0, 1, 1, 0], y: -220, x: p.drift, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1.6, ease: "easeOut" }}
+                    style={{
+                      position: "absolute",
+                      left: `${p.x}%`,
+                      bottom: "14%",
+                      fontSize: p.size,
+                    }}
+                  >
+                    {p.emoji}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
             <video 
               ref={vRef} 
               className="block z-10 w-full h-full object-contain cursor-pointer"
@@ -1587,6 +1717,7 @@ useImperativeHandle(ref, () => ({
                 WebkitFontSmoothing: 'antialiased',
                 transform: 'translateZ(0)',
                 willChange: 'auto',
+                filter: `brightness(${brightness})`,
               }}
             />
 
@@ -1742,8 +1873,10 @@ useImperativeHandle(ref, () => ({
                       onSeekBy={actions.seekBy} onSeekTo={actions.seekAbs}
                       onVolume={actions.setVolume} onToggleMute={actions.toggleMute}
                       onTogglePiP={actions.togglePiP} onSetRate={actions.setPlaybackRate}
+                      brightness={brightness} onSetBrightness={handleSetBrightness}
                       isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
                       likes={likes} liked={liked} onToggleLike={toggleLike}
+                      onReactStart={startReacting} onReactEnd={stopReacting}
                       dislikes={dislikes} disliked={disliked} onToggleDislike={toggleDislike}
                       isPiPSupported={isPiPSupported} isAuthenticated={isAuthenticated}
                       levels={state.levels} currentLevel={state.currentLevel} onSetLevel={actions.setLevel}

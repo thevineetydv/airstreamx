@@ -14,6 +14,7 @@ import { useCreatorProfile, formatDisplayName, getAvatarGradient } from "../hook
 import { API_URL } from "../utils/constants";
 import { useAuth } from "../context/AuthContext";
 import { resolveChannelParam } from "../utils/channelUrl";
+import PostsTab from "../components/PostsTab";
 import ChannelCustomizationModal, {
   type ChannelCustomization as CustomizationData,
 } from "../components/ChannelCustomizationModal";
@@ -131,7 +132,7 @@ function defaultProfile(email: string): ChannelProfile {
   };
 }
 
-type TabType = "home" | "videos" | "shorts" | "live" | "playlists" | "community" | "about";
+type TabType = "home" | "videos" | "shorts" | "posts" | "live" | "playlists" | "community" | "about";
 type SortType = "newest" | "oldest" | "popular" | "liked";
 type ViewMode = "grid" | "list";
 type NotificationLevel = "all" | "personalized" | "none";
@@ -1524,6 +1525,7 @@ if (countId) {
               "home",
               "videos",
               "shorts",
+              "posts",
               "live",
               "playlists",
               "community",
@@ -1935,6 +1937,22 @@ if (countId) {
                     </motion.div>
                   ))}
                 </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* POSTS */}
+          {activeTab === "posts" && (
+            <motion.div
+              key="posts"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              {channelIdRef.current ? (
+                <PostsTab channelId={channelIdRef.current} isOwnChannel={isOwner} />
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-12">Loading…</p>
               )}
             </motion.div>
           )}

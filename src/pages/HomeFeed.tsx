@@ -427,6 +427,13 @@ const ThumbnailWithPreview = React.memo(function ThumbnailWithPreview({
         }}
       />
 
+      {/* White sheen — subtle, always-on highlight so the thumbnail
+          doesn't sit totally flat against the black grid */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "radial-gradient(circle at 25% 15%, rgba(255,255,255,0.15), transparent 55%)" }}
+      />
+
       {/* Preview video — only mounted for devices that can trigger it.
           On phones this saves ~50 idle <video> elements from ever
           existing in the DOM. */}
@@ -1294,7 +1301,10 @@ const VideoCard = React.memo(function VideoCard({ video }: { video: any }) {
       <Link to={`/watch?v=${video.public_id || video.id}`} className="group block">
         <ThumbnailWithPreview
           video={video}
-          className="aspect-video rounded-xl shadow-lg hover:shadow-red-500/20 transition-shadow"
+          className="aspect-video rounded-xl border border-white/[0.18]
+                     shadow-[0_0_30px_rgba(255,255,255,0.08)]
+                     hover:border-white/25 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)]
+                     transition-all"
         />
 
         <div className="flex mt-2 md:mt-3 gap-2 md:gap-3">
