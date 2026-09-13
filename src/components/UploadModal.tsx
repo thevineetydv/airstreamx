@@ -807,20 +807,20 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         </div>
 
         {/* Right Side: Form Content */}
-        <div className="flex-1 flex flex-col bg-zinc-950 max-h-[90vh] md:max-h-none">
+        <div className="flex-1 min-w-0 flex flex-col bg-zinc-950 max-h-[90vh] md:max-h-none overflow-x-hidden">
           {/* Header */}
-          <div className="px-6 py-5 flex items-center justify-between border-b border-white/5 flex-shrink-0">
-            <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                {step === 1 && <><FileVideo size={20} /> Video Upload</>}
-                {step === 2 && <><Sparkles size={20} /> Finalize Publishing</>}
-                {step === 3 && <><CheckCircle size={20} /> Ready to Go!</>}
+          <div className="px-4 sm:px-6 py-5 flex items-center justify-between gap-3 border-b border-white/5 flex-shrink-0 min-w-0">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold flex items-center gap-2 truncate">
+                {step === 1 && <><FileVideo size={20} className="flex-shrink-0" /> Video Upload</>}
+                {step === 2 && <><Sparkles size={20} className="flex-shrink-0" /> Finalize Publishing</>}
+                {step === 3 && <><CheckCircle size={20} className="flex-shrink-0" /> Ready to Go!</>}
               </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <p className="text-xs text-zinc-500 mt-0.5 truncate">
                 {localStorage.getItem("airstream_draft") ? "Draft saved" : "No draft saved"}
               </p>
             </div>
-            <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
+            <div className="flex items-center gap-2 flex-shrink-0" style={{ minHeight: "40px" }}>
               {localStorage.getItem("airstream_draft") && step < 3 && (
                 <button
                   onClick={clearDraft}
@@ -852,7 +852,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
             {/* Error Message */}
             <AnimatePresence>
               {error && (
