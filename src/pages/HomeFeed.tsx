@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type Hls from "hls.js";
 import ShortsSection from "../components/ShortsSection";
+import SponsoredBanner from "../components/SponsoredBanner";
 import { API_URL } from "../utils/constants";
 import { channelUrl } from "../utils/channelUrl";
 import { useCachedData } from "../utils/useCachedData";
@@ -1031,6 +1032,9 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       {/* Hero */}
       {category !== "Subscriptions" && !searchQuery && adminFeaturedLoading && <HeroSkeleton />}
       {category !== "Subscriptions" && !searchQuery && !adminFeaturedLoading && featuredVideo && <HeroVideo video={featuredVideo} />}
+
+      {/* Sponsored banner — local business promotion, shows only when one is active */}
+      {category !== "Subscriptions" && !searchQuery && <SponsoredBanner />}
 
       {/* Shorts */}
       {category !== "Subscriptions" && <ShortsSection />}
