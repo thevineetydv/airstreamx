@@ -24,6 +24,43 @@ try {
   `;
 }
 
+const CHUNK_ERROR_PATTERNS = [
+  "failed to fetch dynamically imported module",
+  "failed to load module script",
+  "error loading dynamically imported module",
+];
+
+function isChunkLoadError(message: string | undefined | null): boolean {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return CHUNK_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
+function handlePossibleChunkError(message: string | undefined | null) {
+  if (!isChunkLoadError(message)) return;
+  const alreadyReloaded = sessionStorage.getItem("chunk-error-reloaded");
+  if (alreadyReloaded) return; // already tried once this session — don't loop
+  sessionStorage.setItem("chunk-error-reloaded", "1");
+  window.location.reload();
+}
+
+// Dynamic import() rejections (React.lazy() chunks, and Rollup's own
+// internal loader for manually-chunked static imports) surface here.
+window.addEventListener("unhandledrejection", (event) => {
+  handlePossibleChunkError(event.reason?.message ?? String(event.reason));
+});
+
+// Some browsers surface a failed <script type="module"> chunk load as
+// a plain resource error rather than a promise rejection — capture
+// phase catches it since it doesn't bubble.
+window.addEventListener(
+  "error",
+  (event) => {
+    handlePossibleChunkError(event.message);
+  },
+  true
+);
+
 /**
  * isSafeToReload — a silent reload mid-video-playback or while someone's
  * mid-comment would be a bad interruption on a video platform. This
@@ -107,3 +144,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// Reaching this point means the app rendered successfully — whatever
+// chunk error (if any) triggered the reload-and-retry above is now
+// resolved. Clear the flag after a short delay so a LATER, unrelated
+// chunk failure (e.g. this same tab still open across a future deploy)
+// gets its own fresh auto-retry instead of being silently skipped for
+// the rest of this tab's session.
+setTimeout(() => {
+  sessionStorage.removeItem("chunk-error-reloaded");
+}, 10000);
