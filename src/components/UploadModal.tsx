@@ -661,6 +661,14 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     Private: <Lock size={16} />
   };
 
+  // Thumbnail tiles were hardcoded to aspect-video (16:9) regardless of
+  // the source video's actual shape. Forcing a portrait (9:16) Shorts
+  // frame into a 16:9 box via object-cover crops a LOT off the top and
+  // bottom — which is why faces were getting cut down to mouth/chin.
+  // Match the tile shape to the source instead, so the full frame shows.
+  const isPortraitVideo = videoMetadata ? videoMetadata.height > videoMetadata.width : false;
+  const thumbTileAspect = isPortraitVideo ? "aspect-[9/16]" : "aspect-video";
+
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center z-[9999] p-0 sm:p-4 animate-in fade-in duration-300">
       <motion.div
@@ -698,7 +706,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             {/* Video Preview */}
             <div className="space-y-2">
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Live Preview</p>
-              <div className="aspect-video bg-black rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative group shadow-inner">
+              <div className={`${thumbTileAspect} bg-black rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative group shadow-inner`}>
                 {videoPreview ? (
                   <>
                     <video
@@ -1035,7 +1043,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
                       {/* ── Custom Upload Cell ── */}
                       <label
-                        className={`aspect-video rounded-xl relative overflow-hidden cursor-pointer group transition-all duration-200
+                        className={`${thumbTileAspect} rounded-xl relative overflow-hidden cursor-pointer group transition-all duration-200
                           ${thumbnail
                             ? 'border-2 border-red-500 shadow-lg shadow-red-500/20 ring-2 ring-red-500/20'
                             : 'border-2 border-dashed border-zinc-700 hover:border-red-500/60 hover:shadow-lg hover:shadow-red-500/10'
@@ -1096,7 +1104,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                                 setIsPlaying(false);
                               }
                             }}
-                            className={`aspect-video rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:scale-105 ${thumbnailPreview === src && !thumbnail
+                            className={`${thumbTileAspect} rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:scale-105 ${thumbnailPreview === src && !thumbnail
                                 ? 'border-red-500 shadow-lg shadow-red-500/20 ring-2 ring-red-500/20'
                                 : 'border-white/5 hover:border-white/20'
                               }`}
@@ -1105,7 +1113,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                           </button>
                         ))
                         : Array.from({ length: 5 }).map((_, i) => (
-                          <div key={i} className="aspect-video rounded-xl border border-white/5 bg-zinc-900 relative overflow-hidden">
+                          <div key={i} className={`${thumbTileAspect} rounded-xl border border-white/5 bg-zinc-900 relative overflow-hidden`}>
                             <div className="absolute inset-0 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 animate-pulse" />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <Loader2 size={14} className="text-zinc-700 animate-spin" />
