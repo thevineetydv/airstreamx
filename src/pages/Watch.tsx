@@ -413,6 +413,26 @@ export default function Watch() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [current, setCurrent] = useState<Video | null>(null);
 
+  // Client-side navigation (the Up Next Link, or autoplay-next) only
+  // changes the ?v= query param — unlike a full page load, the browser
+  // doesn't scroll back to top on its own. On mobile, where reaching Up
+  // Next means scrolling far down, clicking a suggestion correctly
+  // changed the video underneath but left the viewport exactly where it
+  // was, so it looked like nothing happened at all.
+  useEffect(() => {
+    // Only when the user was actually scrolled away from the player —
+    // true after clicking something deep in the Up Next list, not true
+    // during normal autoplay-next (the user is typically still
+    // positioned at/near the player when a video ends). Scrolling
+    // unconditionally on every video change meant autoplay-next also
+    // triggered this scroll right as the new video tried to play,
+    // which can interfere with the browser's autoplay-gesture timing —
+    // very plausibly why the next video sometimes needed a manual tap.
+    if (window.scrollY > 300) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [id]);
+
   // Preload the up-next video (the one autoplay-next jumps to when the
   // current video ends, and the top item in the sidebar suggestions list)
   // — same technique as ShortsPage's preloader. A hidden, muted HLS
