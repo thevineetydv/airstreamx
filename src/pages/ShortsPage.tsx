@@ -10,6 +10,7 @@ import {
   Music2, Eye, Bookmark, BookmarkCheck,
   X, Send, Check, ExternalLink, MoreVertical, Flag,
   AlignLeft, ListPlus, Monitor, ThumbsDown, MessageCircleOff,
+  Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
 import Hls from "hls.js";
 import { getAuth } from "firebase/auth";
@@ -468,7 +469,7 @@ function SideActions({
               border: `1px solid ${liked ? "rgba(254,44,85,0.55)" : "rgba(255,255,255,0.12)"}`,
             }}
           >
-            <Heart className={`${iconSize} ${liked ? "fill-[#fe2c55] text-[#fe2c55]" : "text-white"}`} />
+            <Heart className={`${iconSize} ${liked ? "fill-[#ef4444] text-[#ef4444]" : "text-white"}`} />
           </motion.div>
           <span className="text-white text-[11px] font-semibold leading-none drop-shadow-sm">
             {likesCount > 0 ? fmtCount(likesCount) : "Like"}
@@ -858,7 +859,7 @@ function ShortPlayer({
             transition={{ duration: 0.85, ease: "easeOut" }}
             className="absolute pointer-events-none" style={{ zIndex: 30, left: 0, top: 0 }}
           >
-            <Heart className="w-14 h-14 fill-[#fe2c55] text-[#fe2c55]" />
+            <Heart className="w-14 h-14 fill-[#ef4444] text-[#ef4444]" />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -1006,7 +1007,7 @@ function ShortPlayer({
           <div className="absolute top-0 left-0 h-full rounded-full bg-white/60"
             style={{ width: `${buffered}%`, transition: "width 0.3s linear" }} />
           <div className="absolute top-0 left-0 h-full rounded-full"
-            style={{ width: `${progress}%`, background: "linear-gradient(to right,#fe2c55,#a855f7)", boxShadow: "0 0 8px rgba(254,44,85,0.8)", transition: "width 0.1s linear" }} />
+            style={{ width: `${progress}%`, background: "linear-gradient(to right,#ef4444,#dc2626)", boxShadow: "0 0 8px rgba(239,68,68,0.8)", transition: "width 0.1s linear" }} />
           <div className="absolute top-1/2 w-4 h-4 rounded-full bg-white"
             style={{ left: `${progress}%`, transform: "translate(-50%,-50%)", boxShadow: "0 0 0 2.5px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)" }} />
         </div>
@@ -1064,6 +1065,7 @@ export default function ShortsPage({
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  const [likedFetched, setLikedFetched] = useState<Set<number>>(new Set());
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [commentCounts, setCommentCounts] = useState<Record<number, number | null>>({});
@@ -1125,7 +1127,49 @@ export default function ShortsPage({
       .then(r => r.json())
       .then(d => setCommentCounts(prev => ({ ...prev, [short.id]: Array.isArray(d.comments) ? d.comments.length : 0 })))
       .catch(() => setCommentCounts(prev => ({ ...prev, [short.id]: 0 })));
-  }, [activeIndex, shorts]);  
+  }, [activeIndex, shorts]);
+
+  /* Lazy-load whether THIS user has already liked the active short.
+     Mirrors VideoPlayer.tsx's /like-status pattern, which Shorts never used —
+     that's why likedIds always started empty on refresh: likeCounts loaded
+     the server's total from v.likes, but nothing told the app "you already
+     liked this one," so the heart's active state reset every time. */
+  useEffect(() => {
+    const short = shorts[activeIndex];
+    if (!short || likedFetched.has(short.id)) return;
+
+    const auth = getAuth();
+    const fetchStatus = async (user: ReturnType<typeof getAuth>["currentUser"]) => {
+      if (!user) { setLikedFetched(prev => new Set(prev).add(short.id)); return; }
+      try {
+        const token = await user.getIdToken();
+        const r = await fetch(`${API_URL}/videos/${short.id}/like-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setLikedIds(prev => {
+            const n = new Set(prev);
+            d.liked ? n.add(short.id) : n.delete(short.id);
+            return n;
+          });
+          if (typeof d.likes === "number") {
+            setLikeCounts(prev => ({ ...prev, [short.id]: d.likes }));
+          }
+        }
+      } catch { /* fail silent — count already has the server's last-known value */ }
+      finally { setLikedFetched(prev => new Set(prev).add(short.id)); }
+    };
+
+    if (auth.currentUser) {
+      fetchStatus(auth.currentUser);
+    } else {
+      // On refresh, Firebase hasn't rehydrated the session yet at mount —
+      // wait for the first auth-state event instead of assuming logged-out.
+      const unsub = auth.onAuthStateChanged(u => { unsub(); fetchStatus(u); });
+      return () => unsub();
+    }
+  }, [activeIndex, shorts, likedFetched]);
 
   /* URL sync — support both /shorts/26 (numeric) and /shorts/Cb42DJaiw6c (public_id) */
   useEffect(() => {
@@ -1264,7 +1308,7 @@ export default function ShortsPage({
     <>
       <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
         fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
-      <div style={{ height: "calc(100vh - 64px)", background: "#0a0a0a" }}><Skeleton /></div>
+      <div style={{ height: "calc(100vh - 64px)", background: "#0F0F0F" }}><Skeleton /></div>
     </>
   );
 
@@ -1274,7 +1318,7 @@ export default function ShortsPage({
       <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
         fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
       <div className="flex flex-col items-center justify-center gap-3 text-center"
-        style={{ height: "calc(100vh - 64px)", background: "#0a0a0a" }}>
+        style={{ height: "calc(100vh - 64px)", background: "#0F0F0F" }}>
         <div className="text-5xl opacity-40">📱</div>
         <p className="text-white text-lg font-semibold">No Shorts yet</p>
         <p className="text-white/30 text-sm">Upload videos under 60 seconds to create Shorts</p>
@@ -1301,7 +1345,7 @@ export default function ShortsPage({
         className="relative overflow-hidden"
         style={{
           height: isMobile ? "100dvh" : "calc(100vh - 64px)",
-          background: "#0a0a0a",
+          background: "#0F0F0F",
           touchAction: "none",
         }}
       >
@@ -1312,26 +1356,31 @@ export default function ShortsPage({
         {!isMobile && (
           <div className="flex h-full">
 
-            {/* Slim sidebar: Home + Shorts */}
+            {/* Sidebar: Home, Shorts, Subscriptions, Library, Trending —
+                the minimum-viable set (see AIRSTREAMX_DESIGN_SYSTEM.md §6).
+                A 2-item sidebar reads as unfinished regardless of polish. */}
             <nav className="hidden md:flex flex-col flex-shrink-0 pt-6 gap-1"
-              style={{ width: "clamp(72px, 14vw, 200px)", background: "#0a0a0a", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+              style={{ width: "clamp(72px, 14vw, 200px)", background: "#0F0F0F", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
               {[
-                { icon: "🏠", label: "Home", path: "/", active: false },
-                { icon: "⚡", label: "Shorts", path: "/shorts", active: true },
+                { icon: Home, label: "Home", path: "/", active: false },
+                { icon: Zap, label: "Shorts", path: "/shorts", active: true },
+                { icon: Users, label: "Subscriptions", path: "/subscriptions", active: false },
+                { icon: Library, label: "Library", path: "/library", active: false },
+                { icon: TrendingUp, label: "Trending", path: "/trending", active: false },
               ].map(item => (
                 <button
                   key={item.label}
                   onClick={() => navigate(item.path)}
                   className="flex items-center gap-3 mx-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all"
                   style={{
-                    background: item.active ? "rgba(254,44,85,0.13)" : "transparent",
-                    color: item.active ? "#fe2c55" : "rgba(255,255,255,0.55)",
-                    borderLeft: item.active ? "3px solid #fe2c55" : "3px solid transparent",
+                    background: item.active ? "rgba(239,68,68,0.13)" : "transparent",
+                    color: item.active ? "#ef4444" : "rgba(255,255,255,0.55)",
+                    borderLeft: item.active ? "3px solid #ef4444" : "3px solid transparent",
                   }}
                   onMouseEnter={e => { if (!item.active) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)"; }}
                   onMouseLeave={e => { if (!item.active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                 >
-                  <span className="text-lg">{item.icon}</span>
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
                   <span className="hidden lg:inline">{item.label}</span>
                 </button>
               ))}
@@ -1354,7 +1403,6 @@ export default function ShortsPage({
                   >
                     <ChevronUp className="w-5 h-5 text-white" />
                   </motion.button>
-                  <span className="text-[10px] font-medium text-white/35 select-none tracking-widest">PREV</span>
                 </div>
 
                 {/* Player - YouTube style responsive sizing */}
@@ -1449,7 +1497,6 @@ export default function ShortsPage({
                         style={{ background: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.18)", backdropFilter: "blur(12px)" }}>
                         <ChevronDown className="w-5 h-5 text-white" />
                       </div>
-                      <span className="text-[10px] font-medium text-white/35 select-none tracking-widest">NEXT</span>
                     </motion.button>
                   </div>
                 </div>
