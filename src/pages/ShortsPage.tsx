@@ -108,11 +108,51 @@ function getHookText(id: number): string {
  * ───────────────────────────────────────────── */
 function useVideoPreloader(nextUrl: string | undefined) {
   useEffect(() => {
-    if (!nextUrl) return;
-    const link = document.createElement("link");
-    link.rel = "prefetch"; link.href = nextUrl;
-    document.head.appendChild(link);
-    return () => { try { document.head.removeChild(link); } catch { } };
+    if (!nextUrl || !nextUrl.endsWith(".m3u8") || !Hls.isSupported()) return;
+
+    // Respect the existing Data Saver setting (Settings page) — this
+    // preload uses real mobile data ahead of the user actually watching
+    // that video, which directly contradicts what someone who turned
+    // Data Saver on is asking for. Skip preloading entirely in that case;
+    // the video will still load normally the moment they actually swipe
+    // to it, just without the head start.
+    try {
+      if (localStorage.getItem("data_saver_mode") === "1") return;
+      // @ts-expect-error — navigator.connection is widely supported but
+      // not yet a formal standard, hence the guard.
+      if (navigator.connection?.saveData) return;
+    } catch {}
+
+    // link rel="prefetch" only fetches the .m3u8 manifest text file — it
+    // has no concept of HLS needing the .ts/.m4s segments the manifest
+    // references, so the real "wait for the first segment to download"
+    // delay was completely unaddressed by the old version of this hook.
+    // This spins up a hidden, muted HLS instance on an offscreen <video>
+    // so the browser's own HTTP cache gets warmed with the manifest AND
+    // the next Short's first few seconds — by the time the user actually
+    // swipes to it, the real player's requests mostly hit cache instead
+    // of the network.
+    const video = document.createElement("video");
+    video.muted = true;
+    video.style.display = "none";
+    document.body.appendChild(video);
+
+    const hls = new Hls({
+      enableWorker: true,
+      maxBufferLength: 8,       // only the first few seconds — this is a
+                                  // warm-up, not a full download
+      capLevelToPlayerSize: false,
+      startLevel: 0,            // lowest rendition on purpose: preloading
+                                  // shouldn't compete for bandwidth with
+                                  // whatever's actually playing right now
+    });
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(nextUrl));
+
+    return () => {
+      try { hls.destroy(); } catch {}
+      try { document.body.removeChild(video); } catch {}
+    };
   }, [nextUrl]);
 }
 

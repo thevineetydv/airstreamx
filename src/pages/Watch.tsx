@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import Hls from "hls.js/light";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -411,6 +412,49 @@ export default function Watch() {
 
   const [videos, setVideos] = useState<Video[]>([]);
   const [current, setCurrent] = useState<Video | null>(null);
+
+  // Preload the up-next video (the one autoplay-next jumps to when the
+  // current video ends, and the top item in the sidebar suggestions list)
+  // — same technique as ShortsPage's preloader. A hidden, muted HLS
+  // instance warms the browser's HTTP cache with the next video's
+  // manifest and first few segments while the current one is still
+  // playing, so autoplay-next (or clicking the first suggestion) starts
+  // near-instantly instead of showing a buffering spinner.
+  useEffect(() => {
+    const nextUrl = videos.find(v => v.id !== current?.id)?.url;
+    if (!nextUrl || !nextUrl.endsWith(".m3u8") || !Hls.isSupported()) return;
+
+    // Respect the existing Data Saver setting — skip this preload
+    // entirely when it's on, same reasoning as ShortsPage's preloader.
+    try {
+      if (localStorage.getItem("data_saver_mode") === "1") return;
+      // @ts-expect-error — navigator.connection is a widely-supported but
+      // not-yet-standard API; not all browsers have it, hence the guard.
+      if (navigator.connection?.saveData) return;
+    } catch {}
+
+    const preloadVideo = document.createElement("video");
+    preloadVideo.muted = true;
+    preloadVideo.style.display = "none";
+    document.body.appendChild(preloadVideo);
+
+    const hls = new Hls({
+      enableWorker: true,
+      maxBufferLength: 8,     // just enough for an instant start, not a full download
+      capLevelToPlayerSize: false,
+      startLevel: 0,          // lowest rendition — a preload shouldn't
+                                // compete for bandwidth with what's
+                                // actually playing right now
+    });
+    hls.attachMedia(preloadVideo);
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(nextUrl));
+
+    return () => {
+      try { hls.destroy(); } catch {}
+      try { document.body.removeChild(preloadVideo); } catch {}
+    };
+  }, [videos, current?.id]);
+
   const [ambient, setAmbient] = useState("rgba(0,0,0,0)");
   const [ambientEnabled, setAmbientEnabled] = useState<boolean>(() => {
     try { return (localStorage.getItem(LS.AMBIENT) ?? "1") === "1"; } catch { return true; }
