@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import Hls, { type Level } from "hls.js";
+import Hls, { type Level } from "hls.js/light";
 
 // ─────────────────────────────────────────────
 // Constants & helpers

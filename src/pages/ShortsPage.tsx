@@ -12,7 +12,7 @@ import {
   AlignLeft, ListPlus, Monitor, ThumbsDown, MessageCircleOff,
   Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
-import Hls from "hls.js";
+import Hls from "hls.js/light";
 import { getAuth } from "firebase/auth";
 import { API_URL } from "../utils/constants";
 import { getChannelWatermark } from "../utils/channelUrl";
@@ -927,7 +927,15 @@ function ShortPlayer({
       {/* Bottom info */}
       <div
         className="absolute left-3 z-10 pointer-events-none"
-        style={{ bottom: isMobile ? 20 : 32, right: isMobile ? 80 : 16 }}
+        style={{
+          // Plain "20px" was fine in Chrome DevTools' device emulator but
+          // sits right in the home-indicator gesture zone on a real
+          // iPhone X or later, since viewport-fit=cover (index.html) lets
+          // content extend under it with no automatic inset. BottomNav.tsx
+          // already accounts for this; this container didn't.
+          bottom: isMobile ? "calc(20px + env(safe-area-inset-bottom, 0px))" : 32,
+          right: isMobile ? 80 : 16,
+        }}
       >
         {/* Creator info + Subscribe — one horizontal row, avatar + name +
             compact Subscribe button, sitting with the caption at
@@ -1424,6 +1432,12 @@ export default function ShortsPage({
           height: isMobile ? "100dvh" : "calc(100vh - 64px)",
           background: "#0F0F0F",
           touchAction: "none",
+          // touchAction:none stops the browser's own pan/zoom gestures, but
+          // iOS Safari's pull-to-refresh / rubber-band bounce is a separate
+          // mechanism that still fires underneath a fast vertical swipe —
+          // without this, swiping between Shorts can visibly fight with
+          // the page trying to bounce/refresh at the same time.
+          overscrollBehavior: "contain",
         }}
       >
 

@@ -622,6 +622,8 @@ export default function Header({
                       { label: "About", to: "/about" },
                       { label: "How it works", to: "/how-it-works" },
                       { label: "FAQ", to: "/faq" },
+                      { label: "Privacy Policy", to: "/privacy" },
+                      { label: "Terms of Service", to: "/terms" },
                     ].map((link) => (
                       <button
                         key={link.to}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { LS } from "../utils/constants";
 
 export default function Settings() {
@@ -258,6 +259,18 @@ export default function Settings() {
                 <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${dataSaver ? "translate-x-5" : ""}`} />
               </div>
             </label>
+          </div>
+        </div>
+
+        <div className="bg-[#212121] border border-white/10 rounded-xl p-5">
+          <h2 className="text-lg font-semibold mb-3">Legal</h2>
+          <div className="flex flex-col gap-1">
+            <Link to="/privacy" className="py-2 text-gray-300 hover:text-white transition-colors">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="py-2 text-gray-300 hover:text-white transition-colors">
+              Terms of Service
+            </Link>
           </div>
         </div>
       </div>

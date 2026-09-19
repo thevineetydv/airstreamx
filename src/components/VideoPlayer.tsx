@@ -13,7 +13,7 @@ import {
   Loader2, Volume1, Rewind, FastForward, Heart, Settings, Sparkles,
   ThumbsDown, HelpCircle, X,
 } from "lucide-react";
-import Hls from "hls.js";
+import Hls from "hls.js/light";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../utils/constants";
 import { getAuth } from "firebase/auth";
