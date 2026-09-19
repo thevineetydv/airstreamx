@@ -10,6 +10,7 @@ import {
   Music2, Eye, Bookmark, BookmarkCheck,
   X, Send, Check, ExternalLink, MoreVertical, Flag,
   AlignLeft, ListPlus, Monitor, ThumbsDown, MessageCircleOff,
+  Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
 import Hls from "hls.js";
 import { getAuth } from "firebase/auth";
@@ -468,7 +469,7 @@ function SideActions({
               border: `1px solid ${liked ? "rgba(254,44,85,0.55)" : "rgba(255,255,255,0.12)"}`,
             }}
           >
-            <Heart className={`${iconSize} ${liked ? "fill-[#fe2c55] text-[#fe2c55]" : "text-white"}`} />
+            <Heart className={`${iconSize} ${liked ? "fill-[#ef4444] text-[#ef4444]" : "text-white"}`} />
           </motion.div>
           <span className="text-white text-[11px] font-semibold leading-none drop-shadow-sm">
             {likesCount > 0 ? fmtCount(likesCount) : "Like"}
@@ -569,13 +570,14 @@ interface ShortPlayerProps {
   onToggleSave: (id: number) => void;
   onAmbientToggle: () => void;
   isMobile?: boolean;
+  isOwnChannel?: boolean;
 }
 
 function ShortPlayer({
   short, isActive, onLike, liked, likesCount,
   onVideoEnd, ambientMode,
   commentsCount, saved, onToggleSave, onAmbientToggle,
-  isMobile = false,
+  isMobile = false, isOwnChannel = false,
 }: ShortPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -657,9 +659,15 @@ function ShortPlayer({
         }).catch(() => {
           // Browser blocked autoplay-with-sound for this element (common
           // on scroll-triggered advances, since the gesture context is
-          // weaker than a direct click). Fall back to guaranteed muted
-          // playback rather than leaving the video paused.
+          // weaker than a direct click, and especially common right after
+          // a page load/refresh with no prior user gesture at all — this
+          // is the "no voice on restart" case). Fall back to guaranteed
+          // muted playback AND sync React state to match, so the mute
+          // button correctly shows "muted" and a real tap on it reliably
+          // unmutes — a tap is a genuine user gesture, so the browser
+          // allows sound from that point on.
           video.muted = true;
+          setMuted(true);
           video.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
         });
       }, 80);
@@ -858,7 +866,7 @@ function ShortPlayer({
             transition={{ duration: 0.85, ease: "easeOut" }}
             className="absolute pointer-events-none" style={{ zIndex: 30, left: 0, top: 0 }}
           >
-            <Heart className="w-14 h-14 fill-[#fe2c55] text-[#fe2c55]" />
+            <Heart className="w-14 h-14 fill-[#ef4444] text-[#ef4444]" />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -932,25 +940,62 @@ function ShortPlayer({
             onClick={e => e.stopPropagation()}
           >
             <div
-              className={`${isMobile ? "w-8 h-8 text-xs" : "w-7 h-7 text-[11px]"} rounded-full bg-gradient-to-br ${getAvatarColor(short.uploader_email)} flex items-center justify-center font-bold text-white flex-shrink-0`}
+              className={`${isMobile ? "w-8 h-8 text-xs" : "w-7 h-7 text-[11px]"} rounded-full ${short.avatar_url ? "" : `bg-gradient-to-br ${getAvatarColor(short.uploader_email)}`} flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
               style={{ border: "1.5px solid rgba(255,255,255,0.5)" }}
             >
-              {getDisplayName(short)[0]}
+              {short.avatar_url ? (
+                <img
+                  src={short.avatar_url}
+                  alt={getDisplayName(short)}
+                  className="w-full h-full object-cover"
+                  onError={e => {
+                    // Real avatar failed to load (broken URL, deleted file) —
+                    // fall back to the generated initial instead of a broken
+                    // image icon. Marking the element lets the parent's
+                    // gradient classes apply on next render if this Short
+                    // re-mounts, but for this instance we just hide the <img>
+                    // and paint the initial directly.
+                    const target = e.currentTarget;
+                    target.style.display = "none";
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.classList.add("bg-gradient-to-br", ...getAvatarColor(short.uploader_email).split(" "));
+                      parent.textContent = getDisplayName(short)[0];
+                    }
+                  }}
+                />
+              ) : (
+                getDisplayName(short)[0]
+              )}
             </div>
-            <span className={`text-white ${isMobile ? "text-sm" : "text-xs"} font-bold drop-shadow-md truncate max-w-[140px]`}>
+            <span className={`text-white ${isMobile ? "text-sm" : "text-xs"} font-bold drop-shadow-md truncate ${isMobile ? "max-w-[100px]" : "max-w-[140px]"}`}>
               {getDisplayName(short)}
             </span>
           </Link>
 
           {/* Compact SubscriptionButton — CSS `zoom` shrinks the real
               layout box (unlike `transform: scale`, which only scales the
-              paint and would clip against a declared height). */}
-          <div style={{ zoom: 0.6 }} onClick={e => e.stopPropagation()} className="flex-shrink-0">
-            <SubscriptionButton
-              channelId={short.uploader_email}
-              channelName={getDisplayName(short)}
-            />
-          </div>
+              paint and would clip against a declared height). Hidden on
+              your own channel: the backend rejects self-subscribe anyway
+              (see SubscriptionButton.tsx), and the Watch page already
+              shows a plain label there instead of a button that would
+              just fail on click — this matches that, on both mobile and
+              desktop widths since it's driven by flex layout, not a
+              fixed size. */}
+          {isOwnChannel ? (
+            <span
+              className={`text-white/40 font-medium flex-shrink-0 whitespace-nowrap ${isMobile ? "text-xs" : "text-[11px]"}`}
+            >
+              {isMobile ? "Your channel" : "This is your channel"}
+            </span>
+          ) : (
+            <div style={{ zoom: 0.6 }} onClick={e => e.stopPropagation()} className="flex-shrink-0">
+              <SubscriptionButton
+                channelId={short.uploader_email}
+                channelName={getDisplayName(short)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Title — expandable */}
@@ -1006,7 +1051,7 @@ function ShortPlayer({
           <div className="absolute top-0 left-0 h-full rounded-full bg-white/60"
             style={{ width: `${buffered}%`, transition: "width 0.3s linear" }} />
           <div className="absolute top-0 left-0 h-full rounded-full"
-            style={{ width: `${progress}%`, background: "linear-gradient(to right,#fe2c55,#a855f7)", boxShadow: "0 0 8px rgba(254,44,85,0.8)", transition: "width 0.1s linear" }} />
+            style={{ width: `${progress}%`, background: "linear-gradient(to right,#ef4444,#dc2626)", boxShadow: "0 0 8px rgba(239,68,68,0.8)", transition: "width 0.1s linear" }} />
           <div className="absolute top-1/2 w-4 h-4 rounded-full bg-white"
             style={{ left: `${progress}%`, transform: "translate(-50%,-50%)", boxShadow: "0 0 0 2.5px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)" }} />
         </div>
@@ -1018,12 +1063,26 @@ function ShortPlayer({
 /* ─────────────────────────────────────────────
  * SKELETON
  * ───────────────────────────────────────────── */
-function Skeleton() {
+function Skeleton({ isMobile = false }: { isMobile?: boolean }) {
+  if (isMobile) {
+    // Mobile Shorts are full-bleed, edge-to-edge — no desktop-style side
+    // gutters for PREV/NEXT and the action rail. h-full (not a separate
+    // vh calc) so this can never exceed the parent's real 100dvh height.
+    return (
+      <div className="relative w-full h-full bg-white/5 animate-pulse overflow-hidden">
+        <div className="absolute right-3 flex flex-col items-center gap-5" style={{ bottom: 96 }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="w-11 h-11 rounded-full bg-white/10 animate-pulse" style={{ animationDelay: `${i * 0.08}s` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-center w-full h-full gap-0">
       <div style={{ width: 52 }} />
       <div className="bg-white/5 animate-pulse rounded-2xl flex-shrink-0"
-        style={{ aspectRatio: "9/16", height: "min(calc(100vh - 80px), 700px)", width: "auto" }} />
+        style={{ aspectRatio: "9/16", height: "min(100%, 700px)", width: "auto" }} />
       <div className="flex flex-col items-center gap-5" style={{ width: 80, paddingLeft: 16 }}>
         {[1, 2, 3, 4, 5].map(i => (
           <div key={i} className="flex flex-col items-center gap-1.5">
@@ -1064,12 +1123,23 @@ export default function ShortsPage({
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  const [likedFetched, setLikedFetched] = useState<Set<number>>(new Set());
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [commentCounts, setCommentCounts] = useState<Record<number, number | null>>({});
   const [ambientMode, setAmbientMode] = useState(false);
   const [muted, setMuted] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  /* Current user's email — one listener here instead of one per ShortPlayer
+     instance. Used to detect "this is your own channel" and show the same
+     label the long-form Watch page already shows there, instead of a
+     Subscribe button that would just fail on click. */
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => getAuth().currentUser?.email ?? null);
+  useEffect(() => {
+    const auth = getAuth();
+    return auth.onAuthStateChanged(u => setCurrentUserEmail(u?.email ?? null));
+  }, []);
 
   /* Swipe drag state */
   const dragStartY = useRef(0);
@@ -1125,7 +1195,49 @@ export default function ShortsPage({
       .then(r => r.json())
       .then(d => setCommentCounts(prev => ({ ...prev, [short.id]: Array.isArray(d.comments) ? d.comments.length : 0 })))
       .catch(() => setCommentCounts(prev => ({ ...prev, [short.id]: 0 })));
-  }, [activeIndex, shorts]);  
+  }, [activeIndex, shorts]);
+
+  /* Lazy-load whether THIS user has already liked the active short.
+     Mirrors VideoPlayer.tsx's /like-status pattern, which Shorts never used —
+     that's why likedIds always started empty on refresh: likeCounts loaded
+     the server's total from v.likes, but nothing told the app "you already
+     liked this one," so the heart's active state reset every time. */
+  useEffect(() => {
+    const short = shorts[activeIndex];
+    if (!short || likedFetched.has(short.id)) return;
+
+    const auth = getAuth();
+    const fetchStatus = async (user: ReturnType<typeof getAuth>["currentUser"]) => {
+      if (!user) { setLikedFetched(prev => new Set(prev).add(short.id)); return; }
+      try {
+        const token = await user.getIdToken();
+        const r = await fetch(`${API_URL}/videos/${short.id}/like-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setLikedIds(prev => {
+            const n = new Set(prev);
+            d.liked ? n.add(short.id) : n.delete(short.id);
+            return n;
+          });
+          if (typeof d.likes === "number") {
+            setLikeCounts(prev => ({ ...prev, [short.id]: d.likes }));
+          }
+        }
+      } catch { /* fail silent — count already has the server's last-known value */ }
+      finally { setLikedFetched(prev => new Set(prev).add(short.id)); }
+    };
+
+    if (auth.currentUser) {
+      fetchStatus(auth.currentUser);
+    } else {
+      // On refresh, Firebase hasn't rehydrated the session yet at mount —
+      // wait for the first auth-state event instead of assuming logged-out.
+      const unsub = auth.onAuthStateChanged(u => { unsub(); fetchStatus(u); });
+      return () => unsub();
+    }
+  }, [activeIndex, shorts, likedFetched]);
 
   /* URL sync — support both /shorts/26 (numeric) and /shorts/Cb42DJaiw6c (public_id) */
   useEffect(() => {
@@ -1259,22 +1371,31 @@ export default function ShortsPage({
     return () => window.removeEventListener("resize", fn);
   }, []);
 
-  /* ── Loading state ── */
+  /* ── Loading state ──
+     Must match the real content container (below) exactly: Header hidden
+     on mobile, 100dvh not 100vh. Mismatching these caused a visible height
+     jump — and Header popping in/out — right when loading finished, since
+     100vh overshoots the true visible area on mobile (it ignores the
+     browser's address bar), while the loaded view correctly used 100dvh. */
   if (loading) return (
     <>
-      <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
-        fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
-      <div style={{ height: "calc(100vh - 64px)", background: "#0a0a0a" }}><Skeleton /></div>
+      {!isMobile && (
+        <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
+          fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
+      )}
+      <div style={{ height: isMobile ? "100dvh" : "calc(100vh - 64px)", background: "#0F0F0F" }}><Skeleton isMobile={isMobile} /></div>
     </>
   );
 
-  /* ── Empty state ── */
+  /* ── Empty state ── same mobile-parity fix as loading state above. */
   if (shorts.length === 0) return (
     <>
-      <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
-        fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
-      <div className="flex flex-col items-center justify-center gap-3 text-center"
-        style={{ height: "calc(100vh - 64px)", background: "#0a0a0a" }}>
+      {!isMobile && (
+        <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
+          fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
+      )}
+      <div className="flex flex-col items-center justify-center gap-3 text-center px-6"
+        style={{ height: isMobile ? "100dvh" : "calc(100vh - 64px)", background: "#0F0F0F" }}>
         <div className="text-5xl opacity-40">📱</div>
         <p className="text-white text-lg font-semibold">No Shorts yet</p>
         <p className="text-white/30 text-sm">Upload videos under 60 seconds to create Shorts</p>
@@ -1301,7 +1422,7 @@ export default function ShortsPage({
         className="relative overflow-hidden"
         style={{
           height: isMobile ? "100dvh" : "calc(100vh - 64px)",
-          background: "#0a0a0a",
+          background: "#0F0F0F",
           touchAction: "none",
         }}
       >
@@ -1312,26 +1433,31 @@ export default function ShortsPage({
         {!isMobile && (
           <div className="flex h-full">
 
-            {/* Slim sidebar: Home + Shorts */}
+            {/* Sidebar: Home, Shorts, Subscriptions, Library, Trending —
+                the minimum-viable set (see AIRSTREAMX_DESIGN_SYSTEM.md §6).
+                A 2-item sidebar reads as unfinished regardless of polish. */}
             <nav className="hidden md:flex flex-col flex-shrink-0 pt-6 gap-1"
-              style={{ width: "clamp(72px, 14vw, 200px)", background: "#0a0a0a", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+              style={{ width: "clamp(72px, 14vw, 200px)", background: "#0F0F0F", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
               {[
-                { icon: "🏠", label: "Home", path: "/", active: false },
-                { icon: "⚡", label: "Shorts", path: "/shorts", active: true },
+                { icon: Home, label: "Home", path: "/", active: false },
+                { icon: Zap, label: "Shorts", path: "/shorts", active: true },
+                { icon: Users, label: "Subscriptions", path: "/subscriptions", active: false },
+                { icon: Library, label: "Library", path: "/library", active: false },
+                { icon: TrendingUp, label: "Trending", path: "/trending", active: false },
               ].map(item => (
                 <button
                   key={item.label}
                   onClick={() => navigate(item.path)}
                   className="flex items-center gap-3 mx-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all"
                   style={{
-                    background: item.active ? "rgba(254,44,85,0.13)" : "transparent",
-                    color: item.active ? "#fe2c55" : "rgba(255,255,255,0.55)",
-                    borderLeft: item.active ? "3px solid #fe2c55" : "3px solid transparent",
+                    background: item.active ? "rgba(239,68,68,0.13)" : "transparent",
+                    color: item.active ? "#ef4444" : "rgba(255,255,255,0.55)",
+                    borderLeft: item.active ? "3px solid #ef4444" : "3px solid transparent",
                   }}
                   onMouseEnter={e => { if (!item.active) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)"; }}
                   onMouseLeave={e => { if (!item.active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                 >
-                  <span className="text-lg">{item.icon}</span>
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
                   <span className="hidden lg:inline">{item.label}</span>
                 </button>
               ))}
@@ -1354,7 +1480,6 @@ export default function ShortsPage({
                   >
                     <ChevronUp className="w-5 h-5 text-white" />
                   </motion.button>
-                  <span className="text-[10px] font-medium text-white/35 select-none tracking-widest">PREV</span>
                 </div>
 
                 {/* Player - YouTube style responsive sizing */}
@@ -1393,6 +1518,7 @@ export default function ShortsPage({
                         onToggleSave={handleToggleSave}
                         onAmbientToggle={() => setAmbientMode(a => !a)}
                         isMobile={false}
+                        isOwnChannel={!!currentUserEmail && currentUserEmail === current.uploader_email}
                       />
                     </motion.div>
                   </AnimatePresence>
@@ -1449,7 +1575,6 @@ export default function ShortsPage({
                         style={{ background: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.18)", backdropFilter: "blur(12px)" }}>
                         <ChevronDown className="w-5 h-5 text-white" />
                       </div>
-                      <span className="text-[10px] font-medium text-white/35 select-none tracking-widest">NEXT</span>
                     </motion.button>
                   </div>
                 </div>
@@ -1486,6 +1611,7 @@ export default function ShortsPage({
                 onToggleSave={handleToggleSave}
                 onAmbientToggle={() => setAmbientMode(a => !a)}
                 isMobile={isMobile}
+                isOwnChannel={!!currentUserEmail && currentUserEmail === current.uploader_email}
               />
             </motion.div>
 

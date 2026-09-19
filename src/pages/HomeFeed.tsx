@@ -552,7 +552,7 @@ const ThumbnailWithPreview = React.memo(function ThumbnailWithPreview({
  */
 function HeroSkeleton() {
   return (
-    <div className="relative w-full h-[42vh] sm:h-[48vh] md:h-[58vh] min-h-[32vh] max-h-[70vh] rounded-3xl overflow-hidden mb-10 bg-[#141414] animate-pulse" />
+    <div className="relative w-full h-[42vh] sm:h-[48vh] md:h-[58vh] min-h-[32vh] max-h-[70vh] rounded-3xl overflow-hidden mb-10 bg-[#212121] animate-pulse" />
   );
 }
 
@@ -1089,7 +1089,7 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
 
           {!subscriptionLoading && !subscriptionError && subscriptionVideos.length === 0 && (
             <div className="text-center py-16 px-4">
-              <div className="w-16 h-16 bg-[#110000] rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-[#212121] rounded-full flex items-center justify-center mx-auto mb-4">
                 <Bell className="w-8 h-8 text-gray-600" />
               </div>
               <h3 className="text-base font-semibold text-gray-300 mb-2">No subscriptions yet</h3>
@@ -1137,7 +1137,7 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
           animate={{ opacity: 1 }}
           className="text-center py-16 px-4"
         >
-          <div className="w-16 h-16 bg-[#110000] rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-[#212121] rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
               className="w-8 h-8 text-gray-600"
               fill="none"
@@ -1222,7 +1222,7 @@ function CategoryTabs({ category, setCategory, isLoggedIn }: any) {
           className={`px-3 md:px-5 py-1.5 md:py-3 text-xs md:text-sm rounded-full transition-all whitespace-nowrap font-medium min-h-[32px] md:min-h-[44px] flex items-center justify-center flex-shrink-0 gap-1.5
             ${category === "Subscriptions"
               ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/30"
-              : "bg-[#1a1a1a] text-gray-300 hover:bg-red-500/10 hover:text-red-400 border border-gray-800"
+              : "bg-[#212121] text-gray-300 hover:bg-red-500/10 hover:text-red-400 border border-gray-800"
             }`}
         >
           <Bell size={14} /> Subscriptions
@@ -1237,7 +1237,7 @@ function CategoryTabs({ category, setCategory, isLoggedIn }: any) {
           className={`px-3 md:px-5 py-1.5 md:py-3 text-xs md:text-sm rounded-full transition-all whitespace-nowrap font-medium min-h-[32px] md:min-h-[44px] flex items-center justify-center flex-shrink-0
             ${category === c
               ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/30"
-              : "bg-[#1a1a1a] text-gray-300 hover:bg-red-500/10 hover:text-red-400 border border-gray-800"
+              : "bg-[#212121] text-gray-300 hover:bg-red-500/10 hover:text-red-400 border border-gray-800"
             }`}
         >
           {c}
@@ -1253,7 +1253,7 @@ function CategoryTabs({ category, setCategory, isLoggedIn }: any) {
 
 function ViewToggle({ viewMode, setViewMode }: any) {
   return (
-    <div className="flex gap-2 bg-[#1a1a1a] p-1 rounded-xl border border-gray-800 flex-shrink-0">
+    <div className="flex gap-2 bg-[#212121] p-1 rounded-xl border border-gray-800 flex-shrink-0">
       <button
         onClick={() => setViewMode("grid")}
         className={`px-3 py-2 rounded-lg transition-all ${viewMode === "grid"
