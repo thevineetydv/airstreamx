@@ -548,9 +548,20 @@ const Controls: React.FC<any> = ({
         </AnimatePresence>
       </div>
 
-      {/* ── BUTTON ROW ── */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+      {/* ── BUTTON ROW ──
+          Every control here used flex-shrink-0 with generous gaps and no
+          wrap — fine on desktop, but on a narrow mobile player (e.g. a
+          375px-wide phone) the combined width of play/skip/volume/time
+          on the left plus like-dislike/react/settings/fullscreen on the
+          right exceeded the available space. Nothing could shrink, so
+          justify-between just crushed the gap between them, and the
+          time display visually collided with the like/dislike pill.
+          Tightened gaps + an overflow-x-auto safety net (hidden
+          scrollbar) below fixes it: things fit at normal widths, and on
+          the narrowest devices the row scrolls internally instead of
+          ever overlapping. */}
+      <div className="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-shrink-0">
           <button onClick={onPlayPause} className="hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0">
             {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
           </button>
@@ -574,24 +585,24 @@ const Controls: React.FC<any> = ({
         </div>
 
         {/* ── RIGHT: Like/Dislike pill + Speed + Settings + Fullscreen ── */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
 
           {/* Like + Dislike combined pill */}
           <div className="flex items-center rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
             <button
               onClick={onToggleLike} disabled={!isAuthenticated}
               title="Like"
-              className={`flex items-center gap-1 pl-3 pr-2 py-1.5 text-xs font-semibold transition-all border-r border-white/10
+              className={`flex items-center gap-1 pl-2.5 sm:pl-3 pr-1.5 sm:pr-2 py-1.5 text-xs font-semibold transition-all border-r border-white/10
                 ${isAuthenticated ? "hover:bg-white/10 active:scale-95" : "opacity-40 cursor-not-allowed"}
                 ${liked ? "text-red-400" : "text-white"}`}
             >
               <Heart size={14} fill={liked ? "currentColor" : "none"} />
-              {likes > 0 && <span className="ml-1">{likes}</span>}
+              {likes > 0 && <span className="ml-1 hidden sm:inline">{likes}</span>}
             </button>
             <button
               onClick={onToggleDislike} disabled={!isAuthenticated}
               title="Dislike"
-              className={`flex items-center gap-1 pl-2 pr-3 py-1.5 text-xs font-semibold transition-all
+              className={`flex items-center gap-1 pl-1.5 sm:pl-2 pr-2.5 sm:pr-3 py-1.5 text-xs font-semibold transition-all
                 ${isAuthenticated ? "hover:bg-white/10 active:scale-95" : "opacity-40 cursor-not-allowed"}
                 ${disliked ? "text-red-400" : "text-white"}`}
             >
