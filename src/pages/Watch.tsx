@@ -347,7 +347,7 @@ function TipButton({ creatorUpiId, creatorName }: { creatorUpiId?: string; creat
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="bg-[#181818] border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 w-full max-w-md"
+              className="bg-[#212121] border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 w-full max-w-md"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -1441,7 +1441,7 @@ useEffect(() => {
                       <button
                         onClick={() => saveEditComment(reply.id)}
                         disabled={!editText.trim() || savingEdit}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:bg-[#1a0000] disabled:cursor-not-allowed rounded-full text-[11px] transition min-h-[28px]"
+                        className="flex items-center gap-1 px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:bg-[#212121] disabled:cursor-not-allowed rounded-full text-[11px] transition min-h-[28px]"
                       >
                         <Check size={11} />
                         {savingEdit ? "Saving…" : "Save"}
@@ -1536,7 +1536,7 @@ useEffect(() => {
                       className="w-full bg-transparent border-b border-gray-700 focus:border-red-500 outline-none py-1 text-xs"
                     />
                     {mentionQuery !== null && mentionTargetIsReply && filteredMentionCandidates.length > 0 && (
-                      <div className="absolute left-0 top-full mt-1 bg-[#181818] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[140px] overflow-hidden">
+                      <div className="absolute left-0 top-full mt-1 bg-[#212121] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[140px] overflow-hidden">
                         {filteredMentionCandidates.map((name) => (
                           <button
                             key={name}
@@ -1552,7 +1552,7 @@ useEffect(() => {
                       <button
                         onClick={() => postReply()}
                         disabled={!replyText.trim() || postingReply}
-                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:bg-[#1a0000] disabled:cursor-not-allowed rounded-full text-[11px] transition min-h-[28px]"
+                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:bg-[#212121] disabled:cursor-not-allowed rounded-full text-[11px] transition min-h-[28px]"
                       >
                         {postingReply ? "Posting…" : "Reply"}
                       </button>
@@ -1701,7 +1701,7 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+      <div className="flex items-center justify-center min-h-screen bg-[#0F0F0F]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-500 mx-auto mb-4" />
           <p className="text-gray-400">Loading video...</p>
@@ -1712,7 +1712,7 @@ useEffect(() => {
 
   if (error || !current) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+      <div className="flex items-center justify-center min-h-screen bg-[#0F0F0F]">
         <div className="text-center max-w-md p-8">
           <div className="text-6xl mb-4">😵</div>
           <h2 className="text-2xl font-bold text-white mb-2">Video Not Found</h2>
@@ -1727,7 +1727,7 @@ useEffect(() => {
 
   return (
     <div
-      className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden"
+      className="min-h-screen bg-[#0F0F0F] text-white overflow-x-hidden"
       style={{ overflowY: "auto", scrollbarGutter: "stable" }}
     >
       {ambientEnabled && (
@@ -1831,7 +1831,7 @@ useEffect(() => {
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.92, y: -8 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute top-full left-0 mt-2 bg-[#181818] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[180px]"
+                          className="absolute top-full left-0 mt-2 bg-[#212121] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[180px]"
                         >
                           {[
                             { icon: "𝕏", label: "Twitter", key: "twitter" },
@@ -1887,7 +1887,7 @@ useEffect(() => {
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.92, y: -8 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute right-0 top-full mt-2 bg-[#181818] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[160px]"
+                          className="absolute right-0 top-full mt-2 bg-[#212121] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[160px]"
                         >
                           <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-lg transition text-left text-sm min-h-[44px]">
                             <Flag size={16} /><span>Report</span>
@@ -1914,7 +1914,7 @@ useEffect(() => {
                 && !focusMode && (
                   <div>
                     <div
-                      className="bg-[#181818] rounded-xl overflow-hidden"
+                      className="bg-[#212121] rounded-xl overflow-hidden"
                       style={{
                         display: "grid",
                         gridTemplateRows: showDescription ? "1fr" : "5rem",
@@ -1940,7 +1940,7 @@ useEffect(() => {
                   <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 mb-3">
                     <MessageSquare size={20} /> Comments
                   </h3>
-                  <div className="bg-[#181818] rounded-xl p-4 sm:p-5 text-sm text-gray-300">
+                  <div className="bg-[#212121] rounded-xl p-4 sm:p-5 text-sm text-gray-300">
                     <p>Comments are turned off for this video.</p>
                     <button
                       type="button"
@@ -1971,8 +1971,8 @@ useEffect(() => {
                       onChange={(e) => setCommentSort(e.target.value as "newest" | "top")}
                       className="bg-transparent border border-white/10 rounded-full px-2.5 py-1 text-xs sm:text-sm text-gray-300 hover:text-white transition outline-none cursor-pointer"
                     >
-                      <option className="bg-[#181818]" value="newest">Newest first</option>
-                      <option className="bg-[#181818]" value="top">Top comments</option>
+                      <option className="bg-[#212121]" value="newest">Newest first</option>
+                      <option className="bg-[#212121]" value="top">Top comments</option>
                     </select>
                     <button onClick={() => setShowComments(v => !v)} className="text-xs sm:text-sm text-gray-400 hover:text-white transition w-fit">
                       {showComments ? "Hide" : "Show"}
@@ -2003,7 +2003,7 @@ useEffect(() => {
                             className="w-full bg-transparent border-b border-gray-700 focus:border-red-500 outline-none py-2 text-xs sm:text-sm"
                           />
                           {mentionQuery !== null && !mentionTargetIsReply && filteredMentionCandidates.length > 0 && (
-                            <div className="absolute left-0 top-full mt-1 bg-[#181818] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[160px] overflow-hidden">
+                            <div className="absolute left-0 top-full mt-1 bg-[#212121] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[160px] overflow-hidden">
                               {filteredMentionCandidates.map((name) => (
                                 <button
                                   key={name}
@@ -2020,7 +2020,7 @@ useEffect(() => {
                               <button
                                 onClick={postComment}
                                 disabled={!commentText.trim() || postingComment}
-                                className="px-3 sm:px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#1a0000] disabled:cursor-not-allowed rounded-full text-xs sm:text-sm transition min-h-[36px]"
+                                className="px-3 sm:px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#212121] disabled:cursor-not-allowed rounded-full text-xs sm:text-sm transition min-h-[36px]"
                               >
                                 {postingComment ? "Posting…" : "Comment"}
                               </button>
@@ -2102,7 +2102,7 @@ useEffect(() => {
                                           <button
                                             onClick={() => saveEditComment(c.id)}
                                             disabled={!editText.trim() || savingEdit}
-                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#1a0000] disabled:cursor-not-allowed rounded-full text-xs transition min-h-[32px]"
+                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#212121] disabled:cursor-not-allowed rounded-full text-xs transition min-h-[32px]"
                                           >
                                             <Check size={13} />
                                             {savingEdit ? "Saving…" : "Save"}
@@ -2222,7 +2222,7 @@ useEffect(() => {
                                               className="w-full bg-transparent border-b border-gray-700 focus:border-red-500 outline-none py-1.5 text-xs sm:text-sm"
                                             />
                                             {mentionQuery !== null && mentionTargetIsReply && filteredMentionCandidates.length > 0 && (
-                                              <div className="absolute left-0 top-full mt-1 bg-[#181818] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[160px] overflow-hidden">
+                                              <div className="absolute left-0 top-full mt-1 bg-[#212121] border border-white/10 rounded-lg shadow-2xl z-30 min-w-[160px] overflow-hidden">
                                                 {filteredMentionCandidates.map((name) => (
                                                   <button
                                                     key={name}
@@ -2238,7 +2238,7 @@ useEffect(() => {
                                               <button
                                                 onClick={() => postReply()}
                                                 disabled={!replyText.trim() || postingReply}
-                                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#1a0000] disabled:cursor-not-allowed rounded-full text-xs transition min-h-[32px]"
+                                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-[#212121] disabled:cursor-not-allowed rounded-full text-xs transition min-h-[32px]"
                                               >
                                                 {postingReply ? "Posting…" : "Reply"}
                                               </button>
@@ -2302,7 +2302,7 @@ useEffect(() => {
 
           {!focusMode && (
             <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0">
-              <div className="bg-[#181818] rounded-xl p-3 sm:p-4 lg:sticky lg:top-4">
+              <div className="bg-[#212121] rounded-xl p-3 sm:p-4 lg:sticky lg:top-4">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <h3 className="text-base sm:text-lg text-white font-semibold">Up next</h3>
                   <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
@@ -2371,7 +2371,7 @@ useEffect(() => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#181818] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+              className="bg-[#212121] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -2452,7 +2452,7 @@ useEffect(() => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#181818] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+              className="bg-[#212121] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
             >
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">

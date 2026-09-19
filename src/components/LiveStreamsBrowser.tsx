@@ -157,7 +157,7 @@ const LiveStreamsBrowser: React.FC = () => {
           >
             <button
               onClick={() => navigate(`/live/watch/${stream.id}`)}
-              className="group relative bg-[#0a0000]/50 rounded-2xl overflow-hidden border border-white/10 hover:border-red-500/50 transition-all hover:scale-105 w-full text-left"
+              className="group relative bg-[#0F0F0F]/50 rounded-2xl overflow-hidden border border-white/10 hover:border-red-500/50 transition-all hover:scale-105 w-full text-left"
             >
               {/* Thumbnail */}
               <div className="relative aspect-video bg-gradient-to-br from-red-500/20 to-red-700/20">

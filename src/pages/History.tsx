@@ -204,7 +204,7 @@ export default function HistoryPage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-xl overflow-hidden border border-white/10 bg-[#181818] animate-pulse"
+                className="rounded-xl overflow-hidden border border-white/10 bg-[#212121] animate-pulse"
               >
                 <div className="aspect-video bg-[#2a2a2a]" />
                 <div className="p-4 space-y-2">
@@ -255,7 +255,7 @@ export default function HistoryPage() {
                 // the Watch.tsx cache key consistent instead of creating
                 // two separate cache entries for one video.
                 to={`/watch?v=${e.info?.public_id || e.id}`}
-                className="group rounded-xl overflow-hidden border border-white/10 bg-[#181818] hover:border-red-500/40 transition-colors"
+                className="group rounded-xl overflow-hidden border border-white/10 bg-[#212121] hover:border-red-500/40 transition-colors"
               >
                 {/* Thumbnail */}
                 <div className="relative aspect-video bg-black">

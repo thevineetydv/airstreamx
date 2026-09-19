@@ -133,7 +133,7 @@ export default function CreatorCard({
   if (compact) {
     return (
       <div
-        className={`flex items-center justify-between gap-3 p-3 bg-[#181818] rounded-xl border border-white/5 ${className}`}
+        className={`flex items-center justify-between gap-3 p-3 bg-[#212121] rounded-xl border border-white/5 ${className}`}
       >
         {/* Clickable avatar + name → channel */}
         <Link
@@ -145,7 +145,7 @@ export default function CreatorCard({
           <motion.div
             whileHover={{ scale: 1.06 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className={`w-9 h-9 rounded-full bg-gradient-to-br ${creator.avatarGradient} flex-shrink-0 overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#181818] transition-all`}
+            className={`w-9 h-9 rounded-full bg-gradient-to-br ${creator.avatarGradient} flex-shrink-0 overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#212121] transition-all`}
           >
             {resolvedAvatarUrl ? (
               <img
@@ -204,13 +204,13 @@ export default function CreatorCard({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-[#181818] rounded-2xl border border-white/5 p-5 flex flex-col items-center gap-3 text-center ${className}`}
+      className={`bg-[#212121] rounded-2xl border border-white/5 p-5 flex flex-col items-center gap-3 text-center ${className}`}
     >
       <Link to={resolvedPath} className="group/creator flex flex-col items-center gap-3">
         <motion.div
           whileHover={{ scale: 1.06 }}
           transition={{ type: "spring", stiffness: 400, damping: 20 }}
-          className={`w-20 h-20 rounded-full bg-gradient-to-br ${creator.avatarGradient} overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#181818] transition-all`}
+          className={`w-20 h-20 rounded-full bg-gradient-to-br ${creator.avatarGradient} overflow-hidden ring-2 ring-transparent group-hover/creator:ring-red-400 group-hover/creator:ring-offset-2 group-hover/creator:ring-offset-[#212121] transition-all`}
         >
           {resolvedAvatarUrl ? (
             <img

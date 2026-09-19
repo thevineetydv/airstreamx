@@ -92,7 +92,7 @@ export default function HowItWorksPage({ onUploadClick }: HowItWorksPageProps) {
           transition={{ delay: 0.15 }}
           className="flex justify-center mb-16"
         >
-          <div className="relative inline-flex bg-[#141414] border border-white/10 rounded-full p-1.5">
+          <div className="relative inline-flex bg-[#212121] border border-white/10 rounded-full p-1.5">
             {(["viewer", "creator"] as const).map((t) => (
               <button
                 key={t}
@@ -142,13 +142,13 @@ export default function HowItWorksPage({ onUploadClick }: HowItWorksPageProps) {
                 >
                   {/* Icon node on the timeline */}
                   <div className="relative flex-shrink-0 z-10">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#0d0d0d] border-2 border-red-500/30 flex items-center justify-center shadow-lg shadow-black/40">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#212121] to-[#0d0d0d] border-2 border-red-500/30 flex items-center justify-center shadow-lg shadow-black/40">
                       <step.icon size={22} className="text-red-400" />
                     </div>
                   </div>
 
                   {/* Card */}
-                  <div className="flex-1 bg-[#141414] rounded-2xl border border-white/10 p-5 pt-4 relative overflow-hidden">
+                  <div className="flex-1 bg-[#212121] rounded-2xl border border-white/10 p-5 pt-4 relative overflow-hidden">
                     {/* Giant ghost numeral */}
                     <span
                       className="absolute -top-2 -right-1 text-7xl font-black select-none pointer-events-none"

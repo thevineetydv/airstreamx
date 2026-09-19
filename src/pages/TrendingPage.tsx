@@ -99,7 +99,7 @@ function VideoCard({ video, rank }: { video: Video; rank: number }) {
   return (
     <Link to={`/watch?id=${video.id}`} className="group block">
       {/* Thumbnail */}
-      <div className="relative aspect-video bg-[#181818] rounded-xl overflow-hidden mb-3">
+      <div className="relative aspect-video bg-[#212121] rounded-xl overflow-hidden mb-3">
         <img
           src={video.thumbnail}
           alt={video.title}

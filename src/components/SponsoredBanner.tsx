@@ -37,7 +37,7 @@ export default function SponsoredBanner() {
       href={banner.link_url}
       target="_blank"
       rel="noopener noreferrer sponsored"
-      className="flex items-center gap-3 bg-[#141414] border border-red-500/20 rounded-xl px-3.5 py-3 mb-4 hover:border-red-500/40 transition-colors group"
+      className="flex items-center gap-3 bg-[#212121] border border-red-500/20 rounded-xl px-3.5 py-3 mb-4 hover:border-red-500/40 transition-colors group"
     >
       <div className="w-11 h-11 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
         <Store size={20} className="text-red-500" />

@@ -91,7 +91,7 @@ export default function LikedPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {liked.map(v => (
-              <Link key={v.id} to={`/watch/${v.id}`} className="group rounded-xl overflow-hidden border border-white/10 bg-[#181818] hover:border-red-500/40 transition-colors">
+              <Link key={v.id} to={`/watch/${v.id}`} className="group rounded-xl overflow-hidden border border-white/10 bg-[#212121] hover:border-red-500/40 transition-colors">
                 <div className="aspect-video bg-black">
                   {v.thumbnail ? (
                     <img src={v.thumbnail} alt={v.title} className="w-full h-full object-cover" />

@@ -177,7 +177,7 @@ function ShareModal({ short, onClose }: { short: Short; onClose: () => void }) {
         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 380, damping: 38 }}
         className="w-full max-w-sm rounded-t-3xl p-5 pb-8"
-        style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.08)" }}
+        style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.08)" }}
         onClick={e => e.stopPropagation()}
       >
         <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-5" />
@@ -352,7 +352,7 @@ function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle }: {
         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 400, damping: 40 }}
         className="w-full max-w-sm rounded-t-3xl overflow-hidden pb-2"
-        style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.07)" }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1"><div className="w-8 h-1 rounded-full bg-white/15" /></div>

@@ -182,11 +182,11 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
           />
           {/* Diamond kite body — tricolor */}
           <g transform="translate(20,16) rotate(20)">
-            <path d="M0,-13 L9,0 L0,13 L-9,0 Z" fill="#FF9933" stroke="#0a0000" strokeWidth="0.6" />
+            <path d="M0,-13 L9,0 L0,13 L-9,0 Z" fill="#FF9933" stroke="#0F0F0F" strokeWidth="0.6" />
             <path d="M-9,0 L9,0 L0,13 Z" fill="#138808" />
             <path d="M-9,0 L9,0 L0,-13 Z" fill="#FF9933" />
             <rect x="-9" y="-1.3" width="18" height="2.6" fill="#FFFFFF" />
-            <line x1="0" y1="-13" x2="0" y2="13" stroke="#0a0000" strokeWidth="0.5" opacity="0.4" />
+            <line x1="0" y1="-13" x2="0" y2="13" stroke="#0F0F0F" strokeWidth="0.5" opacity="0.4" />
           </g>
           {/* Small tail ribbons */}
           <path d="M12 27 l3 2 M15 29 l3 2 M18 31 l3 2" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
@@ -304,7 +304,7 @@ function CountryFlagIcon({ code, className = "w-4 h-3" }: { code: string; classN
     case "IN":
       return (
         <svg viewBox="0 0 24 16" className={className} aria-hidden="true">
-          <rect width="24" height="16" fill="#0a0000" />
+          <rect width="24" height="16" fill="#0F0F0F" />
           <rect width="24" height="5.33" y="0" fill="#FF9933" />
           <rect width="24" height="5.33" y="5.33" fill="#FFFFFF" />
           <rect width="24" height="5.33" y="10.67" fill="#138808" />
@@ -713,7 +713,7 @@ export default function Header({
                     onBlur={() => setSearchFocused(false)}
                     onKeyDown={handleKeyDown}
                     placeholder={isListening ? "Listening…" : "Search"}
-                    className="flex-1 h-10 pl-11 pr-4 text-sm bg-[#0a0000]/50 border border-gray-700 rounded-l-full focus:outline-none placeholder:text-gray-400 focus:border-red-500/50 transition-all"
+                    className="flex-1 h-10 pl-11 pr-4 text-sm bg-[#0F0F0F]/50 border border-gray-700 rounded-l-full focus:outline-none placeholder:text-gray-400 focus:border-red-500/50 transition-all"
                     disabled={isListening}
                     autoComplete="off"
                   />
@@ -727,7 +727,7 @@ export default function Header({
                       <X size={16} className="text-gray-400" />
                     </button>
                   )}
-                  <button type="submit" aria-label="Search" className="h-10 px-5 flex items-center justify-center bg-[#110000]/50 border border-l-0 border-gray-700 rounded-r-full hover:bg-red-600 hover:border-red-600 transition-all group">
+                  <button type="submit" aria-label="Search" className="h-10 px-5 flex items-center justify-center bg-[#212121]/50 border border-l-0 border-gray-700 rounded-r-full hover:bg-red-600 hover:border-red-600 transition-all group">
                     <SearchIcon className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" />
                   </button>
                 </div>
@@ -738,7 +738,7 @@ export default function Header({
                 {isListening && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-lg px-4 py-2 shadow-lg z-50"
+                    className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-lg px-4 py-2 shadow-lg z-50"
                   >
                     <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
                       <div className="flex gap-1">
@@ -763,7 +763,7 @@ export default function Header({
                   <motion.div
                     initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-[#181818] border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-50"
+                    className="absolute top-full left-0 right-0 mt-2 bg-[#212121] border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-50"
                   >
                     {!q && searchHistory.length > 0 && (
                       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
@@ -811,8 +811,8 @@ export default function Header({
               className={`flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full transition-all group ${isListening
                 ? "bg-red-500 shadow-lg shadow-red-500/50 animate-pulse"
                 : voiceSupported
-                  ? "bg-[#110000]/50 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/50"
-                  : "bg-[#110000]/30 cursor-not-allowed opacity-50"
+                  ? "bg-[#212121]/50 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/50"
+                  : "bg-[#212121]/30 cursor-not-allowed opacity-50"
                 }`}
             >
               {isListening
@@ -850,7 +850,7 @@ export default function Header({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-48 bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
+                    className="absolute right-0 mt-2 w-48 bg-[#212121]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
                   >
                     {/* Section label */}
                     <div className="px-3.5 pt-2.5 pb-1">
@@ -929,7 +929,7 @@ export default function Header({
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    className="absolute right-0 mt-2 w-80 bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl overflow-hidden"
+                    className="absolute right-0 mt-2 w-80 bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl overflow-hidden"
                   >
                     <div className="flex items-center justify-between p-4 border-b border-red-500/20">
                       <h3 className="font-semibold">Notifications</h3>
@@ -1014,7 +1014,7 @@ export default function Header({
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute right-0 mt-2 w-64 bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl overflow-hidden z-50"
+                        className="absolute right-0 mt-2 w-64 bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl overflow-hidden z-50"
                       >
                         <div className="p-4 border-b border-red-500/20 flex items-center gap-3">
                           {user.photoURL ? (
@@ -1074,7 +1074,7 @@ export default function Header({
       </header>
 {/* Mobile search bar */}
 <div className="md:hidden px-4 py-2 bg-black/90 border-b border-white/10" ref={searchRef}>
-  <form onSubmit={onSubmit} className="flex items-center bg-[#0a0000]/50 border border-gray-700 rounded-full px-4 h-10">
+  <form onSubmit={onSubmit} className="flex items-center bg-[#0F0F0F]/50 border border-gray-700 rounded-full px-4 h-10">
     <SearchIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
     <input
       ref={inputRef}

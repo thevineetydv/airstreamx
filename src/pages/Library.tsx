@@ -162,7 +162,7 @@ export default function LibraryPage() {
               <Link
                 key={v.id}
                 to={`/watch?v=${v.id}`}
-                className="group rounded-xl overflow-hidden border border-white/10 bg-[#181818] hover:border-red-500/40 transition-colors"
+                className="group rounded-xl overflow-hidden border border-white/10 bg-[#212121] hover:border-red-500/40 transition-colors"
               >
                 <div className="aspect-video bg-black relative">
                   {v.thumbnail ? (

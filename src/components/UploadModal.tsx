@@ -677,7 +677,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
         className="bg-[#0f0f0f] border border-white/10 text-white w-full max-w-[900px] min-h-[600px] max-h-[90vh] rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row relative"
       >
         {/* Left Side: Preview & Progress */}
-        <div className="w-full md:w-[340px] bg-[#0a0000]/40 p-6 border-r border-white/5 hidden md:flex flex-col">
+        <div className="w-full md:w-[340px] bg-[#0F0F0F]/40 p-6 border-r border-white/5 hidden md:flex flex-col">
           <div className="flex items-center gap-3 mb-8">
             <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               {/* AirStreamX Logo - Play button with bar */}
@@ -759,7 +759,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
             {/* Video Metadata */}
             {videoMetadata && (
-              <div className="bg-[#110000]/30 rounded-xl p-3 space-y-2 text-xs">
+              <div className="bg-[#212121]/30 rounded-xl p-3 space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Duration</span>
                   <span className="font-mono text-white">{formatDuration(videoMetadata.duration)}</span>
@@ -803,7 +803,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
           </div>
 
           {/* Footer Info */}
-          <div className="mt-auto p-4 bg-[#110000]/50 rounded-2xl border border-white/5">
+          <div className="mt-auto p-4 bg-[#212121]/50 rounded-2xl border border-white/5">
             <div className="flex items-center gap-2 text-zinc-400 mb-2">
               <Info size={12} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Guidelines</span>
@@ -903,7 +903,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       onDrop={handleDrop}
                       className={`relative border-2 border-dashed rounded-[32px] min-h-[320px] flex flex-col items-center justify-center transition-all cursor-pointer group ${isDragging
                         ? 'border-red-500 bg-red-500/10 scale-[0.98]'
-                        : 'border-zinc-800 hover:border-zinc-600 bg-[#0a0000]/20 hover:bg-[#0a0000]/40'
+                        : 'border-zinc-800 hover:border-zinc-600 bg-[#0F0F0F]/20 hover:bg-[#0F0F0F]/40'
                         }`}
                       onClick={() => fileInputRef.current?.click()}
                     >
@@ -938,7 +938,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                   ) : (
                     <div className="space-y-6">
                       {/* File Info Card */}
-                      <div className="bg-[#0a0000]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
+                      <div className="bg-[#0F0F0F]/50 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
                           <Video size={24} className="text-red-500" />
                         </div>
@@ -968,7 +968,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                           <Type size={14} /> Video Title *
                         </label>
                         <input
-                          className="w-full p-4 bg-[#0a0000] border border-white/5 rounded-2xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/50 outline-none text-lg font-medium transition-all placeholder:text-zinc-700"
+                          className="w-full p-4 bg-[#0F0F0F] border border-white/5 rounded-2xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/50 outline-none text-lg font-medium transition-all placeholder:text-zinc-700"
                           placeholder="Add a compelling title..."
                           value={title}
                           onChange={(e) => setTitle(e.target.value)}
@@ -1000,7 +1000,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         </label>
                         <textarea
                           rows={5}
-                          className="w-full p-4 bg-[#0a0000] border border-white/5 rounded-2xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/50 outline-none text-sm resize-none text-zinc-300 transition-all placeholder:text-zinc-700"
+                          className="w-full p-4 bg-[#0F0F0F] border border-white/5 rounded-2xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500/50 outline-none text-sm resize-none text-zinc-300 transition-all placeholder:text-zinc-700"
                           placeholder="Tell viewers what your video is about..."
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
@@ -1073,7 +1073,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                             </button>
                           </>
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-[#0a0000] flex flex-col items-center justify-center gap-1.5 group-hover:from-zinc-800 transition-all duration-200">
+                          <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-[#0F0F0F] flex flex-col items-center justify-center gap-1.5 group-hover:from-zinc-800 transition-all duration-200">
                             <div className="w-8 h-8 rounded-full bg-red-600/10 border border-red-500/20 flex items-center justify-center group-hover:bg-red-600/20 group-hover:border-red-500/40 group-hover:scale-110 transition-all duration-200">
                               <ImagePlus size={15} className="text-red-500" />
                             </div>
@@ -1131,7 +1131,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full p-4 bg-[#0a0000] border border-white/5 rounded-2xl outline-none text-sm font-semibold cursor-pointer hover:bg-[#110000] transition-colors"
+                        className="w-full p-4 bg-[#0F0F0F] border border-white/5 rounded-2xl outline-none text-sm font-semibold cursor-pointer hover:bg-[#212121] transition-colors"
                       >
                         {["Entertainment", "Gaming", "Music", "Education", "Tech", "Sports", "Vlog", "Comedy"].map(c => (
                           <option key={c} value={c}>{c}</option>
@@ -1144,7 +1144,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       <select
                         value={visibility}
                         onChange={(e) => setVisibility(e.target.value)}
-                        className="w-full p-4 bg-[#0a0000] border border-white/5 rounded-2xl outline-none text-sm font-semibold cursor-pointer hover:bg-[#110000] transition-colors"
+                        className="w-full p-4 bg-[#0F0F0F] border border-white/5 rounded-2xl outline-none text-sm font-semibold cursor-pointer hover:bg-[#212121] transition-colors"
                       >
                         {["Public", "Unlisted", "Private"].map(v => (
                           <option key={v} value={v}>{v}</option>
@@ -1154,8 +1154,8 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                   </div>
 
                   {/* Visibility Info */}
-                  <div className="p-3 bg-[#0a0000]/50 rounded-xl border border-white/5 flex items-start gap-3 text-xs">
-                    <div className="p-1.5 bg-[#110000] rounded-lg">
+                  <div className="p-3 bg-[#0F0F0F]/50 rounded-xl border border-white/5 flex items-start gap-3 text-xs">
+                    <div className="p-1.5 bg-[#212121] rounded-lg">
                       {visibilityIcons[visibility]}
                     </div>
                     <div>
@@ -1182,7 +1182,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         onClick={() => setMadeForKids(true)}
                         className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${madeForKids === true
                           ? "bg-red-500/15 border-red-500 text-white"
-                          : "bg-[#0a0000] border-white/5 text-zinc-400 hover:bg-[#110000]"
+                          : "bg-[#0F0F0F] border-white/5 text-zinc-400 hover:bg-[#212121]"
                           }`}
                       >
                         Yes, it's made for kids
@@ -1192,7 +1192,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         onClick={() => setMadeForKids(false)}
                         className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${madeForKids === false
                           ? "bg-red-500/15 border-red-500 text-white"
-                          : "bg-[#0a0000] border-white/5 text-zinc-400 hover:bg-[#110000]"
+                          : "bg-[#0F0F0F] border-white/5 text-zinc-400 hover:bg-[#212121]"
                           }`}
                       >
                         No, not made for kids
@@ -1210,7 +1210,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       {showKidsFactors ? "Hide" : "Not sure? Tap for simple questions"} {showKidsFactors ? "▲" : "▼"}
                     </button>
                     {showKidsFactors && (
-                      <div className="p-3 bg-[#0a0000]/50 rounded-xl border border-white/5 text-xs text-zinc-400 space-y-1.5">
+                      <div className="p-3 bg-[#0F0F0F]/50 rounded-xl border border-white/5 text-xs text-zinc-400 space-y-1.5">
                         <p className="text-zinc-300 font-semibold mb-2">
                           Ask yourself these simple questions:
                         </p>
@@ -1239,7 +1239,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       <Tag size={14} /> Search Tags
                     </label>
                     <input
-                      className="w-full p-4 bg-[#0a0000] border border-white/5 rounded-2xl outline-none text-sm text-zinc-300 focus:ring-2 focus:ring-red-500/30 transition-all placeholder:text-zinc-700"
+                      className="w-full p-4 bg-[#0F0F0F] border border-white/5 rounded-2xl outline-none text-sm text-zinc-300 focus:ring-2 focus:ring-red-500/30 transition-all placeholder:text-zinc-700"
                       placeholder="coding, tutorial, javascript (separated by commas)"
                       value={tags}
                       onChange={(e) => setTags(e.target.value)}
@@ -1261,7 +1261,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                           <button
                             key={i}
                             onClick={() => addSuggestedTag(tag)}
-                            className="px-3 py-1 bg-[#110000] hover:bg-red-600 rounded-full text-xs font-medium transition-colors border border-white/5 hover:border-red-500"
+                            className="px-3 py-1 bg-[#212121] hover:bg-red-600 rounded-full text-xs font-medium transition-colors border border-white/5 hover:border-red-500"
                           >
                             + {tag}
                           </button>
@@ -1276,7 +1276,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                       <>
                         <button
                           onClick={() => setStep(1)}
-                          className="flex-1 px-8 py-4 rounded-2xl font-bold bg-[#0a0000] border border-white/5 hover:bg-[#110000] transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 px-8 py-4 rounded-2xl font-bold bg-[#0F0F0F] border border-white/5 hover:bg-[#212121] transition-colors flex items-center justify-center gap-2"
                         >
                           <ChevronLeft size={18} /> Back
                         </button>
@@ -1311,7 +1311,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                         </div>
 
                         {/* Progress Bar */}
-                        <div className="w-full h-3 bg-[#0a0000] rounded-full overflow-hidden border border-white/5 p-0.5">
+                        <div className="w-full h-3 bg-[#0F0F0F] rounded-full overflow-hidden border border-white/5 p-0.5">
                           <motion.div
                             className="h-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 rounded-full shadow-lg shadow-red-500/50"
                             initial={{ width: 0 }}
@@ -1322,15 +1322,15 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
                         {/* Upload Stats */}
                         <div className="grid grid-cols-3 gap-3 text-center text-xs">
-                          <div className="p-3 bg-[#0a0000]/50 rounded-xl">
+                          <div className="p-3 bg-[#0F0F0F]/50 rounded-xl">
                             <p className="text-zinc-500 mb-1">Uploaded</p>
                             <p className="font-bold text-white">{formatBytes((file?.size ?? 0) * (progress / 100))}</p>
                           </div>
-                          <div className="p-3 bg-[#0a0000]/50 rounded-xl">
+                          <div className="p-3 bg-[#0F0F0F]/50 rounded-xl">
                             <p className="text-zinc-500 mb-1">Total Size</p>
                             <p className="font-bold text-white">{formatBytes(file?.size ?? 0)}</p>
                           </div>
-                          <div className="p-3 bg-[#0a0000]/50 rounded-xl">
+                          <div className="p-3 bg-[#0F0F0F]/50 rounded-xl">
                             <p className="text-zinc-500 mb-1">Speed</p>
                             <p className="font-bold text-white">{formatBytes(uploadSpeed)}/s</p>
                           </div>
@@ -1397,7 +1397,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
                     <button
                       onClick={onClose}
-                      className="px-6 py-4 bg-[#0a0000] border border-white/5 rounded-2xl font-bold hover:bg-[#110000] transition-all hover:scale-105 active:scale-95"
+                      className="px-6 py-4 bg-[#0F0F0F] border border-white/5 rounded-2xl font-bold hover:bg-[#212121] transition-all hover:scale-105 active:scale-95"
                     >
                       View Dashboard
                     </button>

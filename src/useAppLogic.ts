@@ -323,8 +323,8 @@ export function useAppLogic(): AppLogic {
 
   const themeCls: ThemeClasses =
     theme === "dark"
-      ? { page: "bg-[#0f0f0f] text-[#e5e5e5]", panel: "bg-[#181818] border-white/10" }
-      : { page: "bg-slate-950 text-slate-100", panel: "bg-[#0a0000] border-red-500/20" };
+      ? { page: "bg-[#0f0f0f] text-[#e5e5e5]", panel: "bg-[#212121] border-white/10" }
+      : { page: "bg-slate-950 text-slate-100", panel: "bg-[#0F0F0F] border-red-500/20" };
 
   // ── Return ────────────────────────────────────
 

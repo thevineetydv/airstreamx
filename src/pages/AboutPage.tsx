@@ -118,7 +118,7 @@ export default function AboutPage() {
               viewport={{ once: true, margin: "-60px" }}
               transition={{ delay: i * 0.1, duration: 0.5 }}
               whileHover={{ y: -4 }}
-              className="group relative bg-[#141414] rounded-2xl border border-white/10 p-6 overflow-hidden transition-colors hover:border-red-500/30"
+              className="group relative bg-[#212121] rounded-2xl border border-white/10 p-6 overflow-hidden transition-colors hover:border-red-500/30"
             >
               {/* Glow that appears on hover */}
               <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-red-500/0 group-hover:bg-red-500/10 blur-2xl transition-all duration-500" />

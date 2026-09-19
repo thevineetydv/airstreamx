@@ -117,7 +117,7 @@ function ConfirmModal({
         initial={{ scale: 0.92, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.92, opacity: 0 }}
-        className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        className="bg-[#212121] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <p className="text-white text-sm mb-6 leading-relaxed">{message}</p>
@@ -175,7 +175,7 @@ function EditModal({
         initial={{ scale: 0.93, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.93, opacity: 0, y: 20 }}
-        className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+        className="bg-[#212121] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -268,7 +268,7 @@ function FeaturedModal({
         initial={{ scale: 0.93, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.93, opacity: 0, y: 20 }}
-        className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+        className="bg-[#212121] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
@@ -632,7 +632,7 @@ export default function AdminDashboard() {
   /* ── Loading / Access denied ── */
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+      <div className="flex items-center justify-center min-h-screen bg-[#0F0F0F]">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
       </div>
     );
@@ -642,7 +642,7 @@ export default function AdminDashboard() {
 
   /* ── Render ── */
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0F0F0F] text-white">
 
       {/* Header */}
       <div className="border-b border-white/5 bg-[#111] px-4 sm:px-6 py-4 flex items-center gap-4">
@@ -665,7 +665,7 @@ export default function AdminDashboard() {
           { label: "Ready", value: videos.filter(v => v.status === "ready").length, color: "text-emerald-400" },
           { label: "Active Featured", value: featuredList.filter(f => f.is_active).length, color: "text-yellow-400" },
         ].map(s => (
-          <div key={s.label} className="bg-[#141414] border border-white/5 rounded-xl p-3">
+          <div key={s.label} className="bg-[#212121] border border-white/5 rounded-xl p-3">
             <p className="text-xs text-gray-500 mb-1">{s.label}</p>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
           </div>
@@ -701,7 +701,7 @@ export default function AdminDashboard() {
                 placeholder="Search by title, email, channel…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="flex-1 bg-[#141414] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 outline-none"
+                className="flex-1 bg-[#212121] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 outline-none"
               />
               <div className="flex gap-2">
                 {selectedIds.size > 0 && (
@@ -731,7 +731,7 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto rounded-xl border border-white/5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-[#141414] border-b border-white/5 text-left">
+                    <tr className="bg-[#212121] border-b border-white/5 text-left">
                       <th className="px-3 py-3 w-8">
                         <input
                           type="checkbox"
@@ -937,7 +937,7 @@ export default function AdminDashboard() {
                     className={`flex items-center gap-4 p-4 rounded-xl border transition ${
                       f.is_active
                         ? "bg-yellow-500/5 border-yellow-500/20"
-                        : "bg-[#141414] border-white/5 opacity-50"
+                        : "bg-[#212121] border-white/5 opacity-50"
                     }`}
                   >
                     <div className="text-xl">{f.is_active ? "⭐" : "☆"}</div>
@@ -981,7 +981,7 @@ export default function AdminDashboard() {
         {tab === "maintenance" && (
           <div className="space-y-6">
             {/* Server health */}
-            <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+            <div className="bg-[#212121] border border-white/5 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold text-white">Server health</p>
                 <button
@@ -1038,7 +1038,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Cleanup actions */}
-            <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+            <div className="bg-[#212121] border border-white/5 rounded-xl p-4">
               <p className="text-sm font-semibold text-white mb-1">Cleanup actions</p>
               <p className="text-xs text-gray-500 mb-4">
                 App-level only — clears in-memory caches and recalculates scores.

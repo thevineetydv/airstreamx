@@ -63,8 +63,8 @@ export default function ShortsSection() {
             swapping to real content added ~20px here alone. */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
-            <div className="w-7 h-7 rounded-lg bg-[#110000] animate-pulse" />
-            <div className="w-20 h-5 bg-[#110000] rounded animate-pulse" />
+            <div className="w-7 h-7 rounded-lg bg-[#212121] animate-pulse" />
+            <div className="w-20 h-5 bg-[#212121] rounded animate-pulse" />
           </div>
           <div className="flex items-center gap-2" style={{ minHeight: "40px" }} />
         </div>
@@ -78,9 +78,9 @@ export default function ShortsSection() {
         >
           {[...Array(5)].map((_, i) => (
             <div key={i} className="flex-shrink-0 w-36">
-              <div className="aspect-[9/16] bg-[#110000] rounded-xl mb-2 animate-pulse" />
-              <div className="h-3 bg-[#1a0000] rounded w-3/4 mb-1 animate-pulse" />
-              <div className="h-3 bg-[#110000] rounded w-1/2 animate-pulse" />
+              <div className="aspect-[9/16] bg-[#212121] rounded-xl mb-2 animate-pulse" />
+              <div className="h-3 bg-[#212121] rounded w-3/4 mb-1 animate-pulse" />
+              <div className="h-3 bg-[#212121] rounded w-1/2 animate-pulse" />
             </div>
           ))}
         </div>
@@ -145,7 +145,7 @@ export default function ShortsSection() {
           >
             {/* Thumbnail — 9:16 portrait */}
             <div
-              className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0a0000] mb-2"
+              className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0F0F0F] mb-2"
               style={{ containIntrinsicSize: "auto 9rem" }}
             >
               <img

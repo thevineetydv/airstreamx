@@ -14,7 +14,7 @@ export default function LoginButton() {
           <img src={user.photoURL} alt="avatar" className="w-12 h-12 rounded-full" />
         )}
         <span className="text-lg font-semibold">{user.displayName}</span>
-        <button onClick={logout} className="px-4 py-2 rounded bg-[#1a0000] hover:bg-gray-600 text-white">
+        <button onClick={logout} className="px-4 py-2 rounded bg-[#212121] hover:bg-gray-600 text-white">
           Logout
         </button>
       </div>

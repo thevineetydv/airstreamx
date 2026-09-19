@@ -128,7 +128,7 @@ export default function Settings() {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-[#181818] border border-white/10 rounded-xl p-5">
+        <div className="bg-[#212121] border border-white/10 rounded-xl p-5">
           <h2 className="text-lg font-semibold mb-3">Playback</h2>
           <div className="flex items-center justify-between py-2">
             <div>
@@ -240,7 +240,7 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="bg-[#181818] border border-white/10 rounded-xl p-5">
+        <div className="bg-[#212121] border border-white/10 rounded-xl p-5">
           <h2 className="text-lg font-semibold mb-3">Data & Network</h2>
           <div className="flex items-center justify-between py-2">
             <div>

@@ -669,7 +669,7 @@ export default function ClipGenerator() {
   const isProcessing = ["uploading", "transcribing", "detecting", "generating"].includes(stage);
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8" style={{ background: "#0a0a0a" }}>
+    <div className="min-h-screen pb-20 md:pb-8" style={{ background: "#0F0F0F" }}>
       <div className="max-w-6xl mx-auto px-4 pt-8">
 
         {/* Header */}
