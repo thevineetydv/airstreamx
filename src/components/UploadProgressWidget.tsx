@@ -28,7 +28,7 @@ export default function UploadProgressWidget() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
           transition={{ duration: 0.2 }}
-          className="fixed bottom-4 right-4 z-[90] w-72 bg-[#181818] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+          className="fixed bottom-4 right-4 z-[90] w-72 bg-[#212121] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
         >
           <button onClick={openModal} className="w-full text-left p-4 hover:bg-white/5 transition-colors">
             <div className="flex items-center gap-2 mb-2.5">

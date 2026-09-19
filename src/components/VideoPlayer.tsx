@@ -13,7 +13,7 @@ import {
   Loader2, Volume1, Rewind, FastForward, Heart, Settings, Sparkles,
   ThumbsDown, HelpCircle, X,
 } from "lucide-react";
-import Hls from "hls.js";
+import Hls from "hls.js/light";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../utils/constants";
 import { getAuth } from "firebase/auth";
@@ -436,7 +436,7 @@ const KeyboardShortcuts: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
     className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
     <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-      className="bg-[#0a0000] rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+      className="bg-[#0F0F0F] rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-white flex items-center gap-2"><HelpCircle size={24} className="text-red-400" /> Keyboard Shortcuts</h3>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg"><X size={20} className="text-gray-400" /></button>
@@ -1013,7 +1013,7 @@ const VideoEndScreen: React.FC<{
                         }}
                         className="group hover:border-red-500/40 transition-colors"
                       >
-                        <div style={{ position: "relative", width: 64, height: 36, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: "#0a0a0a" }}>
+                        <div style={{ position: "relative", width: 64, height: 36, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: "#0F0F0F" }}>
                           <img src={el.video.thumbnail} alt={el.video.title}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             className="group-hover:scale-105 transition-transform"
@@ -1077,7 +1077,7 @@ const VideoEndScreen: React.FC<{
               onClick={() => navigate(`/watch?v=${nextVideo.public_id || nextVideo.id}`)}
               style={{
                 flex: 1, position: "relative", borderRadius: 10, overflow: "hidden",
-                cursor: "pointer", background: "#0a0a0a",
+                cursor: "pointer", background: "#0F0F0F",
                 boxShadow: "0 0 0 1px rgba(239,68,68,0.2), 0 8px 32px rgba(0,0,0,0.6)",
               }}
               className="group"

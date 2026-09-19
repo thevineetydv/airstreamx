@@ -14,7 +14,7 @@ interface DeleteVideoModalProps {
 export function DeleteVideoModal({ video, onClose, onConfirm }: DeleteVideoModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#181818] w-[420px] rounded-xl shadow-xl p-6 relative border border-white/10">
+      <div className="bg-[#212121] w-[420px] rounded-xl shadow-xl p-6 relative border border-white/10">
         <button className="absolute right-3 top-3 text-gray-400 hover:text-white" onClick={onClose}>
           <X size={20} />
         </button>
@@ -36,7 +36,7 @@ export function DeleteVideoModal({ video, onClose, onConfirm }: DeleteVideoModal
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg bg-[#1a0000] hover:bg-gray-600">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg bg-[#212121] hover:bg-gray-600">
             Cancel
           </button>
           <button

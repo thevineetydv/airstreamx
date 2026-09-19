@@ -355,7 +355,7 @@ export default function UploadPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-[#181818] border border-gray-800 rounded-2xl overflow-y-auto max-h-[80vh]"
+          className="bg-[#212121] border border-gray-800 rounded-2xl overflow-y-auto max-h-[80vh]"
         >
           <AnimatePresence mode="wait">
             {/* Error Alert */}
@@ -729,7 +729,7 @@ export default function UploadPage() {
                     <span className="text-gray-400">Progress</span>
                     <span className="font-semibold">{progress}%</span>
                   </div>
-                  <div className="h-2 bg-[#1a0000] rounded-full overflow-hidden">
+                  <div className="h-2 bg-[#212121] rounded-full overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${progress}%` }}
@@ -853,7 +853,7 @@ export default function UploadPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="mt-8 bg-[#181818] border border-gray-800 rounded-xl p-6"
+            className="mt-8 bg-[#212121] border border-gray-800 rounded-xl p-6"
           >
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Film className="text-red-500" size={20} />

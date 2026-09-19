@@ -1,9 +1,20 @@
-/* ===========================
-   TAILWIND CSS
-   =========================== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===========================
+   iOS SAFARI INPUT-ZOOM FIX
+   =========================== */
+/* iOS Safari zooms the whole page in when a focused form field computes
+   under 16px font-size — several inputs here (header search, admin
+   forms) use Tailwind's text-sm/text-xs, which are 14px/12px. Scoped to
+   mobile widths only so desktop keeps its intentionally smaller text. */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 
 /* ===========================
    CLS PREVENTION — ASPECT RATIO LOCKS
@@ -231,6 +242,7 @@ button:focus-visible {
   height: 80px;
   border-radius: 9999px;
   background: rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;

@@ -958,10 +958,10 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
                               <div className="space-y-2">
                                 <input value={link.label} onChange={e => updateLink(link.id, "label", e.target.value)}
                                   maxLength={40} placeholder="Label (e.g. My Website, Instagram, Portfolio)"
-                                  className="w-full bg-[#0a0a0a] border border-white/[0.08] focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none transition" />
+                                  className="w-full bg-[#0F0F0F] border border-white/[0.08] focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none transition" />
                                 <input value={link.url} onChange={e => updateLink(link.id, "url", e.target.value)}
                                   maxLength={200} placeholder="https://" type="url"
-                                  className="w-full bg-[#0a0a0a] border border-white/[0.08] focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none transition font-mono" />
+                                  className="w-full bg-[#0F0F0F] border border-white/[0.08] focus:border-red-500/40 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none transition font-mono" />
                               </div>
                             </motion.div>
                           ))}

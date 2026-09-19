@@ -76,7 +76,7 @@ function renderCaptionWithHashtags(caption: string) {
 
 function PostSkeleton() {
   return (
-    <div className="bg-[#141414] border border-white/5 rounded-2xl p-5 animate-pulse">
+    <div className="bg-[#212121] border border-white/5 rounded-2xl p-5 animate-pulse">
       <div className="h-3 w-20 bg-white/10 rounded mb-4" />
       <div className="h-3 w-full bg-white/10 rounded mb-2" />
       <div className="h-3 w-2/3 bg-white/10 rounded mb-4" />
@@ -216,7 +216,7 @@ export default function PostsTab({ channelId, isOwnChannel }: PostsTabProps) {
 
       {!loading && posts.length === 0 && (
         <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-full bg-[#141414] border border-white/5 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-full bg-[#212121] border border-white/5 flex items-center justify-center mx-auto mb-4">
             <FileText size={26} className="text-gray-600" />
           </div>
           <h3 className="text-base font-semibold text-gray-300 mb-1.5">No posts yet</h3>
@@ -238,7 +238,7 @@ export default function PostsTab({ channelId, isOwnChannel }: PostsTabProps) {
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ delay: Math.min(i * 0.05, 0.3), duration: 0.35 }}
               whileHover={{ y: -2 }}
-              className="group relative bg-[#141414] border border-white/5 rounded-2xl p-5 overflow-hidden transition-colors hover:border-white/10"
+              className="group relative bg-[#212121] border border-white/5 rounded-2xl p-5 overflow-hidden transition-colors hover:border-white/10"
             >
               {/* Subtle hover glow, matching the app's card language elsewhere */}
               <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-red-500/0 group-hover:bg-red-500/[0.06] blur-2xl transition-all duration-500 pointer-events-none" />

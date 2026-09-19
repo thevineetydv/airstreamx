@@ -84,7 +84,7 @@ export default function Login() {
         </div>
 
         {/* Form Card */}
-        <div className="bg-[#181818] rounded-2xl p-8 border border-gray-800">
+        <div className="bg-[#212121] rounded-2xl p-8 border border-gray-800">
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Error Alert */}
             {error && (
@@ -178,6 +178,18 @@ export default function Login() {
                 "Sign In"
               )}
             </button>
+
+            <p className="text-center text-xs text-gray-500 mt-4">
+              By continuing, you agree to AirStreamX's{" "}
+              <Link to="/terms" className="text-gray-400 hover:text-white underline">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" className="text-gray-400 hover:text-white underline">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
 
           {/* Divider */}
@@ -186,7 +198,7 @@ export default function Login() {
               <div className="w-full border-t border-gray-700"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-[#181818] text-gray-400">
+              <span className="px-4 bg-[#212121] text-gray-400">
                 Don't have an account?
               </span>
             </div>

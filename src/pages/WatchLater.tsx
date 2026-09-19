@@ -114,7 +114,7 @@ export default function WatchLaterPage() {
 
         {/* Soft sign-in nudge for non-authed users */}
         {!user && !empty && (
-          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#181818] border border-white/10 text-sm text-gray-400">
+          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#212121] border border-white/10 text-sm text-gray-400">
             <ShieldAlert className="w-4 h-4 flex-shrink-0 text-red-400" />
             <span>
               Sign in to sync Watch Later across devices.{" "}
@@ -149,7 +149,7 @@ export default function WatchLaterPage() {
             {videos.map(v => (
               <div
                 key={v.id}
-                className="group rounded-xl overflow-hidden border border-white/10 bg-[#181818] hover:border-red-500/40 transition-colors relative"
+                className="group rounded-xl overflow-hidden border border-white/10 bg-[#212121] hover:border-red-500/40 transition-colors relative"
               >
                 {/* Remove button */}
                 <button

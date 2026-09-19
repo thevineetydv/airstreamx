@@ -70,7 +70,7 @@ function DeleteModal({ video, onClose, onConfirm, isDeleting }: DeleteModalProps
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.9, y: 20 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-2xl w-full max-w-md p-6 shadow-2xl shadow-red-500/10"
+          className="bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-2xl w-full max-w-md p-6 shadow-2xl shadow-red-500/10"
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
@@ -88,7 +88,7 @@ function DeleteModal({ video, onClose, onConfirm, isDeleting }: DeleteModalProps
             <button
               onClick={onClose}
               disabled={isDeleting}
-              className="px-5 py-2.5 rounded-xl bg-[#110000] text-white hover:bg-[#1a0000] transition-all text-sm font-medium disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-[#212121] text-white hover:bg-[#212121] transition-all text-sm font-medium disabled:opacity-50"
             >
               Cancel
             </button>
@@ -125,7 +125,7 @@ function VideoActionsMenu({ video, onDelete, onClose }: VideoActionsMenuProps) {
       initial={{ opacity: 0, scale: 0.95, y: -10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -10 }}
-      className="absolute right-2 top-12 z-30 w-48 bg-[#0a0000]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl shadow-red-500/10 overflow-hidden"
+      className="absolute right-2 top-12 z-30 w-48 bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-xl shadow-2xl shadow-red-500/10 overflow-hidden"
     >
       <button
         onClick={() => {
@@ -294,7 +294,7 @@ export default function LibraryPanel({
   };
 
   return (
-    <div className={`h-full flex flex-col rounded-2xl ${themeCls.panel || 'bg-[#0a0000]/50'} backdrop-blur-xl border border-red-500/10`}>
+    <div className={`h-full flex flex-col rounded-2xl ${themeCls.panel || 'bg-[#0F0F0F]/50'} backdrop-blur-xl border border-red-500/10`}>
       {/* Header */}
       <div className="p-4 border-b border-red-500/10">
         <div className="flex items-center justify-between mb-4">
@@ -315,7 +315,7 @@ export default function LibraryPanel({
             className={`p-2 rounded-lg transition-all ${
               showFilters 
                 ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                : "bg-[#110000] text-gray-400 hover:bg-[#1a0000] hover:text-red-400"
+                : "bg-[#212121] text-gray-400 hover:bg-[#212121] hover:text-red-400"
             }`}
           >
             <Filter size={18} />
@@ -330,7 +330,7 @@ export default function LibraryPanel({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search your videos..."
-            className="w-full pl-10 pr-10 py-2.5 bg-[#110000]/50 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+            className="w-full pl-10 pr-10 py-2.5 bg-[#212121]/50 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
           />
           {searchQuery && (
             <button
@@ -351,7 +351,7 @@ export default function LibraryPanel({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-3 p-3 bg-[#110000]/30 rounded-xl space-y-3 border border-red-500/10">
+              <div className="mt-3 p-3 bg-[#212121]/30 rounded-xl space-y-3 border border-red-500/10">
                 {/* Sort Options */}
                 <div>
                   <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">
@@ -369,7 +369,7 @@ export default function LibraryPanel({
                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                           sortBy === value
                             ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                            : "bg-[#110000] text-gray-400 hover:bg-[#1a0000] hover:text-red-400"
+                            : "bg-[#212121] text-gray-400 hover:bg-[#212121] hover:text-red-400"
                         }`}
                       >
                         <Icon size={14} />
@@ -396,7 +396,7 @@ export default function LibraryPanel({
                         className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                           filterBy === value
                             ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                            : "bg-[#110000] text-gray-400 hover:bg-[#1a0000] hover:text-red-400"
+                            : "bg-[#212121] text-gray-400 hover:bg-[#212121] hover:text-red-400"
                         }`}
                       >
                         {label}
@@ -415,7 +415,7 @@ export default function LibraryPanel({
         {filteredVideos.length === 0 ? (
           searchQuery ? (
             <div className="text-center py-10">
-              <div className="w-16 h-16 rounded-full bg-[#110000] flex items-center justify-center mx-auto mb-3">
+              <div className="w-16 h-16 rounded-full bg-[#212121] flex items-center justify-center mx-auto mb-3">
                 <Search className="w-8 h-8 text-gray-600" />
               </div>
               <p className="text-gray-400 text-sm">
@@ -438,7 +438,7 @@ export default function LibraryPanel({
                   className={`relative group flex gap-3 rounded-xl p-3 transition-all duration-200 cursor-pointer border ${
                     currentId === v.id 
                       ? "bg-red-500/10 border-red-500/30 shadow-lg shadow-red-500/10" 
-                      : "bg-[#110000]/30 border-transparent hover:bg-red-500/5 hover:border-red-500/20"
+                      : "bg-[#212121]/30 border-transparent hover:bg-red-500/5 hover:border-red-500/20"
                   }`}
                   onClick={() => setCurrentId?.(v.id)}
                 >
@@ -497,7 +497,7 @@ export default function LibraryPanel({
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === v.id ? null : v.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-2 rounded-lg bg-[#110000]/90 text-gray-400 hover:text-red-400 hover:bg-[#1a0000] transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-2 rounded-lg bg-[#212121]/90 text-gray-400 hover:text-red-400 hover:bg-[#212121] transition-all"
                     >
                       <MoreVertical size={16} />
                     </button>

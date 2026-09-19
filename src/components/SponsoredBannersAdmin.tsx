@@ -129,7 +129,7 @@ export default function SponsoredBannersAdmin() {
       </div>
 
       {showForm && (
-        <div className="bg-[#141414] border border-white/10 rounded-xl p-4 mb-5 space-y-3">
+        <div className="bg-[#212121] border border-white/10 rounded-xl p-4 mb-5 space-y-3">
           {error && (
             <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
               {error}
@@ -212,7 +212,7 @@ export default function SponsoredBannersAdmin() {
           {banners.map((b) => (
             <div
               key={b.id}
-              className="flex items-center gap-3 bg-[#141414] border border-white/5 rounded-xl px-4 py-3"
+              className="flex items-center gap-3 bg-[#212121] border border-white/5 rounded-xl px-4 py-3"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">

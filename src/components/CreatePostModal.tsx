@@ -221,7 +221,7 @@ export default function CreatePostModal({ onClose, onPosted }: CreatePostModalPr
           role="dialog"
           aria-modal="true"
           aria-labelledby="create-post-title"
-          className="relative bg-[#141414] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
+          className="relative bg-[#212121] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl max-h-[85vh] overflow-hidden flex flex-col"
         >
           {/* Ambient glow, matching the app's card language elsewhere */}
           <div

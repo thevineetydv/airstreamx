@@ -124,7 +124,7 @@ const LiveStreamPage: React.FC = () => {
       />
 
       {/* Stream Info */}
-      <div className="mt-6 bg-[#0a0000]/50 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
+      <div className="mt-6 bg-[#0F0F0F]/50 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">

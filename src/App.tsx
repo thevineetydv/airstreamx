@@ -45,6 +45,8 @@ const Liked            = lazy(() => import("./pages/Liked"));
 // FIX #3: Removed duplicate `Trending` import — only TrendingPage is used
 const CategoryPage     = lazy(() => import("./pages/CategoryPage"));
 const FAQPage          = lazy(() => import("./pages/FAQPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsOfServicePage = lazy(() => import("./pages/TermsOfServicePage"));
 const TrendingPage     = lazy(() => import("./pages/TrendingPage"));
 const CreatorDetailPage = lazy(() => import("./pages/CreatorDetailPage"));
 
@@ -248,6 +250,8 @@ function AppContent() {
                   {/* ─── SEO PAGES ────────────────────────────────── */}
                   <Route path="/category/:slug"      element={<CategoryPage />} />
                   <Route path="/faq"                 element={<FAQPage />} />
+                  <Route path="/privacy"             element={<PrivacyPolicyPage />} />
+                  <Route path="/terms"               element={<TermsOfServicePage />} />
                   <Route path="/creators/:handle"    element={<CreatorDetailPage />} />
 
                   {/* ─── ABOUT / HOW IT WORKS ─────────────────────── */}

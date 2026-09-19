@@ -894,7 +894,7 @@ if (countId) {
   const resolvedHandle = stats.handle;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0F0F0F] text-white">
       {/* Hidden file inputs */}
       <input
         ref={avatarInputRef}
@@ -929,7 +929,7 @@ if (countId) {
           </div>
         )}
         <div
-          className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-[#0F0F0F] via-transparent to-transparent"
           style={{ pointerEvents: "none" }}
         />
       </div>
@@ -942,7 +942,7 @@ if (countId) {
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className={`w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br ${stats.gradient} shadow-2xl border-4 border-[#0a0a0a] overflow-hidden`}
+              className={`w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br ${stats.gradient} shadow-2xl border-4 border-[#0F0F0F] overflow-hidden`}
             >
               {(stats.avatarUrl ?? creatorProfile.avatarUrl) ? (
                 <img
@@ -1210,7 +1210,7 @@ if (countId) {
                             initial={{ opacity: 0, scale: 0.95, y: -10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                            className="absolute right-0 top-12 w-56 bg-[#282828] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                            className="absolute right-0 top-12 w-56 bg-[#212121] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
                           >
                             <div className="p-3 border-b border-white/10">
                               <p className="text-sm font-medium text-white">
@@ -1313,7 +1313,7 @@ if (countId) {
                           initial={{ opacity: 0, scale: 0.95, y: -10 }}
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                          className="absolute right-0 top-12 w-48 bg-[#282828] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                          className="absolute right-0 top-12 w-48 bg-[#212121] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
                         >
                           <button
                             onClick={handleReportChannel}
@@ -1428,7 +1428,7 @@ if (countId) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 + i * 0.05 }}
-              className="bg-[#181818] rounded-xl p-4 border border-white/5"
+              className="bg-[#212121] rounded-xl p-4 border border-white/5"
             >
               <stat.icon size={18} className={`${stat.color} mb-2`} />
               <div className="text-xl font-bold">{stat.value}</div>
@@ -1446,7 +1446,7 @@ if (countId) {
               exit={{ opacity: 0, height: 0 }}
               className="mb-6 overflow-hidden"
             >
-              <div className="bg-gradient-to-br from-[#181818] to-[#1a1a2e] rounded-2xl p-6 border border-white/10">
+              <div className="bg-gradient-to-br from-[#212121] to-[#1a1a2e] rounded-2xl p-6 border border-white/10">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold flex items-center gap-2">
                     <BarChart3 size={20} className="text-red-400" />
@@ -1762,7 +1762,7 @@ if (countId) {
                         className="w-36 flex-shrink-0 cursor-pointer group"
                         onClick={() => navigate(`/shorts/${v.id}`)}
                       >
-                        <div className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0a0000]">
+                        <div className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0F0F0F]">
                           <img
                             src={v.thumbnail}
                             alt={v.title}
@@ -1806,11 +1806,11 @@ if (countId) {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search channel"
-                    className="w-full pl-9 pr-4 py-2 bg-[#181818] border border-white/10 rounded-full text-sm focus:outline-none focus:border-red-500/50 text-white placeholder-gray-500"
+                    className="w-full pl-9 pr-4 py-2 bg-[#212121] border border-white/10 rounded-full text-sm focus:outline-none focus:border-red-500/50 text-white placeholder-gray-500"
                   />
                 </div>
                 <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
-                  <div className="flex items-center gap-1 bg-[#181818] border border-white/10 rounded-full px-3 py-2">
+                  <div className="flex items-center gap-1 bg-[#212121] border border-white/10 rounded-full px-3 py-2">
                     <SortAsc size={15} className="text-gray-400" />
                     <select
                       value={sortBy}
@@ -1823,7 +1823,7 @@ if (countId) {
                       <option value="liked">Most Liked</option>
                     </select>
                   </div>
-                  <div className="flex gap-1 bg-[#181818] border border-white/10 rounded-full p-1">
+                  <div className="flex gap-1 bg-[#212121] border border-white/10 rounded-full p-1">
                     <button
                       onClick={() => setViewMode("grid")}
                       className={`p-1.5 rounded-full transition ${viewMode === "grid"
@@ -1904,7 +1904,7 @@ if (countId) {
                       className="cursor-pointer group"
                       onClick={() => navigate(`/shorts/${v.id}`)}
                     >
-                      <div className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0a0000] mb-2">
+                      <div className="relative aspect-[9/16] rounded-xl overflow-hidden bg-[#0F0F0F] mb-2">
                         <img
                           src={v.thumbnail}
                           alt={v.title}
@@ -2091,7 +2091,7 @@ if (countId) {
               className="max-w-2xl pb-12"
             >
               <div className="space-y-6">
-                <div className="bg-[#181818] rounded-2xl p-6 border border-white/5">
+                <div className="bg-[#212121] rounded-2xl p-6 border border-white/5">
                   <h3 className="font-semibold mb-3 text-gray-300">
                     Description
                   </h3>
@@ -2099,7 +2099,7 @@ if (countId) {
                     {profile.bio || stats.description}
                   </p>
                 </div>
-                <div className="bg-[#181818] rounded-2xl p-6 border border-white/5">
+                <div className="bg-[#212121] rounded-2xl p-6 border border-white/5">
                   <h3 className="font-semibold mb-4 text-gray-300">
                     Channel Stats
                   </h3>
@@ -2139,7 +2139,7 @@ if (countId) {
                     ))}
                   </div>
                 </div>
-                <div className="bg-[#181818] rounded-2xl p-6 border border-white/5">
+                <div className="bg-[#212121] rounded-2xl p-6 border border-white/5">
                   <h3 className="font-semibold mb-3 text-gray-300">Contact</h3>
                   {profile.website ? (
                     <a
@@ -2411,23 +2411,23 @@ function EmptyVideos({
 
 function ChannelSkeleton() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] animate-pulse">
-      <div className="h-52 bg-[#110000]" />
+    <div className="min-h-screen bg-[#0F0F0F] animate-pulse">
+      <div className="h-52 bg-[#212121]" />
       <div className="max-w-7xl mx-auto px-6 -mt-12">
         <div className="flex items-end gap-4 mb-6">
-          <div className="w-32 h-32 rounded-full bg-[#1a0000] border-4 border-[#0a0a0a]" />
+          <div className="w-32 h-32 rounded-full bg-[#212121] border-4 border-[#0F0F0F]" />
           <div className="pb-2 flex-1">
-            <div className="h-7 bg-[#1a0000] rounded w-48 mb-2" />
-            <div className="h-4 bg-[#110000] rounded w-64 mb-4" />
+            <div className="h-7 bg-[#212121] rounded w-48 mb-2" />
+            <div className="h-4 bg-[#212121] rounded w-64 mb-4" />
             <div className="flex gap-2">
-              <div className="h-9 bg-[#1a0000] rounded-full w-28" />
-              <div className="h-9 bg-[#110000] rounded-full w-20" />
+              <div className="h-9 bg-[#212121] rounded-full w-28" />
+              <div className="h-9 bg-[#212121] rounded-full w-20" />
             </div>
           </div>
         </div>
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-20 bg-[#110000] rounded-xl" />
+            <div key={i} className="h-20 bg-[#212121] rounded-xl" />
           ))}
         </div>
         <div className="grid grid-cols-4 gap-4">
@@ -2435,9 +2435,9 @@ function ChannelSkeleton() {
             .fill(0)
             .map((_, i) => (
               <div key={i}>
-                <div className="aspect-video bg-[#110000] rounded-xl mb-3" />
-                <div className="h-3 bg-[#1a0000] rounded w-3/4 mb-2" />
-                <div className="h-3 bg-[#110000] rounded w-1/2" />
+                <div className="aspect-video bg-[#212121] rounded-xl mb-3" />
+                <div className="h-3 bg-[#212121] rounded w-3/4 mb-2" />
+                <div className="h-3 bg-[#212121] rounded w-1/2" />
               </div>
             ))}
         </div>
@@ -2451,7 +2451,7 @@ function ChannelSkeleton() {
 function ChannelNotFound() {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
       <div className="text-center">
         <div className="text-8xl mb-4">😵</div>
         <h2 className="text-2xl font-bold text-white mb-2">
