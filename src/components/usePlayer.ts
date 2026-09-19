@@ -184,7 +184,28 @@ export default function usePlayer({
 
     // HLS.js
     if (video.url.endsWith(".m3u8") && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true });
+      const hls = new Hls({
+        enableWorker: true,
+        // Buffer further ahead than hls.js's 30s default — cheap insurance
+        // against the network blips common on Indian 4G, so a brief signal
+        // drop doesn't immediately show a spinner.
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        // Never fetch a higher-resolution rendition than the actual
+        // <video> element needs — a phone-sized player pulling 1080p
+        // wastes the viewer's data AND hammers the 1GB RAM origin server
+        // for bytes that get downscaled anyway.
+        capLevelToPlayerSize: true,
+        // hls.js's default bandwidth guess is tuned for fast connections
+        // and often starts a fresh session at a level too high for 4G,
+        // causing an immediate rebuffer while it corrects itself. Starting
+        // the estimate lower means ABR ramps UP once it confirms good
+        // bandwidth, instead of ramping down after a stall.
+        abrEwmaDefaultEstimate: 500_000, // ~500kbps
+        // Proactively drop a level if the buffer is projected to run out
+        // within 4s, rather than waiting for an actual stall.
+        maxStarvationDelay: 4,
+      });
       hlsRef.current = hls;
       hls.attachMedia(el);
       hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(video.url));
