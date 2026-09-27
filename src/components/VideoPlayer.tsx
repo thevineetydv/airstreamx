@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward,
@@ -470,9 +471,15 @@ const Controls: React.FC<any> = ({
   isTheaterMode, onToggleTheater, onShowHelp, spriteUrl,
   onReactStart, onReactEnd, brightness, onSetBrightness,
 }) => {
-  const [showQuality, setShowQuality] = useState(false);
+   const [showQuality, setShowQuality] = useState(false);
   const [isReacting, setIsReacting] = useState(false);
   const [settingsView, setSettingsView] = useState<"main" | "quality" | "speed">("main");
+  // Settings dropdown is rendered via a portal (see below) so it isn't
+  // clipped by the player's own overflow-hidden (needed for its rounded
+  // corners). Position is computed from the button's real screen
+  // location each time it opens.
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const [settingsPos, setSettingsPos] = useState<{ bottom: number; right: number } | null>(null);
   const [stableVolume, setStableVolume] = useState(false);
   const [voiceBoost, setVoiceBoost] = useState(false);
   const [ambientMode, setAmbientMode] = useState(() => {
@@ -628,36 +635,57 @@ const Controls: React.FC<any> = ({
             <Sparkles size={15} className="text-white" fill={isReacting ? "white" : "none"} />
           </motion.button>
 
-          {/* ⚙ YouTube-style Settings Panel — Speed, Quality, Theater, PiP all inside */}
+          {/* ⚙ YouTube-style Settings Panel — Speed, Quality, Theater, PiP all inside.
+              Rendered via a portal so it isn't clipped by the player's
+              own overflow-hidden — that clipping was the actual bug:
+              the button WAS toggling correctly (it visibly highlighted
+              red), the panel just rendered invisibly outside the
+              player's clipped bounds. */}
           <div className="relative">
             <button
-              onClick={() => { setShowQuality(q => !q); setSettingsView("main"); }}
+              ref={settingsBtnRef}
+              onClick={() => {
+                if (!showQuality && settingsBtnRef.current) {
+                  const rect = settingsBtnRef.current.getBoundingClientRect();
+                  setSettingsPos({
+                    bottom: window.innerHeight - rect.top + 8,
+                    right: window.innerWidth - rect.right,
+                  });
+                }
+                setShowQuality(q => !q);
+                setSettingsView("main");
+              }}
               title="Settings"
               className={`p-1.5 rounded-full transition-all hover:scale-110
                 ${showQuality ? "text-red-400" : "hover:text-red-400 opacity-75 hover:opacity-100"}`}
             >
               <Settings size={17} />
             </button>
-            <AnimatePresence>
-              {showQuality && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute bottom-full right-0 mb-2 shadow-2xl z-[9999]"
-                  style={{
-                    width: 240,
-                    maxHeight: "min(50vh, 300px)",
-                    background: "rgba(28,28,28,0.98)",
-                    backdropFilter: "blur(20px)",
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    overflowY: "auto",
-                    overflowX: "hidden",
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
+            {typeof document !== "undefined" && createPortal(
+              <AnimatePresence>
+                {showQuality && settingsPos && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="shadow-2xl"
+                    style={{
+                      position: "fixed",
+                      bottom: settingsPos.bottom,
+                      right: settingsPos.right,
+                      width: 240,
+                      maxHeight: "min(50vh, 300px)",
+                      background: "rgba(28,28,28,0.98)",
+                      backdropFilter: "blur(20px)",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      overflowY: "auto",
+                      overflowX: "hidden",
+                      zIndex: 999999,
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
                   {/* ── MAIN VIEW ── */}
                   {settingsView === "main" && (
                     <div>
@@ -795,9 +823,11 @@ const Controls: React.FC<any> = ({
                       ))}
                     </div>
                   )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  </motion.div>
+                )}
+              </AnimatePresence>,
+              document.body
+            )}
           </div>
 
           {/* Fullscreen */}
