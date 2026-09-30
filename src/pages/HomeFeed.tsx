@@ -558,6 +558,7 @@ function HeroSkeleton() {
 
 function HeroVideo({ video }: { video: any }) {
   const displayName = getDisplayName(video);
+  const navigate = useNavigate();
   return (
     <Link
       to={`/watch?v=${video.public_id || video.id}`}
@@ -628,21 +629,42 @@ function HeroVideo({ video }: { video: any }) {
             </span>
           </motion.p>
 
-          <motion.button
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
-            className="mt-3 md:mt-5 inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 md:px-6 md:py-3 rounded-full text-xs md:text-sm font-semibold shadow-lg transition-all duration-300"
+            className="mt-3 md:mt-5 flex items-center gap-2 md:gap-3"
           >
-            <svg
-              className="w-3 h-3 md:w-4 md:h-4"
-              fill="currentColor"
-              viewBox="0 0 20 20"
+            <button
+              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 md:px-6 md:py-3 rounded-full text-xs md:text-sm font-semibold shadow-lg transition-all duration-300"
             >
-              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-            </svg>
-            Watch Now
-          </motion.button>
+              <svg
+                className="w-3 h-3 md:w-4 md:h-4"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+              </svg>
+              Watch Now
+            </button>
+
+            {/* Start Earning — secondary CTA for creator-discovery. A
+                nested <Link>/<a> inside the hero's own outer Link would
+                be invalid HTML and cause unpredictable click behavior,
+                so this is a plain button with its own navigate() call,
+                stopping the click from also bubbling up to the outer
+                Link's navigation. */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate("/how-it-works?tab=creator");
+              }}
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/25 text-white px-4 py-2 md:px-6 md:py-3 rounded-full text-xs md:text-sm font-semibold transition-all duration-300"
+            >
+              Start Earning
+            </button>
+          </motion.div>
         </div>
       </motion.div>
     </Link>
