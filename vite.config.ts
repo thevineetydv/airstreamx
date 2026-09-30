@@ -159,25 +159,21 @@ terserOptions: {
           { src: '/favicon-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
         ],
-        // Richer install prompt — one mobile ("narrow") screenshot and
-        // one desktop ("wide") screenshot. These files need to actually
-        // exist in /public before this works — see instructions below.
-        screenshots: [
-          {
-            src: '/screenshots/mobile-home.png',
-            sizes: '1080x1920',
-            type: 'image/png',
-            form_factor: 'narrow',
-            label: 'AirStreamX home feed on mobile',
-          },
-          {
-            src: '/screenshots/desktop-home.png',
-            sizes: '1920x1080',
-            type: 'image/png',
-            form_factor: 'wide',
-            label: 'AirStreamX home feed on desktop',
-          },
-        ],
+        // The `screenshots` field that used to be here referenced
+        // /screenshots/mobile-home.png and /screenshots/desktop-home.png,
+        // but that folder was never actually created — a manifest field
+        // pointing at 404ing files is worse than not having it at all,
+        // so it's removed rather than left broken. `screenshots` is
+        // optional (only used for a richer install-UI on some browsers,
+        // NOT required for the install prompt itself to appear), so
+        // removing it doesn't affect installability.
+        //
+        // TO ADD IT BACK PROPERLY LATER:
+        //   1. Take two real screenshots of the live site: one mobile
+        //      (portrait, ~1080x1920) and one desktop (~1920x1080)
+        //   2. Save them at public/screenshots/mobile-home.png and
+        //      public/screenshots/desktop-home.png
+        //   3. Re-add the screenshots array below with those exact paths
       }
     }),
 	    {
