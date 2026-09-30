@@ -33,7 +33,7 @@ const MissionConsole   = lazy(() => import("./pages/MissionConsole"));
 const SettingsPage     = lazy(() => import("./pages/Settings"));
 const LiveStream       = lazy(() => import("./pages/LiveStream"));
 const LiveStreamsBrowser = lazy(() => import("./components/LiveStreamsBrowser"));
-const GoLiveButton     = lazy(() => import("./components/GoLiveButton"));
+const GoLivePage       = lazy(() => import("./pages/GoLivePage"));
 const ClipGenerator    = lazy(() => import("./pages/ClipGenerator"));
 
 // ─── Sidebar nav pages (were imported but routes were MISSING — FIX #1) ───────
@@ -234,7 +234,7 @@ function AppContent() {
                   {/* ─── LIVE ─────────────────────────────────────── */}
                   <Route path="/live"                    element={<LiveStreamsBrowser />} />
                   <Route path="/live/watch/:streamId"    element={<LiveStream />} />
-                  <Route path="/go-live"                 element={<GoLiveButton />} />
+                  <Route path="/go-live"                 element={<GoLivePage />} />
 
                   {/* ─── CLIP GENERATOR ───────────────────────────── */}
                   <Route path="/clip-generator" element={<ClipGenerator />} />
