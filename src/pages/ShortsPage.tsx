@@ -3,6 +3,7 @@ import React, {
   createContext, useContext, useMemo,
 } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart, MessageSquare, Share2, Volume2, VolumeX,
@@ -110,6 +111,19 @@ function useVideoPreloader(nextUrl: string | undefined) {
   useEffect(() => {
     if (!nextUrl || !nextUrl.endsWith(".m3u8") || !Hls.isSupported()) return;
 
+    // Mobile skip — this runs a SECOND, hidden HLS decoder alongside the
+    // one already decoding the Short someone is actively watching. On
+    // desktop that's a non-issue; on the budget/mid-range Android
+    // hardware this app's actual audience mostly uses, decoding two HLS
+    // streams at once competes for the same limited CPU/GPU headroom as
+    // the UI thread — the exact kind of thing that shows up as "the
+    // whole page feels laggy" or taps (like Share) feeling unresponsive,
+    // even though nothing about THOSE features changed. Preloading still
+    // helps real switching speed, but only where the hardware can
+    // actually afford it.
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    if (isMobile) return;
+
     // Respect the existing Data Saver setting (Settings page) — this
     // preload uses real mobile data ahead of the user actually watching
     // that video, which directly contradicts what someone who turned
@@ -206,7 +220,14 @@ function ShareModal({ short, onClose }: { short: Short; onClose: () => void }) {
     { name: "Copy link", bg: "#444", icon: "🔗", action: () => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); } },
   ];
 
-  return (
+  // Rendered via a portal to document.body — this modal is opened from
+  // inside the mobile Short player's drag-transform wrapper, and CSS
+  // `transform` on any ancestor makes that ancestor the containing
+  // block for `position: fixed` descendants instead of the real
+  // viewport. Without the portal, this "fixed inset-0" bottom sheet
+  // was confining itself to that small transformed wrapper's box
+  // instead of covering the actual screen.
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -219,11 +240,12 @@ function ShareModal({ short, onClose }: { short: Short; onClose: () => void }) {
         className="w-full max-w-sm rounded-t-3xl p-5 pb-8"
         style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.08)" }}
         onClick={e => e.stopPropagation()}
+        data-testid="share-sheet"
       >
         <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-5" />
         <div className="flex items-center justify-between mb-4">
           <p className="text-white font-semibold text-sm">Share</p>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center" data-testid="close-share-sheet">
             <X className="w-3.5 h-3.5 text-white/60" />
           </button>
         </div>
@@ -249,7 +271,8 @@ function ShareModal({ short, onClose }: { short: Short; onClose: () => void }) {
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
@@ -287,7 +310,10 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
     } finally { setSubmitting(false); }
   };
 
-  return (
+  // Portal — same reason as ShareModal above: this opens from inside the
+  // mobile drag-transform wrapper, which breaks `position: fixed`
+  // containment without this.
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -300,6 +326,7 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
         className="w-full max-w-lg flex flex-col"
         style={{ height: "70vh", background: "#111", borderRadius: "24px 24px 0 0", border: "1px solid rgba(255,255,255,0.07)" }}
         onClick={e => e.stopPropagation()}
+        data-testid="comment-sheet"
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
@@ -310,7 +337,7 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
               </span>
             )}
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.08)" }}>
+          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center" data-testid="close-comment-sheet" style={{ background: "rgba(255,255,255,0.08)" }}>
             <X className="w-3.5 h-3.5 text-white/50" />
           </button>
         </div>
@@ -352,7 +379,8 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
           </motion.button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
@@ -381,7 +409,8 @@ function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle }: {
     { icon: <Flag className="w-4 h-4" />, label: "Report", onClick: onClose, danger: true },
   ];
 
-  return (
+  // Portal — same reason as ShareModal/CommentPanel above.
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -418,7 +447,8 @@ function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle }: {
           ))}
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
@@ -687,33 +717,66 @@ function ShortPlayer({
     video.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
   }, [videoUrl]);
 
-  /* ── Autoplay when active ── */
+  /* ── Autoplay when active ──
+     Two bugs lived here, stacked:
+     1. Missing `short.id` in the dependency array meant this only ever
+        ran once (fixed above already).
+     2. Even after that fix, a FIXED 80ms timeout before calling
+        .play() was still wrong: on the very first page load there's
+        enough incidental delay (navigation, initial HLS attach) that
+        80ms usually happened to be enough. On a fast swipe, the fresh
+        HLS source for the NEW short often hasn't buffered anything
+        playable yet at the 80ms mark — play() fails silently, and
+        nothing ever retries it once the video actually becomes ready
+        moments later. Waiting for the video's own 'canplay' event
+        (or playing immediately if it's already buffered enough)
+        removes the race entirely, regardless of network speed. */
   useEffect(() => {
     const video = videoRef.current; if (!video) return;
-    if (isActive) {
-      const t = setTimeout(() => {
-        video.volume = 1;
-        video.muted = muted;
-        video.play().then(() => {
-          setPlaying(true);
-        }).catch(() => {
-          // Browser blocked autoplay-with-sound for this element (common
-          // on scroll-triggered advances, since the gesture context is
-          // weaker than a direct click, and especially common right after
-          // a page load/refresh with no prior user gesture at all — this
-          // is the "no voice on restart" case). Fall back to guaranteed
-          // muted playback AND sync React state to match, so the mute
-          // button correctly shows "muted" and a real tap on it reliably
-          // unmutes — a tap is a genuine user gesture, so the browser
-          // allows sound from that point on.
-          video.muted = true;
-          setMuted(true);
-          video.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-        });
-      }, 80);
-      return () => clearTimeout(t);
-    } else { video.pause(); setPlaying(false); }
-  }, [isActive]);
+
+    if (!isActive) {
+      video.pause();
+      setPlaying(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const attemptPlay = () => {
+      if (cancelled) return;
+      video.volume = 1;
+      video.muted = muted;
+      video.play().then(() => {
+        setPlaying(true);
+      }).catch(() => {
+        // Browser blocked autoplay-with-sound for this element (common
+        // on scroll-triggered advances, since the gesture context is
+        // weaker than a direct click, and especially common right after
+        // a page load/refresh with no prior user gesture at all — this
+        // is the "no voice on restart" case). Fall back to guaranteed
+        // muted playback AND sync React state to match, so the mute
+        // button correctly shows "muted" and a real tap on it reliably
+        // unmutes — a tap is a genuine user gesture, so the browser
+        // allows sound from that point on.
+        video.muted = true;
+        setMuted(true);
+        video.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      });
+    };
+
+    // HAVE_FUTURE_DATA (readyState 3) or higher means there's already
+    // enough buffered to start playback right now — no need to wait.
+    if (video.readyState >= 3) {
+      attemptPlay();
+    } else {
+      video.addEventListener("canplay", attemptPlay, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("canplay", attemptPlay);
+    };
+  }, [isActive, short.id]);
 
   /* ── Sync mute ── */
   useEffect(() => { if (videoRef.current) videoRef.current.muted = muted; }, [muted]);
@@ -791,7 +854,11 @@ function ShortPlayer({
           Using object-contain here made any clip whose native aspect ratio
           isn't exactly 9:16 shrink down with black bars once the real frame
           painted (looked "full screen" while black, then "small" once
-          loaded). object-cover keeps it filling the frame at all times. */}
+          loaded). object-cover keeps it filling the frame at all times.
+          This is safe for the actual VIDEO because the transcoding
+          pipeline preserves each upload's native aspect ratio — but see
+          the poster overlay just below for why the STILL IMAGE needs
+          different handling. */}
 <video
   ref={videoRef}
   className="w-full h-full relative z-10 object-cover"
@@ -802,7 +869,6 @@ function ShortPlayer({
   }}
         playsInline
         muted={muted}
-        poster={short.thumbnail}
         onTimeUpdate={handleTimeUpdate}
         onWaiting={() => setLoading(true)}
         onPlaying={() => { setLoading(false); setVideoError(false); }}
@@ -811,6 +877,32 @@ function ShortPlayer({
         onError={() => { setLoading(false); setVideoError(true); }}
         preload="metadata"
       />
+
+      {/* Poster overlay — shown until the real video starts painting
+          frames, replacing the native `poster` attribute. The native
+          poster shares the video element's own object-cover, which
+          CROPS any thumbnail whose aspect ratio isn't already 9:16 —
+          exactly what happened to thumbnails saved before the
+          portrait-thumbnail fix (titles/text cut off at the edges).
+          This version never crops: the sharp image always fits fully
+          inside the frame (object-contain), with a blurred, cropped
+          copy of the same image filling the space behind it so there's
+          no dead black bars regardless of the source's shape. */}
+      {short.thumbnail && loading && (
+        <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
+          <img
+            src={short.thumbnail}
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ filter: "blur(30px) brightness(0.55)", transform: "scale(1.15)" }}
+          />
+          <img
+            src={short.thumbnail}
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        </div>
+      )}
 
       {/* Tap area — transparent layer over video (below UI) for tap/double-tap */}
       <div className="absolute inset-0" style={{ zIndex: 2 }} onClick={handleTap} />
