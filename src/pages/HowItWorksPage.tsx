@@ -3,6 +3,7 @@
 // Route this at /how-it-works.
 
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Compass, PlaySquare, Heart, Radio,
@@ -60,7 +61,13 @@ interface HowItWorksPageProps {
 }
 
 export default function HowItWorksPage({ onUploadClick }: HowItWorksPageProps) {
-  const [tab, setTab] = useState<"viewer" | "creator">("viewer");
+  // Lets links like /how-it-works?tab=creator deep-link straight to the
+  // Creator tab — without this, a "For Creators" nav link or hero CTA
+  // would drop someone on the Viewer tab by default, making them click
+  // again just to see the info they actually came here for.
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") === "creator" ? "creator" : "viewer";
+  const [tab, setTab] = useState<"viewer" | "creator">(initialTab);
   const steps = tab === "viewer" ? VIEWER_STEPS : CREATOR_STEPS;
 
   return (

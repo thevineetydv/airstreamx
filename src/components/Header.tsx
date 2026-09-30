@@ -196,7 +196,7 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
   );
 }
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { LoginRequiredModal } from "./LoginRequiredModal";
 import CreatePostModal from "./CreatePostModal";
@@ -700,6 +700,20 @@ export default function Header({
               )}
             </div>
           </a>
+
+          {/* For Creators — new creators often don't realize there's a
+              path to joining as a creator at all (vs. just watching);
+              this + the Hero's "Start Earning" CTA + the mobile nav
+              equivalent all deep-link to the Creator tab on
+              /how-it-works, which already explains the value prop
+              (upload, AI clips, UPI tips, going live) before asking
+              anyone to sign in. */}
+          <Link
+            to="/how-it-works?tab=creator"
+            className="hidden lg:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors flex-shrink-0 whitespace-nowrap"
+          >
+            For Creators
+          </Link>
 
           {/* Search bar */}
 <div className="hidden md:flex md:flex-1 min-w-0 items-center gap-2" ref={searchRef}>
