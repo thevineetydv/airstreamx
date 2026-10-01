@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { API_URL } from "../utils/constants";
 import SponsoredBannersAdmin from "../components/SponsoredBannersAdmin";
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* ─── Types  ─────────────────────────────────────────────────── */
 
 interface Video {
   id: number;
@@ -757,6 +757,12 @@ export default function AdminDashboard() {
                         Views <SortIcon k="views" />
                       </th>
                       <th
+                        className="px-3 py-3 text-gray-400 font-medium text-xs cursor-pointer hover:text-white hidden sm:table-cell"
+                        onClick={() => toggleSort("likes")}
+                      >
+                        Likes <SortIcon k="likes" />
+                      </th>
+                      <th
                         className="px-3 py-3 text-gray-400 font-medium text-xs cursor-pointer hover:text-white hidden lg:table-cell"
                         onClick={() => toggleSort("created_at")}
                       >
@@ -830,6 +836,34 @@ export default function AdminDashboard() {
                           {/* Views */}
                           <td className="px-3 py-3 hidden sm:table-cell text-gray-400 text-xs">
                             {fmtViews(v.views || 0)}
+                          </td>
+
+                          {/* Likes — count + quick inline edit. Reuses the
+                              existing handleUpdate(id, updates) PUT call,
+                              same as the Title/Description edit modal —
+                              just sends { likes: <new number> } instead. */}
+                          <td className="px-3 py-3 hidden sm:table-cell">
+                            <button
+                              onClick={() => {
+                                const current = v.likes || 0;
+                                const input = window.prompt(
+                                  `Set likes count for "${v.title}"`,
+                                  String(current)
+                                );
+                                if (input === null) return; // cancelled
+                                const next = parseInt(input, 10);
+                                if (isNaN(next) || next < 0) {
+                                  showToast("Enter a valid number (0 or more)", "error");
+                                  return;
+                                }
+                                handleUpdate(v.id, { likes: next });
+                              }}
+                              className="flex items-center gap-1 text-gray-400 text-xs hover:text-red-400 transition group"
+                              title="Click to set likes count"
+                            >
+                              <span>{fmtViews(v.likes || 0)}</span>
+                              <span className="opacity-0 group-hover:opacity-100 transition text-[10px]">✏️</span>
+                            </button>
                           </td>
 
                           {/* Date */}
