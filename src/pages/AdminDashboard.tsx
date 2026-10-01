@@ -833,9 +833,32 @@ export default function AdminDashboard() {
                             </p>
                           </td>
 
-                          {/* Views */}
-                          <td className="px-3 py-3 hidden sm:table-cell text-gray-400 text-xs">
-                            {fmtViews(v.views || 0)}
+                          {/* Views — count + quick inline edit, same
+                              click-to-prompt pattern as Likes below. Both
+                              reuse the existing handleUpdate(id, updates)
+                              PUT call. */}
+                          <td className="px-3 py-3 hidden sm:table-cell">
+                            <button
+                              onClick={() => {
+                                const current = v.views || 0;
+                                const input = window.prompt(
+                                  `Set views count for "${v.title}"`,
+                                  String(current)
+                                );
+                                if (input === null) return; // cancelled
+                                const next = parseInt(input, 10);
+                                if (isNaN(next) || next < 0) {
+                                  showToast("Enter a valid number (0 or more)", "error");
+                                  return;
+                                }
+                                handleUpdate(v.id, { views: next });
+                              }}
+                              className="flex items-center gap-1 text-gray-400 text-xs hover:text-blue-400 transition group"
+                              title="Click to set views count"
+                            >
+                              <span>{fmtViews(v.views || 0)}</span>
+                              <span className="opacity-0 group-hover:opacity-100 transition text-[10px]">✏️</span>
+                            </button>
                           </td>
 
                           {/* Likes — count + quick inline edit. Reuses the
