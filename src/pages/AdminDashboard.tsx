@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { API_URL } from "../utils/constants";
 import SponsoredBannersAdmin from "../components/SponsoredBannersAdmin";
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* ─── Types  ─────────────────────────────────────────────────── */
 
 interface Video {
   id: number;
