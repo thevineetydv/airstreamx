@@ -1072,7 +1072,7 @@ if (countId) {
               ) : isOwner ? (
                 <button
                   onClick={handleEditStart}
-                  className="text-sm text-gray-600 hover:text-red-400 transition mb-3 flex items-center gap-1"
+                  className="text-sm text-gray-400 hover:text-red-400 transition mb-3 flex items-center gap-1"
                 >
                   <Edit2 size={13} /> Add bio
                 </button>
@@ -1180,7 +1180,7 @@ if (countId) {
                 <>
                   <button
                     onClick={handleEditSave}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition active:scale-95"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition active:scale-95"
                   >
                     <Save size={15} /> Save changes
                   </button>
@@ -1376,7 +1376,7 @@ if (countId) {
 
                   <Link
                     to="/dashboard"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition"
                   >
                     <Video size={15} />
                     <span>Manage videos</span>
@@ -1949,7 +1949,7 @@ if (countId) {
                         <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-mono">
                           {fmtDuration(v.duration)}
                         </div>
-                        <div className="absolute top-2 left-2 bg-gradient-to-r from-red-500 to-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">
+                        <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">
                           SHORT
                         </div>
                         <p className="absolute bottom-2 left-2 text-white text-xs font-medium">
@@ -2004,7 +2004,7 @@ if (countId) {
                   {isOwner && (
                     <Link
                       to="/go-live"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-full font-medium transition"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition"
                     >
                       <Radio size={18} />
                       Go Live Now
@@ -2041,7 +2041,7 @@ if (countId) {
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                           <div className="absolute top-3 left-3 flex items-center gap-2">
-                            <span className="flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded animate-pulse">
+                            <span className="flex items-center gap-1.5 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded animate-pulse">
                               <span className="w-2 h-2 bg-white rounded-full" />
                               LIVE
                             </span>
@@ -2422,7 +2422,7 @@ function EmptyVideos({
       {isOwner && (
         <Link
           to="/upload"
-          className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full text-sm font-medium transition"
+          className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-medium transition"
         >
           <Video size={16} />
           Upload Video
@@ -2487,7 +2487,7 @@ function ChannelNotFound() {
         </p>
         <button
           onClick={() => navigate("/")}
-          className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-full font-medium transition"
+          className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition"
         >
           Go Home
         </button>
