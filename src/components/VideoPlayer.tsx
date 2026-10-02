@@ -1539,11 +1539,18 @@ const VideoPlayer = forwardRef<any, any>(
       if (video.url.endsWith(".m3u8")) {
         const live = /\/hls\/live\/|\/live\//.test(video.url);
         if (Hls.isSupported()) {
+          // Mobile data saving: on phones, cap quality by the player's CSS
+          // size (DPR capped at 1.5) so a ~400px-wide player no longer
+          // streams 1080p, and keep a smaller forward buffer.
+          const isMobile = !!window.matchMedia?.("(max-width: 768px), (pointer: coarse)").matches;
           const hls = new Hls({
             enableWorker: true, lowLatencyMode: live, startFragPrefetch: !live, capLevelToPlayerSize: true,
+            maxDevicePixelRatio: isMobile ? 1.5 : Number.POSITIVE_INFINITY,
             startLevel: live ? -1 : 0, abrEwmaDefaultEstimate: live ? 1_200_000 : 900_000,
             abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
-            maxBufferLength: live ? 6 : 20, maxMaxBufferLength: live ? 12 : 60, maxBufferSize: live ? 20e6 : 30e6,
+            maxBufferLength: live ? 6 : (isMobile ? 15 : 20),
+            maxMaxBufferLength: live ? 12 : (isMobile ? 30 : 60),
+            maxBufferSize: live ? 20e6 : (isMobile ? 12e6 : 30e6),
             maxBufferHole: 0.3, backBufferLength: live ? 15 : 30,
             liveSyncDuration: live ? 3 : undefined, liveMaxLatencyDuration: live ? 10 : undefined,
             capLevelOnFPSDrop: true, fragLoadingTimeOut: 20000, fragLoadingMaxRetry: 6, fragLoadingRetryDelay: 1000,
@@ -1562,7 +1569,13 @@ const VideoPlayer = forwardRef<any, any>(
             // This only sets the starting point — people can still
             // manually pick a higher quality from the quality menu.
             try {
-              const dataSaverOn = localStorage.getItem("data_saver_mode") === "1";
+              // Also honour the browser/OS "Data Saver" signal and slow
+              // (2G/3G) connections, not just the in-app toggle.
+              const conn = (navigator as Navigator & {
+                connection?: { saveData?: boolean; effectiveType?: string };
+              }).connection;
+              const slowNetwork = !!conn && (conn.saveData === true || /(^|-)(2g|3g)$/.test(conn.effectiveType ?? ""));
+              const dataSaverOn = localStorage.getItem("data_saver_mode") === "1" || slowNetwork;
               if (dataSaverOn && hls.levels.length > 0) {
                 let bestIdx = 0;
                 let bestHeight = 0;

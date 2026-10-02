@@ -256,6 +256,11 @@ const SUPPORTS_HOVER_PREVIEW =
  */
 function cloudinaryResize(url: string | undefined, width: number): string {
   if (!url) return "";
+  // Self-hosted thumbnails: the backend resizes and converts to WebP when
+  // ?w= is present (see /hls/thumbnails route in the upload service).
+  if (url.includes("/hls/thumbnails/")) {
+    return `${url}${url.includes("?") ? "&" : "?"}w=${width}`;
+  }
   const marker = "/upload/";
   const idx = url.indexOf(marker);
   if (idx === -1) return url;
