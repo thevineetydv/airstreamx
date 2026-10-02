@@ -1,14 +1,29 @@
 // ============================================================
-// Header.tsx — VERSION 2.0  FIXED
+// Header.tsx — VERSION 2.1  ACCESSIBILITY FIXES
 //
-// Fix applied:
-//   [1] "+ Create" dropdown was always open — no toggle state existed.
-//       Added openCreate state + createRef for click-outside detection.
-//   [2] Dropdown now closes on outside click (same pattern as user menu).
+// Previous fixes (v2.0):
+//   [1] "+ Create" dropdown toggle state + createRef click-outside.
+//   [2] Dropdown closes on outside click.
 //   [3] Dropdown closes when a menu item is clicked.
-//   [4] Styling polished to match the rest of the header (glass morphism,
-//       red accent, motion animations — consistent with notifications menu).
-//   [5] "Go Live" and "Upload" items now respect auth (show login modal).
+//   [4] Glass-morphism styling consistent with notifications menu.
+//   [5] "Go Live" and "Upload" respect auth (login modal).
+//
+// A11y fixes (v2.1):
+//   [A1] Create button: aria-label (text is hidden on mobile — this was
+//        the Lighthouse "button-name" failure), aria-expanded/controls.
+//   [A2] All icon-only buttons labelled (close menu, clear search);
+//        decorative icons aria-hidden.
+//   [A3] Notifications + account buttons expose open/closed state.
+//   [A4] Search inputs get aria-label; desktop search is a proper
+//        combobox/listbox so arrow-key selection is announced.
+//   [A5] Desktop and mobile search no longer share one ref (the mobile
+//        input was overwriting inputRef/searchRef on desktop).
+//   [A6] Escape closes Create / notifications / account / sidebar.
+//   [A7] Sidebar drawer is a labelled modal dialog; focus moves into it.
+//   [A8] Notification rows are buttons, not clickable divs.
+//   [A9] Contrast: red-500 → red-600 behind white text; gray-500/600
+//        text → gray-400; fixed 11px text → rem-based text-xs.
+//   [A10] Sidebar navigation uses real links (<Link>) instead of buttons.
 // ============================================================
 
 import React, { useEffect, useState, useRef, useId } from "react";
@@ -18,19 +33,19 @@ import {
   TrendingUp, Clock, Zap, Home, Library, ThumbsUp, PlaySquare,
   Radio, ArrowRight, Scissors, Plus, FileText,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { LoginRequiredModal } from "./LoginRequiredModal";
+import CreatePostModal from "./CreatePostModal";
+import { API_URL } from "../utils/constants";
+import { useNotifications } from "../context/NotificationContext";
+
+type SpeechRecognition = any;
 
 // ─────────────────────────────────────────────
-// Shared logo — single source of truth
-// Use this EVERYWHERE: header, sidebar, favicon fallback
+// BirthdayConfetti — founder-only, Aug 23
 // ─────────────────────────────────────────────
-/**
- * BirthdayConfetti — a personal touch, not a platform-wide feature.
- * Unlike the Independence Day kite (relevant to every visitor), a
- * founder's birthday means nothing to a random viewer and would just
- * look confusing on a growing platform. So this only ever renders when
- * BOTH the date is Aug 23 AND the logged-in account is Vineet's own —
- * everyone else sees the completely normal header, always.
- */
 function BirthdayConfetti() {
   const { user } = useAuth();
   const [show, setShow] = useState(false);
@@ -41,8 +56,6 @@ function BirthdayConfetti() {
     const isFounder = user?.email?.toLowerCase() === "vineetsitm09@gmail.com";
     if (!isBirthday || !isFounder) return;
 
-    // Once per browser session — a page reload right after dismissing
-    // it shouldn't immediately trigger the whole thing again.
     try {
       if (sessionStorage.getItem("birthday_shown_2026") === "1") return;
       sessionStorage.setItem("birthday_shown_2026", "1");
@@ -71,6 +84,7 @@ function BirthdayConfetti() {
       {pieces.map((p) => (
         <motion.div
           key={p.id}
+          aria-hidden="true"
           initial={{ y: -30, x: 0, opacity: 1, rotate: 0 }}
           animate={{ y: "110vh", x: p.drift, opacity: [1, 1, 0], rotate: p.rotate }}
           transition={{ duration: p.duration, delay: p.delay, ease: "easeIn" }}
@@ -86,6 +100,7 @@ function BirthdayConfetti() {
         />
       ))}
       <motion.div
+        role="status"
         initial={{ opacity: 0, scale: 0.9, y: -10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0 }}
@@ -101,27 +116,22 @@ function BirthdayConfetti() {
   );
 }
 
+// ─────────────────────────────────────────────
+// Shared logo — single source of truth
+// ─────────────────────────────────────────────
 export function AirStreamXLogo({ size = 36 }: { size?: number }) {
-  // Unique per instance — this component is intentionally rendered more
-  // than once at a time (e.g. the responsive mobile/desktop pair below,
-  // plus the sidebar drawer copy). Without unique IDs here, every extra
-  // instance collides on id="axLogoGrad"/"axLogoGlow", and the browser's
-  // url(#...) reference breaks — the fill/glow silently drops, leaving
-  // just the bare pause-bar rectangle instead of the full mark.
+  // Unique per instance — rendered more than once at a time, so shared
+  // ids would break the url(#...) gradient/glow references.
   const uid = useId().replace(/:/g, "");
   const gradId = `axLogoGrad-${uid}`;
   const glowId = `axLogoGlow-${uid}`;
 
-  // ── Independence Day (14–16 Aug) kite doodle ─────────────────
-  // A small tricolor kite floats beside the logo for a few days around
-  // 15 August, then disappears on its own — no manual removal needed,
-  // and it naturally reappears next year. Deliberately subtle: small,
-  // gently swaying, doesn't compete with the actual brand mark.
+  // Independence Day (14–16 Aug) kite doodle
   const now = new Date();
   const showKite = now.getMonth() === 7 && now.getDate() >= 14 && now.getDate() <= 16;
 
   return (
-    <div className="relative inline-flex" style={{ width: size, height: size }}>
+    <div className="relative inline-flex" style={{ width: size, height: size }} aria-hidden="true">
       <div
         style={{ width: size, height: size }}
         className="rounded-[10px] flex items-center justify-center bg-[#050a10] border border-red-500/60 shadow-[0_0_12px_rgba(239,68,68,0.35)] flex-shrink-0"
@@ -132,6 +142,7 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
           viewBox="0 0 32 32"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
+          focusable="false"
         >
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
@@ -173,14 +184,12 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
             rotate: { duration: 3.2, repeat: Infinity, ease: "easeInOut" },
           }}
         >
-          {/* Kite string, curving down toward the logo mark */}
           <path
             d="M14 22 Q 6 30 -2 34"
             stroke="rgba(255,255,255,0.35)"
             strokeWidth="1"
             fill="none"
           />
-          {/* Diamond kite body — tricolor */}
           <g transform="translate(20,16) rotate(20)">
             <path d="M0,-13 L9,0 L0,13 L-9,0 Z" fill="#FF9933" stroke="#0F0F0F" strokeWidth="0.6" />
             <path d="M-9,0 L9,0 L0,13 Z" fill="#138808" />
@@ -188,23 +197,12 @@ export function AirStreamXLogo({ size = 36 }: { size?: number }) {
             <rect x="-9" y="-1.3" width="18" height="2.6" fill="#FFFFFF" />
             <line x1="0" y1="-13" x2="0" y2="13" stroke="#0F0F0F" strokeWidth="0.5" opacity="0.4" />
           </g>
-          {/* Small tail ribbons */}
           <path d="M12 27 l3 2 M15 29 l3 2 M18 31 l3 2" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
         </motion.svg>
       )}
     </div>
   );
 }
-import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { LoginRequiredModal } from "./LoginRequiredModal";
-import CreatePostModal from "./CreatePostModal";
-
-type SpeechRecognition = any;
-import { API_URL } from "../utils/constants";
-import { useNotifications } from "../context/NotificationContext";
-
 
 // ─────────────────────────────────────────────
 // Types
@@ -228,23 +226,28 @@ interface SearchSuggestion { text: string; type: SuggestionType }
 // Helper components
 // ─────────────────────────────────────────────
 
+// [A10] Navigation items are real links — announced as links, and
+// middle-click / "open in new tab" work.
 function SidebarItem({
   icon: Icon,
   label,
-  onClick,
+  to,
+  onNavigate,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" }>;
   label: string;
-  onClick?: () => void;
+  to: string;
+  onNavigate?: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={to}
+      onClick={onNavigate}
       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all text-left group"
     >
-      <Icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+      <Icon aria-hidden="true" className="w-5 h-5 group-hover:scale-110 transition-transform" />
       <span className="text-sm font-medium">{label}</span>
-    </button>
+    </Link>
   );
 }
 
@@ -253,16 +256,17 @@ function MenuItem({
   label,
   onClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" }>;
   label: string;
   onClick?: () => void;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all text-left text-sm group"
     >
-      <Icon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+      <Icon aria-hidden="true" className="w-4 h-4 group-hover:scale-110 transition-transform" />
       <span>{label}</span>
     </button>
   );
@@ -286,24 +290,33 @@ const GEO_APIS = [
   { url: "https://ipwho.is/", field: "country_code" },
 ] as const;
 
+const SIDEBAR_LINKS = [
+  { icon: Home, label: "Home", to: "/" },
+  { icon: Zap, label: "Shorts", to: "/shorts" },
+  { icon: TrendingUp, label: "Trending", to: "/trending" },
+  { icon: Library, label: "Library", to: "/library" },
+  { icon: History, label: "History", to: "/history" },
+  { icon: ThumbsUp, label: "Liked Videos", to: "/liked" },
+  { icon: PlaySquare, label: "Watch Later", to: "/watch-later" },
+];
+
+const FOOTER_LINKS = [
+  { label: "About", to: "/about" },
+  { label: "How it works", to: "/how-it-works" },
+  { label: "FAQ", to: "/faq" },
+  { label: "Privacy Policy", to: "/privacy" },
+  { label: "Terms of Service", to: "/terms" },
+];
+
 /**
- * CountryFlagIcon — small inline SVG flag, NOT an emoji.
- *
- * Flag emoji rely on the OS font to combine two "regional indicator"
- * characters into a flag glyph — Windows (even recent versions, depending
- * on Chrome's font fallback) frequently fails this and just shows the two
- * raw letters instead (that's why "IN" showed up twice — the emoji itself
- * rendered as literal text "IN"). An inline SVG has no such dependency:
- * it looks identical on every OS and browser.
- *
- * Add more `case`s here as you support more regions — falls back to a
- * neutral globe glyph for anything not explicitly drawn.
+ * CountryFlagIcon — small inline SVG flag, NOT an emoji (Windows often
+ * renders flag emoji as the raw letters "IN").
  */
 function CountryFlagIcon({ code, className = "w-4 h-3" }: { code: string; className?: string }) {
   switch (code.toUpperCase()) {
     case "IN":
       return (
-        <svg viewBox="0 0 24 16" className={className} aria-hidden="true">
+        <svg viewBox="0 0 24 16" className={className} aria-hidden="true" focusable="false">
           <rect width="24" height="16" fill="#0F0F0F" />
           <rect width="24" height="5.33" y="0" fill="#FF9933" />
           <rect width="24" height="5.33" y="5.33" fill="#FFFFFF" />
@@ -314,7 +327,7 @@ function CountryFlagIcon({ code, className = "w-4 h-3" }: { code: string; classN
       );
     default:
       return (
-        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="10" />
           <path d="M2 12h20M12 2c2.5 2.7 4 6.3 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.3-4-10s1.5-7.3 4-10z" />
         </svg>
@@ -334,11 +347,19 @@ export default function Header({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Stable ids for aria-controls / aria-activedescendant
+  const baseId = useId().replace(/:/g, "");
+  const createMenuId = `${baseId}-create-menu`;
+  const notifPanelId = `${baseId}-notifications`;
+  const accountMenuId = `${baseId}-account-menu`;
+  const suggestionsId = `${baseId}-search-suggestions`;
+  const optionId = (i: number) => `${baseId}-search-option-${i}`;
+
   // Dropdown visibility
   const [openMenu, setOpenMenu] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openSidebar, setOpenSidebar] = useState(false);
-  const [openCreate, setOpenCreate] = useState(false);  // [FIX 1] was missing entirely
+  const [openCreate, setOpenCreate] = useState(false);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userHandle, setUserHandle] = useState<string | null>(null);
@@ -373,10 +394,12 @@ export default function Header({
   // Refs
   const menuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const createRef = useRef<HTMLDivElement>(null);   // [FIX 2] ref for click-outside
+  const searchRef = useRef<HTMLDivElement>(null);          // desktop search only
+  const createRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);         // desktop input only
+  const mobileInputRef = useRef<HTMLInputElement>(null);   // [A5] separate mobile ref
+  const menuButtonRef = useRef<HTMLButtonElement>(null);   // returns focus after sidebar closes
 
   // ── Sync search query with URL ─────────────
   useEffect(() => {
@@ -418,6 +441,9 @@ export default function Header({
 
     return () => clearTimeout(timer);
   }, [q, showSearchSuggestions]);
+
+  // Reset highlighted suggestion whenever the list changes
+  useEffect(() => { setSelectedIndex(-1); }, [q, showSearchSuggestions]);
 
   // ── Voice search setup ─────────────────────
   useEffect(() => {
@@ -480,7 +506,6 @@ export default function Header({
   }, []);
 
   // ── Close dropdowns on outside click ───────
-  // [FIX 2] createRef added so "+ Create" also closes on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenu(false);
@@ -490,6 +515,22 @@ export default function Header({
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ── [A6] Escape closes every popup ─────────
+  useEffect(() => {
+    function onEsc(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setOpenCreate(false);
+      setOpenMenu(false);
+      setOpenNotifications(false);
+      setOpenSidebar(prev => {
+        if (prev) menuButtonRef.current?.focus(); // return focus to the trigger
+        return false;
+      });
+    }
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
   }, []);
 
   // ── Helpers ─────────────────────────────────
@@ -520,6 +561,7 @@ export default function Header({
     navigate(`/?q=${encodeURIComponent(trimmed)}`);
     setShowSearchSuggestions(false);
     inputRef.current?.blur();
+    mobileInputRef.current?.blur();
   };
 
   const onSubmit = (e: React.FormEvent) => { e.preventDefault(); handleSearchSubmit(q); };
@@ -540,7 +582,7 @@ export default function Header({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const list = getCombinedSuggestions();
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, list.length - 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setShowSearchSuggestions(true); setSelectedIndex(i => Math.min(i + 1, list.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, -1)); }
     else if (e.key === "Enter" && selectedIndex >= 0) { e.preventDefault(); onSuggestionClick(list[selectedIndex].text); }
     else if (e.key === "Escape") { setShowSearchSuggestions(false); inputRef.current?.blur(); }
@@ -552,14 +594,20 @@ export default function Header({
     else { try { recognitionRef.current?.start(); setIsListening(true); } catch { setIsListening(false); } }
   };
 
-  // [FIX 3] Close dropdown + auth gate in one helper
+  // Close dropdown + auth gate in one helper
   const createAction = (action: () => void) => {
     setOpenCreate(false);
     if (!user) { setShowLoginModal(true); return; }
     action();
   };
 
+  const closeSidebar = () => {
+    setOpenSidebar(false);
+    menuButtonRef.current?.focus();
+  };
+
   const combinedSuggestions = getCombinedSuggestions();
+  const suggestionsOpen = showSearchSuggestions && combinedSuggestions.length > 0 && !isListening;
 
   return (
     <>
@@ -570,11 +618,16 @@ export default function Header({
         {openSidebar && (
           <>
             <motion.div
+              aria-hidden="true"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
-              onClick={() => setOpenSidebar(false)}
+              onClick={closeSidebar}
             />
+            {/* [A7] Labelled modal dialog */}
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main menu"
               initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="fixed left-0 top-0 bottom-0 w-64 bg-black/95 backdrop-blur-xl border-r border-red-500/20 z-50 overflow-y-auto shadow-[0_0_30px_rgba(239,68,68,0.3)]"
@@ -596,45 +649,46 @@ export default function Header({
                       )}
                     </div>
                   </div>
-                  <button onClick={() => setOpenSidebar(false)} className="p-1 hover:bg-red-500/10 rounded-lg transition-all">
-                    <X className="w-5 h-5 text-red-400" />
+                  {/* [A2] labelled; autoFocus moves focus into the dialog */}
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={closeSidebar}
+                    aria-label="Close menu"
+                    className="p-1 hover:bg-red-500/10 rounded-lg transition-all"
+                  >
+                    <X aria-hidden="true" className="w-5 h-5 text-red-400" />
                   </button>
                 </div>
 
-                <nav className="space-y-1">
-<SidebarItem icon={Home}      label="Home"        onClick={() => { navigate("/");          setOpenSidebar(false); }} />
-<SidebarItem icon={Zap}       label="Shorts"      onClick={() => { navigate("/shorts");    setOpenSidebar(false); }} />
-<SidebarItem icon={TrendingUp} label="Trending"   onClick={() => { navigate("/trending");  setOpenSidebar(false); }} />
-<SidebarItem icon={Library}   label="Library"     onClick={() => { navigate("/library");   setOpenSidebar(false); }} />
-<SidebarItem icon={History}   label="History"     onClick={() => { navigate("/history");   setOpenSidebar(false); }} />
-<SidebarItem icon={ThumbsUp}  label="Liked Videos" onClick={() => { navigate("/liked");   setOpenSidebar(false); }} />
-<SidebarItem icon={PlaySquare} label="Watch Later" onClick={() => { navigate("/watch-later"); setOpenSidebar(false); }} />
+                <nav aria-label="Main" className="space-y-1">
+                  {SIDEBAR_LINKS.map(link => (
+                    <SidebarItem
+                      key={link.to}
+                      icon={link.icon}
+                      label={link.label}
+                      to={link.to}
+                      onNavigate={() => setOpenSidebar(false)}
+                    />
+                  ))}
                 </nav>
 
-                {/* ── Compact footer links, YouTube-style ──
-                    Lives inside the drawer rather than at the bottom of
-                    the page — this is a scrolling-feed SPA, so a normal
-                    page footer is barely ever seen. The drawer is
-                    always one tap away, so links here actually get found. */}
+                {/* Compact footer links, YouTube-style */}
                 <div className="px-4 pt-4 mt-2 border-t border-white/10">
-                  <nav className="flex flex-wrap gap-x-3 gap-y-2 mb-4">
-                    {[
-                      { label: "About", to: "/about" },
-                      { label: "How it works", to: "/how-it-works" },
-                      { label: "FAQ", to: "/faq" },
-                      { label: "Privacy Policy", to: "/privacy" },
-                      { label: "Terms of Service", to: "/terms" },
-                    ].map((link) => (
-                      <button
+                  <nav aria-label="Site information" className="flex flex-wrap gap-x-3 gap-y-2 mb-4">
+                    {FOOTER_LINKS.map((link) => (
+                      <Link
                         key={link.to}
-                        onClick={() => { navigate(link.to); setOpenSidebar(false); }}
+                        to={link.to}
+                        onClick={() => setOpenSidebar(false)}
                         className="text-xs text-gray-400 hover:text-white transition-colors"
                       >
                         {link.label}
-                      </button>
+                      </Link>
                     ))}
                   </nav>
-                  <p className="text-[11px] text-gray-600 pb-2">
+                  {/* [A9] gray-600 (2.7:1) → gray-400; 11px → text-xs */}
+                  <p className="text-xs text-gray-400 pb-2">
                     © {new Date().getFullYear()} AirStreamX
                   </p>
                 </div>
@@ -654,23 +708,30 @@ export default function Header({
       >
         {theme !== "neon" && (
           <div
+            aria-hidden="true"
             className="absolute inset-0 pointer-events-none"
             style={{ background: "radial-gradient(ellipse at top left, rgba(255,255,255,0.1), transparent 70%)" }}
           />
         )}
-<div className="relative w-full px-2.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-start gap-1.5 sm:gap-2 md:gap-4">
+        <div className="relative w-full px-2.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-start gap-1.5 sm:gap-2 md:gap-4">
           {/* Menu button */}
           <button
+            ref={menuButtonRef}
+            type="button"
             aria-label="Open menu"
+            aria-expanded={openSidebar}
             onClick={() => setOpenSidebar(true)}
             className="p-1.5 sm:p-2 rounded-full hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-95 flex-shrink-0"
           >
-            <Menu className="w-5 h-5" />
+            <Menu aria-hidden="true" className="w-5 h-5" />
           </button>
 
-          {/* Logo — slightly smaller on mobile so it doesn't eat into the
-              already-tight 320px budget shared with the action buttons */}
-          <a href="/" className="flex items-center gap-1.5 sm:gap-2.5 hover:opacity-90 transition-opacity group flex-shrink-0 min-w-0">
+          {/* Logo */}
+          <a
+            href="/"
+            aria-label="AirStreamX home"
+            className="flex items-center gap-1.5 sm:gap-2.5 hover:opacity-90 transition-opacity group flex-shrink-0 min-w-0"
+          >
             <span className="sm:hidden">
               <AirStreamXLogo size={30} />
             </span>
@@ -683,10 +744,6 @@ export default function Header({
                 <span className="text-red-400">Stream</span>
                 <span className="text-red-400 italic">X</span>
               </span>
-              {/* Country badge — flag only, raised above the wordmark
-                  baseline like a superscript (matches YouTube's placement).
-                  Tiny footprint, safe even in the already-tight mobile
-                  header budget. */}
               {countryCode && (
                 <span
                   className="inline-flex flex-shrink-0 -mt-1 sm:-mt-1.5"
@@ -701,13 +758,7 @@ export default function Header({
             </div>
           </a>
 
-          {/* For Creators — new creators often don't realize there's a
-              path to joining as a creator at all (vs. just watching);
-              this + the Hero's "Start Earning" CTA + the mobile nav
-              equivalent all deep-link to the Creator tab on
-              /how-it-works, which already explains the value prop
-              (upload, AI clips, UPI tips, going live) before asking
-              anyone to sign in. */}
+          {/* For Creators */}
           <Link
             to="/how-it-works?tab=creator"
             className="hidden lg:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold text-red-300 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors flex-shrink-0 whitespace-nowrap"
@@ -715,14 +766,22 @@ export default function Header({
             For Creators
           </Link>
 
-          {/* Search bar */}
-<div className="hidden md:flex md:flex-1 min-w-0 items-center gap-2" ref={searchRef}>
+          {/* Search bar (desktop) */}
+          <div className="hidden md:flex md:flex-1 min-w-0 items-center gap-2" ref={searchRef}>
             <div className="relative w-full max-w-full md:max-w-2xl">
-              <form onSubmit={onSubmit}>
+              <form role="search" onSubmit={onSubmit}>
                 <div className={`flex items-center transition-all ${searchFocused ? "ring-2 ring-red-500 shadow-lg shadow-red-500/30" : ""} rounded-full overflow-hidden`}>
-                  <SearchIcon className="absolute left-4 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <SearchIcon aria-hidden="true" className="absolute left-4 w-4 h-4 text-gray-400 pointer-events-none" />
+                  {/* [A4] labelled combobox */}
                   <input
                     ref={inputRef}
+                    type="search"
+                    role="combobox"
+                    aria-label="Search videos"
+                    aria-autocomplete="list"
+                    aria-expanded={suggestionsOpen}
+                    aria-controls={suggestionsId}
+                    aria-activedescendant={suggestionsOpen && selectedIndex >= 0 ? optionId(selectedIndex) : undefined}
                     value={q}
                     onChange={e => setQ(e.target.value)}
                     onFocus={() => { setSearchFocused(true); setShowSearchSuggestions(true); }}
@@ -734,17 +793,22 @@ export default function Header({
                     autoComplete="off"
                   />
                   {isSearching && (
-                    <div className="absolute right-24 pointer-events-none">
-                      <Loader2 size={16} className="text-gray-400 animate-spin" />
+                    <div className="absolute right-24 pointer-events-none" role="status" aria-label="Loading suggestions">
+                      <Loader2 aria-hidden="true" size={16} className="text-gray-400 animate-spin" />
                     </div>
                   )}
                   {q && !isListening && (
-                    <button type="button" onClick={handleClear} className="absolute right-20 p-1 hover:bg-white/10 rounded-full transition">
-                      <X size={16} className="text-gray-400" />
+                    <button
+                      type="button"
+                      onClick={handleClear}
+                      aria-label="Clear search"
+                      className="absolute right-20 p-1 hover:bg-white/10 rounded-full transition"
+                    >
+                      <X aria-hidden="true" size={16} className="text-gray-400" />
                     </button>
                   )}
                   <button type="submit" aria-label="Search" className="h-10 px-5 flex items-center justify-center bg-[#212121]/50 border border-l-0 border-gray-700 rounded-r-full hover:bg-red-600 hover:border-red-600 transition-all group">
-                    <SearchIcon className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" />
+                    <SearchIcon aria-hidden="true" className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" />
                   </button>
                 </div>
               </form>
@@ -753,11 +817,12 @@ export default function Header({
               <AnimatePresence>
                 {isListening && (
                   <motion.div
+                    role="status"
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
                     className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-[#0F0F0F]/95 backdrop-blur-xl border border-red-500/20 rounded-lg px-4 py-2 shadow-lg z-50"
                   >
                     <div className="flex items-center gap-2" style={{ minHeight: "40px" }}>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1" aria-hidden="true">
                         {[0, 0.1, 0.2].map(delay => (
                           <motion.div
                             key={delay}
@@ -775,7 +840,7 @@ export default function Header({
 
               {/* Search suggestions dropdown */}
               <AnimatePresence>
-                {showSearchSuggestions && combinedSuggestions.length > 0 && !isListening && (
+                {suggestionsOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.15 }}
@@ -784,24 +849,34 @@ export default function Header({
                     {!q && searchHistory.length > 0 && (
                       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
                         <span className="text-xs text-gray-400 font-medium">Recent searches</span>
-                        <button onClick={clearHistory} className="text-xs text-red-400 hover:text-red-300 transition">Clear all</button>
+                        <button type="button" onClick={clearHistory} className="text-xs text-red-400 hover:text-red-300 transition">Clear all</button>
                       </div>
                     )}
-                    <div className="max-h-[400px] overflow-y-auto">
+                    <div
+                      id={suggestionsId}
+                      role="listbox"
+                      aria-label={!q ? (searchHistory.length ? "Recent searches" : "Trending searches") : "Search suggestions"}
+                      className="max-h-[400px] overflow-y-auto"
+                    >
                       {combinedSuggestions.map((s, i) => (
                         <button
+                          type="button"
+                          id={optionId(i)}
+                          role="option"
+                          aria-selected={selectedIndex === i}
+                          tabIndex={-1}
                           key={`${s.type}-${s.text}-${i}`}
                           onClick={() => onSuggestionClick(s.text)}
                           onMouseEnter={() => setSelectedIndex(i)}
                           className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${selectedIndex === i ? "bg-white/10" : "hover:bg-white/5"}`}
                         >
-                          <div className="flex-shrink-0 text-gray-400">
+                          <span className="flex-shrink-0 text-gray-400" aria-hidden="true">
                             {s.type === "history" && <Clock size={18} />}
                             {s.type === "trending" && <TrendingUp size={18} />}
                             {s.type === "suggestion" && <SearchIcon size={18} />}
-                          </div>
+                          </span>
                           <span className="flex-1 text-white truncate text-sm">{s.text}</span>
-                          <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+                          <ArrowRight aria-hidden="true" size={16} className="text-gray-400 flex-shrink-0" />
                         </button>
                       ))}
                     </div>
@@ -815,110 +890,81 @@ export default function Header({
               </AnimatePresence>
             </div>
 
-            {/* Voice search — now a real flex sibling instead of being
-                absolutely positioned with a hardcoded right offset. That
-                approach broke at different screen widths because it never
-                actually reserved layout space; flexbox now does that
-                automatically regardless of viewport size. */}
+            {/* Voice search */}
             <button
+              type="button"
               onClick={handleVoiceSearch}
               disabled={!voiceSupported}
               aria-label={isListening ? "Stop listening" : "Voice search"}
+              aria-pressed={isListening}
               className={`flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full transition-all group ${isListening
-                ? "bg-red-500 shadow-lg shadow-red-500/50 animate-pulse"
+                ? "bg-red-600 shadow-lg shadow-red-500/50 animate-pulse"
                 : voiceSupported
                   ? "bg-[#212121]/50 hover:bg-red-600 hover:shadow-lg hover:shadow-red-500/50"
                   : "bg-[#212121]/30 cursor-not-allowed opacity-50"
                 }`}
             >
               {isListening
-                ? <MicOff className="w-5 h-5 text-white" />
-                : <Mic className={`w-5 h-5 transition-colors ${voiceSupported ? "text-gray-300 group-hover:text-white" : "text-gray-600"}`} />}
+                ? <MicOff aria-hidden="true" className="w-5 h-5 text-white" />
+                : <Mic aria-hidden="true" className={`w-5 h-5 transition-colors ${voiceSupported ? "text-gray-300 group-hover:text-white" : "text-gray-600"}`} />}
             </button>
           </div>
 
           {/* ── Right actions ──────────────────────── */}
-<div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            {/* + Create dropdown
-                ─────────────────────────────────────────────────────────
-                [FIX 1] openCreate state controls open/close
-                [FIX 2] createRef enables click-outside-to-close
-                [FIX 3] createAction() closes dropdown + enforces auth
-                [FIX 4] Styled with glass morphism + AnimatePresence
-            ───────────────────────────────────────────────────────── */}
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* + Create dropdown */}
             <div className="relative" ref={createRef}>
+              {/* [A1] accessible name on mobile + state; [A9] red-600 for 4.8:1 contrast */}
               <button
+                type="button"
                 onClick={() => setOpenCreate(prev => !prev)}
+                aria-label="Create"
+                aria-expanded={openCreate}
+                aria-controls={createMenuId}
                 className={`ml-auto flex items-center gap-1.5 px-2.5 sm:px-4 h-8 sm:h-9 rounded-full text-white text-sm font-medium transition-all hover:scale-105 active:scale-95 justify-center ${openCreate
-                  ? "bg-gradient-to-r from-red-600 to-red-600 shadow-lg shadow-red-500/40"
-                  : "bg-gradient-to-r from-red-500 to-red-500 hover:shadow-lg hover:shadow-red-500/40"
+                  ? "bg-red-700 shadow-lg shadow-red-500/40"
+                  : "bg-red-600 hover:shadow-lg hover:shadow-red-500/40"
                   }`}
               >
                 {/* Plus icon rotates to × when open */}
-                <Plus className={`w-4 h-4 transition-transform duration-200 ${openCreate ? "rotate-45" : "rotate-0"}`} />
+                <Plus aria-hidden="true" className={`w-4 h-4 transition-transform duration-200 ${openCreate ? "rotate-45" : "rotate-0"}`} />
                 <span className="hidden sm:inline">Create</span>
               </button>
 
               <AnimatePresence>
                 {openCreate && (
                   <motion.div
+                    id={createMenuId}
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
                     className="absolute right-0 mt-2 w-48 bg-[#212121]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
                   >
-                    {/* Section label */}
-                    <div className="px-3.5 pt-2.5 pb-1">
-                      <p className="text-[11px] text-gray-500 font-semibold tracking-wide">Create</p>
+                    {/* [A9] gray-500 11px → gray-400 text-xs */}
+                    <div className="px-3.5 pt-2.5 pb-1" aria-hidden="true">
+                      <p className="text-xs text-gray-400 font-semibold tracking-wide">Create</p>
                     </div>
 
                     <div className="p-1.5">
-
-                      {/* AI Clips */}
-                      <button
-                        onClick={() => createAction(() => navigate("/clip-generator"))}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      >
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
-                          <Scissors className="w-3.5 h-3.5 text-violet-400" />
-                        </div>
-                        <p className="text-sm font-medium text-white">AI Clips</p>
-                      </button>
-
-                      {/* Upload Video */}
-                      <button
-                        onClick={() => createAction(() => handleUploadClick())}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      >
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
-                          <Upload className="w-3.5 h-3.5 text-red-400" />
-                        </div>
-                        <p className="text-sm font-medium text-white">Upload video</p>
-                      </button>
-
-                      {/* Create Post — quick text + image/video post */}
-                      <button
-                        onClick={() => createAction(() => setShowCreatePostModal(true))}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      >
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
-                          <FileText className="w-3.5 h-3.5 text-blue-400" />
-                        </div>
-                        <p className="text-sm font-medium text-white">Create post</p>
-                      </button>
-
-                      {/* Go Live */}
-                      <button
-                        onClick={() => createAction(() => navigate("/go-live"))}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      >
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
-                          <Radio className="w-3.5 h-3.5 text-red-400" />
-                        </div>
-                        <p className="text-sm font-medium text-white">Go Live</p>
-                      </button>
-
+                      {[
+                        { label: "AI Clips", icon: Scissors, color: "text-violet-400", run: () => navigate("/clip-generator") },
+                        { label: "Upload video", icon: Upload, color: "text-red-400", run: () => handleUploadClick() },
+                        { label: "Create post", icon: FileText, color: "text-blue-400", run: () => setShowCreatePostModal(true) },
+                        { label: "Go Live", icon: Radio, color: "text-red-400", run: () => navigate("/go-live") },
+                      ].map(item => (
+                        <button
+                          type="button"
+                          key={item.label}
+                          onClick={() => createAction(item.run)}
+                          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/5 focus-visible:bg-white/5 transition-colors text-left"
+                        >
+                          <span aria-hidden="true" className="w-7 h-7 rounded-md flex items-center justify-center bg-white/[0.06] flex-shrink-0">
+                            <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
+                          </span>
+                          <span className="text-sm font-medium text-white">{item.label}</span>
+                        </button>
+                      ))}
                     </div>
                   </motion.div>
                 )}
@@ -927,14 +973,18 @@ export default function Header({
 
             {/* Notifications */}
             <div className="relative" ref={notificationRef}>
+              {/* [A3] exposes open/closed state */}
               <button
+                type="button"
                 onClick={() => setOpenNotifications(!openNotifications)}
                 aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+                aria-expanded={openNotifications}
+                aria-controls={notifPanelId}
                 className="relative h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center rounded-full bg-white/10 border border-white/25 text-white hover:bg-white/20 hover:border-white/50 transition-all hover:scale-110 active:scale-95"
               >
-                <Bell className="w-5 h-5 text-white" />
+                <Bell aria-hidden="true" className="w-5 h-5 text-white" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-black px-0.5 leading-none">
+                  <span aria-hidden="true" className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-600 text-white text-[0.625rem] font-bold rounded-full flex items-center justify-center border-2 border-black px-0.5 leading-none">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -942,6 +992,9 @@ export default function Header({
               <AnimatePresence>
                 {openNotifications && (
                   <motion.div
+                    id={notifPanelId}
+                    role="region"
+                    aria-label="Notifications"
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -952,50 +1005,55 @@ export default function Header({
                       <div className="flex items-center gap-3">
                         {notifications.some(n => !n.read) && (
                           <button
+                            type="button"
                             onClick={() => notifications.forEach(n => markAsRead(n.id))}
                             className="text-xs text-gray-400 hover:text-red-300 transition-colors"
                           >
                             Mark all read
                           </button>
                         )}
-                        <button onClick={clearAllNotifications} className="text-xs text-red-400 hover:text-red-300 transition-colors">Clear All</button>
+                        <button type="button" onClick={clearAllNotifications} className="text-xs text-red-400 hover:text-red-300 transition-colors">Clear All</button>
                       </div>
                     </div>
-                    <div className="max-h-96 overflow-y-auto">
+                    <ul className="max-h-96 overflow-y-auto">
                       {notifications.length > 0 ? (
                         notifications.map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              markAsRead(n.id);
-                              if (n.href) { navigate(n.href); setOpenNotifications(false); }
-                            }}
-                            className={`p-4 border-b border-white/5 transition-all ${n.href ? "cursor-pointer hover:bg-red-500/5" : "cursor-default"} ${!n.read ? "bg-red-500/10 border-l-2 border-l-red-500" : ""}`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`flex-shrink-0 w-2 h-2 rounded-full mt-2 ${n.type === "success" ? "bg-red-500" :
-                                n.type === "error" ? "bg-red-500" :
-                                  n.type === "warning" ? "bg-yellow-500" :
-                                    "bg-red-400"
-                                } ${n.read ? "opacity-30" : ""}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-white leading-snug">{n.title}</p>
-                                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{n.message}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <p className="text-xs text-gray-400">{n.time}</p>
-                                  {n.href && <span className="text-xs text-red-400 hover:text-red-300">Watch now →</span>}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <li key={n.id}>
+                            {/* [A8] real button instead of clickable div */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                markAsRead(n.id);
+                                if (n.href) { navigate(n.href); setOpenNotifications(false); }
+                              }}
+                              className={`w-full text-left p-4 border-b border-white/5 transition-all ${n.href ? "cursor-pointer hover:bg-red-500/5" : "cursor-default"} ${!n.read ? "bg-red-500/10 border-l-2 border-l-red-500" : ""}`}
+                            >
+                              <span className="flex items-start gap-3">
+                                <span aria-hidden="true" className={`flex-shrink-0 w-2 h-2 rounded-full mt-2 ${n.type === "success" ? "bg-red-500" :
+                                  n.type === "error" ? "bg-red-500" :
+                                    n.type === "warning" ? "bg-yellow-500" :
+                                      "bg-red-400"
+                                  } ${n.read ? "opacity-30" : ""}`} />
+                                <span className="flex-1 min-w-0">
+                                  {!n.read && <span className="sr-only">Unread: </span>}
+                                  <span className="block text-sm font-medium text-white leading-snug">{n.title}</span>
+                                  <span className="block text-xs text-gray-400 mt-0.5 leading-relaxed">{n.message}</span>
+                                  <span className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-gray-400">{n.time}</span>
+                                    {n.href && <span className="text-xs text-red-400 hover:text-red-300">Watch now →</span>}
+                                  </span>
+                                </span>
+                              </span>
+                            </button>
+                          </li>
                         ))
                       ) : (
-                        <div className="p-8 text-center text-gray-400">
-                          <Bell className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                        <li className="p-8 text-center text-gray-400">
+                          <Bell aria-hidden="true" className="w-12 h-12 mx-auto mb-2 opacity-20" />
                           <p className="text-sm">No notifications</p>
-                        </div>
+                        </li>
                       )}
-                    </div>
+                    </ul>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -1005,8 +1063,13 @@ export default function Header({
             <div className="relative" ref={menuRef}>
               {user ? (
                 <>
+                  {/* [A3] named + exposes state */}
                   <button
+                    type="button"
                     onClick={() => setOpenMenu(!openMenu)}
+                    aria-label="Account menu"
+                    aria-expanded={openMenu}
+                    aria-controls={accountMenuId}
                     className="relative hover:ring-2 ring-red-500 rounded-full transition-all hover:scale-105 active:scale-95 p-1"
                   >
                     {user.photoURL ? (
@@ -1014,19 +1077,20 @@ export default function Header({
                         loading="lazy"
                         decoding="async"
                         src={user.photoURL}
-                        alt="Profile"
+                        alt=""
                         className="w-8 h-8 rounded-full border-2 border-red-500/30 object-cover"
                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove("hidden"); }}
                       />
                     ) : null}
-                    <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-500/30 flex items-center justify-center text-white text-sm font-bold ${user.photoURL ? "hidden" : ""}`}>
+                    <span aria-hidden="true" className={`w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-500/30 flex items-center justify-center text-white text-sm font-bold ${user.photoURL ? "hidden" : ""}`}>
                       {(user.displayName?.[0] || user.email?.[0] || "U").toUpperCase()}
-                    </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 border-2 border-black rounded-full" />
+                    </span>
+                    <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 border-2 border-black rounded-full" />
                   </button>
                   <AnimatePresence>
                     {openMenu && (
                       <motion.div
+                        id={accountMenuId}
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -1038,12 +1102,12 @@ export default function Header({
                               loading="lazy"
                               decoding="async"
                               src={user.photoURL}
-                              alt="Profile"
+                              alt=""
                               className="w-12 h-12 rounded-full border-2 border-red-500/30 object-cover flex-shrink-0"
                               onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove("hidden"); }}
                             />
                           ) : null}
-                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-500/30 flex items-center justify-center text-white text-lg font-bold flex-shrink-0 ${user.photoURL ? "hidden" : ""}`}>
+                          <div aria-hidden="true" className={`w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-500/30 flex items-center justify-center text-white text-lg font-bold flex-shrink-0 ${user.photoURL ? "hidden" : ""}`}>
                             {(user.displayName?.[0] || user.email?.[0] || "U").toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1052,7 +1116,6 @@ export default function Header({
                           </div>
                         </div>
                         <div className="p-2">
-                          {/* Your Channel — uses channelUrl() which produces /@handle URLs */}
                           <MenuItem icon={User} label="Your Channel" onClick={() => {
                             const handle = userHandle || user.email!.split("@")[0];
                             navigate(`/@${handle}`);
@@ -1064,10 +1127,11 @@ export default function Header({
                         </div>
                         <div className="p-2 border-t border-red-500/20">
                           <button
+                            type="button"
                             onClick={logout}
                             className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all"
                           >
-                            <LogOut className="w-4 h-4" />
+                            <LogOut aria-hidden="true" className="w-4 h-4" />
                             <span>Logout</span>
                           </button>
                         </div>
@@ -1076,9 +1140,11 @@ export default function Header({
                   </AnimatePresence>
                 </>
               ) : (
+                /* [A9] solid red-600 for 4.8:1 contrast with white text */
                 <button
+                  type="button"
                   onClick={login}
-                  className="px-3 sm:px-5 h-8 sm:h-9 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white text-xs sm:text-sm font-medium hover:shadow-lg hover:shadow-red-500/50 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+                  className="px-3 sm:px-5 h-8 sm:h-9 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium hover:shadow-lg hover:shadow-red-500/50 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
                 >
                   Sign in
                 </button>
@@ -1088,19 +1154,24 @@ export default function Header({
           </div>
         </div>
       </header>
-{/* Mobile search bar */}
-<div className="md:hidden px-4 py-2 bg-black/90 border-b border-white/10" ref={searchRef}>
-  <form onSubmit={onSubmit} className="flex items-center bg-[#0F0F0F]/50 border border-gray-700 rounded-full px-4 h-10">
-    <SearchIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-    <input
-      ref={inputRef}
-      value={q}
-      onChange={e => setQ(e.target.value)}
-      placeholder="Search"
-      className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-gray-400"
-    />
-  </form>
-</div>
+
+      {/* Mobile search bar — [A5] own ref, [A4] labelled */}
+      <div className="md:hidden px-4 py-2 bg-black/90 border-b border-white/10">
+        <form role="search" onSubmit={onSubmit} className="flex items-center bg-[#0F0F0F]/50 border border-gray-700 rounded-full px-4 h-10 focus-within:ring-2 focus-within:ring-red-500">
+          <SearchIcon aria-hidden="true" className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+          <input
+            ref={mobileInputRef}
+            type="search"
+            aria-label="Search videos"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Search"
+            enterKeyHint="search"
+            className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-gray-400"
+          />
+        </form>
+      </div>
+
       {/* Login modal */}
       {showLoginModal && (
         <LoginRequiredModal
