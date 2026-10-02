@@ -381,7 +381,7 @@ export default function ChannelPage() {
                 break;
               }
             }
-          } catch (e) {
+          } catch {
             // Try next domain
             continue;
           }

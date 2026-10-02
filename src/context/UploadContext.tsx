@@ -9,7 +9,7 @@
 // had no way to distinguish "hide the UI" from "cancel the upload" —
 // this context makes that distinction possible.
 
-import { createContext, useContext, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 
 interface UploadContextValue {
   // Modal visibility — single source of truth, so App.tsx, the mini

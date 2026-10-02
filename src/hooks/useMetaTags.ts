@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { generateMetaTags, MetaTagsConfig } from '../utils/metaTagGenerator';
+import { generateMetaTags, type MetaTagsConfig } from '../utils/metaTagGenerator';
 
 /**
  * React hook to set meta tags on component mount/update

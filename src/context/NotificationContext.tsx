@@ -12,7 +12,7 @@ import {
   useCallback,
   useRef,
   useEffect,
-  ReactNode,
+  type ReactNode,
 } from "react";
 import { API_URL } from "../utils/constants";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";

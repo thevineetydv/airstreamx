@@ -93,7 +93,7 @@ export function useCachedData<T>(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [key, enabled, ttl]);
 
   const refresh = useCallback(async () => {

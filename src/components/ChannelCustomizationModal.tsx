@@ -495,7 +495,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
 
     setSaving(true);
 
-    let newHistory = [...handleHistory];
+    const newHistory = [...handleHistory];
     if (handleChanged) {
       const now = new Date();
       const release = new Date(now.getTime() + COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
