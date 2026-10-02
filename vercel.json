@@ -10,6 +10,13 @@
     },
     {
       "source": "/watch",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Slackbot|Slack-ImgProxy).*"
+        }
+      ],
       "destination": "https://backend.airstreamx.com/og-preview"
     },
     {
