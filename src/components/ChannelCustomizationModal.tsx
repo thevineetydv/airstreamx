@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { registerHandle } from "../utils/channelUrl";
 import { API_URL } from "../utils/constants";
+import { auth } from "../firebase";
 
 /* ─────────────────────────────────────────────────────────────
  * TYPES
@@ -487,17 +488,41 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
       h => h.handle.toLowerCase() === handle.trim().toLowerCase()
     );
     setNameError(nErr); setHandleError(hErr); setUpiIdError(uErr);
-    if (nErr || hErr || uErr) return;
-    if (handleChanged && handleAvail === false) { setHandleError("This handle is already taken."); return; }
+    setSaveError(null);
+
+    // Validation errors used to be shown only next to their field. If that
+    // field was on another tab (e.g. an old, invalid UPI ID on "Contact"
+    // while the creator edits the name on "Basic"), Save silently did
+    // nothing. Now we jump to the tab with the problem and say why.
+    const failValidation = (msg: string, onTab: Tab) => {
+      setTab(onTab);
+      setSaveError(msg);
+    };
+    if (nErr) return failValidation(nErr, "basic");
+    if (hErr) return failValidation(hErr, "basic");
+    if (uErr) return failValidation(`UPI ID: ${uErr}`, "contact");
+    if (handleChanged && handleAvail === false) {
+      setHandleError("This handle is already taken.");
+      return failValidation("This handle is already taken.", "basic");
+    }
     if (handleChanged && cooldown.locked && !switchingBack) {
-      setHandleError(`You've used both changes for this 10-day window. ${cooldown.daysUntilSlot} day${cooldown.daysUntilSlot !== 1 ? "s" : ""} until a slot reopens.`);
-      return;
+      const msg = `You've used both changes for this 10-day window. ${cooldown.daysUntilSlot} day${cooldown.daysUntilSlot !== 1 ? "s" : ""} until a slot reopens.`;
+      setHandleError(msg);
+      return failValidation(msg, "basic");
     }
 
     setSaving(true);
-    setSaveError(null);
 
-    if (!token) {
+    // Always get a fresh ID token at save time. The token passed in as a prop
+    // can be over an hour old (laptop sleep / background tab), and the save
+    // endpoint now verifies it, so a stale token made every save fail with 401.
+    let freshToken: string | null = null;
+    try {
+      freshToken = (await auth.currentUser?.getIdToken()) ?? token ?? null;
+    } catch {
+      freshToken = token ?? null;
+    }
+    if (!freshToken) {
       setSaveError("Your session has expired. Please sign in again.");
       setSaving(false);
       return;
@@ -548,7 +573,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         formData.append("type", type);
         const uploadRes = await fetch(`${API_URL}/api/upload/image`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${freshToken}` },
           body: formData,
         });
         if (!uploadRes.ok) {
@@ -575,9 +600,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         "Content-Type": "application/json"
       };
 
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
+      headers["Authorization"] = `Bearer ${freshToken}`;
 
       // Create payload FIRST
       const payload: any = {

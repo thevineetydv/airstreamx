@@ -60,8 +60,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
+    // Timers are paused while a laptop sleeps or a tab sits in the background,
+    // so the 55-minute refresh above can be missed and the token expires.
+    // Re-check whenever the tab becomes visible again: getIdToken() returns
+    // the cached token if it is still valid and refreshes it if it is not.
+    const refreshOnReturn = async () => {
+      if (document.visibilityState !== "visible" || !auth.currentUser) return;
+      try {
+        setToken(await getIdToken(auth.currentUser));
+      } catch (err) {
+        console.error("Failed to refresh token:", err);
+      }
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+
     return () => {
       unsub();
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
       if (tokenRefreshInterval) {
         clearInterval(tokenRefreshInterval);
       }
