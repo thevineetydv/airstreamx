@@ -512,9 +512,13 @@ if (subscriberCount === 0 && channelIdRef.current) {
 }
 
       // Owner check
-      if (user?.email === decodedEmail) setIsOwner(true);
+      const viewerIsOwner = !!user?.email && user.email === emailToUse;
+      if (viewerIsOwner) setIsOwner(true);
 
-      const firebasePhotoURL = user?.photoURL ?? undefined;
+      // The logged-in user's Firebase photo is only a valid fallback on
+      // their OWN channel. Previously it was used for every channel without
+      // a saved avatar, so viewers saw their own picture on other channels.
+      const firebasePhotoURL = viewerIsOwner ? (user?.photoURL ?? undefined) : undefined;
       const resolvedAvatar = avatarUrl ?? firebasePhotoURL;
 
       // BUG FIX: pass `localVids` (the real array) — NOT `videos` (stale state)
@@ -649,10 +653,14 @@ if (countId) {
   };
 
   const handleEditSave = async () => {
+    if (!token) {
+      alert("Your session has expired. Please sign in again to save changes.");
+      return;
+    }
     // Persist profile changes to the backend (PostgreSQL), not localStorage
     try {
-      if (token) {
-        await fetch(`${API_URL}/api/channels/profile`, {
+      {
+        const res = await fetch(`${API_URL}/api/channels/profile`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -667,9 +675,16 @@ if (countId) {
             youtube: editProfile.youtube,
           }),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Save failed (HTTP ${res.status})`);
+        }
       }
     } catch (err) {
       console.error("Failed to save profile:", err);
+      // Keep the editor open so the user doesn't lose their changes
+      alert(err instanceof Error ? err.message : "Could not save your changes. Please try again.");
+      return;
     }
 
     setProfile(editProfile);
@@ -743,35 +758,45 @@ if (countId) {
         r.readAsDataURL(file);
       });
 
-      // Optimistic UI update
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+
+      // Optimistic UI update (remember the old value so we can revert)
+      const previousAvatar = stats?.avatarUrl;
       setStats(prev => (prev ? { ...prev, avatarUrl: dataUrl } : prev));
 
       // Upload to backend so it persists in PostgreSQL
-      if (token) {
-        try {
-          const formData = new FormData();
-          formData.append("avatar", file);
-          await fetch(`${API_URL}/api/channels/avatar`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
-          });
-        } catch (err) {
-          console.error("Avatar backend upload failed:", err);
-        }
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch(`${API_URL}/api/channels/avatar`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        setStats(prev => (prev ? { ...prev, avatarUrl: previousAvatar } : prev));
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `Avatar upload failed (HTTP ${res.status})`);
       }
 
-      // Also update Firebase photoURL
-      try {
-        const auth = getAuth();
-        if (auth.currentUser) {
-          await updateProfile(auth.currentUser, { photoURL: dataUrl });
+      // Firebase photoURL only accepts a short hosted URL — a base64 data URL
+      // is rejected as too long. Use the URL the backend returns, if any.
+      const body = await res.json().catch(() => ({}));
+      const hostedUrl: string | undefined = body?.url ?? body?.avatarUrl ?? body?.avatar_url;
+      if (hostedUrl && !hostedUrl.startsWith("data:")) {
+        setStats(prev => (prev ? { ...prev, avatarUrl: hostedUrl } : prev));
+        try {
+          const auth = getAuth();
+          if (auth.currentUser) await updateProfile(auth.currentUser, { photoURL: hostedUrl });
+        } catch (err) {
+          console.warn("Firebase photoURL update failed:", err);
         }
-      } catch { }
+      }
     } catch (err) {
       console.error("Avatar upload failed:", err);
+      alert(err instanceof Error ? err.message : "Avatar upload failed. Please try again.");
     } finally {
       setAvatarUploading(false);
+      e.target.value = ""; // allow re-selecting the same file after a failure
     }
   };
 

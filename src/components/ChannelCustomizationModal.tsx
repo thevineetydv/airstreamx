@@ -289,6 +289,7 @@ interface Props {
 export default function ChannelCustomizationModal({ email, token, isOpen, onClose, onSaved }: Props) {
   const [tab, setTab] = useState<Tab>("basic");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copiedUrl, setCopied] = useState(false);
 
@@ -494,6 +495,13 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     }
 
     setSaving(true);
+    setSaveError(null);
+
+    if (!token) {
+      setSaveError("Your session has expired. Please sign in again.");
+      setSaving(false);
+      return;
+    }
 
     const newHistory = [...handleHistory];
     if (handleChanged) {
@@ -530,49 +538,36 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     };
 
     try {
-      // ── Upload avatar to Cloudinary if it's a fresh base64 data URL ──
+      // Upload a fresh base64 preview to Cloudinary and return the hosted URL.
+      // Throws on failure — previously a failed upload left the raw base64
+      // in the payload, which made the main save request fail silently.
+      const uploadImage = async (dataUrl: string, fileName: string, type: string): Promise<string> => {
+        const formData = new FormData();
+        const blob = await (await fetch(dataUrl)).blob();
+        formData.append("file", blob, fileName);
+        formData.append("type", type);
+        const uploadRes = await fetch(`${API_URL}/api/upload/image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}));
+          throw new Error(err?.error || `Could not upload ${type} image (HTTP ${uploadRes.status}).`);
+        }
+        const { url } = await uploadRes.json();
+        if (!url) throw new Error(`Upload server returned no URL for the ${type} image.`);
+        return url;
+      };
+
       if (avatarDataUrl?.startsWith("data:image/")) {
-        const formData = new FormData();
-        const blob = await (await fetch(avatarDataUrl)).blob();
-        formData.append("file", blob, avatarFileName || "avatar.jpg");
-        formData.append("type", "avatar");
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const uploadRes = await fetch(`${API_URL}/api/upload/image`, { method: "POST", headers, body: formData });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          data.avatarDataUrl = url; // replace base64 with Cloudinary URL
-        }
+        data.avatarDataUrl = await uploadImage(avatarDataUrl, avatarFileName || "avatar.jpg", "avatar");
       }
-
-      // ── Upload banner to Cloudinary if it's a fresh base64 data URL ──
       if (bannerDataUrl?.startsWith("data:image/")) {
-        const formData = new FormData();
-        const blob = await (await fetch(bannerDataUrl)).blob();
-        formData.append("file", blob, bannerFileName || "banner.jpg");
-        formData.append("type", "banner");
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const uploadRes = await fetch(`${API_URL}/api/upload/image`, { method: "POST", headers, body: formData });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          data.bannerDataUrl = url;
-        }
+        data.bannerDataUrl = await uploadImage(bannerDataUrl, bannerFileName || "banner.jpg", "banner");
       }
-
-      // ── Upload watermark to Cloudinary if fresh base64 ──
       if (watermarkDataUrl?.startsWith("data:image/")) {
-        const formData = new FormData();
-        const blob = await (await fetch(watermarkDataUrl)).blob();
-        formData.append("file", blob, watermarkFileName || "watermark.png");
-        formData.append("type", "watermark");
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const uploadRes = await fetch(`${API_URL}/api/upload/image`, { method: "POST", headers, body: formData });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          data.watermarkDataUrl = url;
-        }
+        data.watermarkDataUrl = await uploadImage(watermarkDataUrl, watermarkFileName || "watermark.png", "watermark");
       }
 
       // ── Persist everything to PostgreSQL via POST /api/channel-customization ──
@@ -627,14 +622,24 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
           setSaving(false);
           return;
         }
-        throw new Error(err?.error || "Save failed");
+        if (saveRes.status === 401 || saveRes.status === 403) {
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+        if (saveRes.status === 413) {
+          throw new Error("The images are too large. Please use smaller files.");
+        }
+        throw new Error(err?.error || `Save failed (HTTP ${saveRes.status}).`);
       }
     } catch (err) {
       console.error("ChannelCustomizationModal save error:", err);
+      setSaveError(err instanceof Error ? err.message : "Could not save your changes. Please try again.");
       setSaving(false);
       return;
     }
 
+    if (data.avatarDataUrl) setAvatarDataUrl(data.avatarDataUrl);
+    if (data.bannerDataUrl) setBannerDataUrl(data.bannerDataUrl);
+    if (data.watermarkDataUrl) setWatermarkDataUrl(data.watermarkDataUrl);
     setHandleHistory(newHistory);
     setCooldown(computeCooldown(newHistory));
     setOriginalHandle(handle.trim());
@@ -1272,6 +1277,12 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
                 className="px-4 py-2 text-sm text-gray-400 hover:text-white transition rounded-lg hover:bg-white/5">
                 Cancel
               </button>
+
+              {saveError && (
+                <p role="alert" className="flex-1 mx-3 text-xs text-red-400 text-right">
+                  {saveError}
+                </p>
+              )}
 
               <motion.button
                 onClick={handleSave}
