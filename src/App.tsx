@@ -5,7 +5,8 @@ import BottomNav from "./components/BottomNav";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Toast from "./components/Toast";
 import { useAppLogic } from "./useAppLogic";
-import UploadModal from "./components/UploadModal";
+// Lazy: only needed once the user opens the upload dialog
+const UploadModal = lazy(() => import("./components/UploadModal"));
 import { UploadProvider, useUpload } from "./context/UploadContext";
 import UploadProgressWidget from "./components/UploadProgressWidget";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -20,7 +21,9 @@ if (typeof window !== "undefined" && "requestIdleCallback" in window) {
 
 // ─── Eager load critical pages (visible on first paint) ───────────────────────
 import HomeFeed from "./pages/HomeFeed";
-import WatchPage from "./pages/Watch";
+// Lazy: the watch page (player, comments, HLS) is heavy and not needed
+// to render the homepage, so it is fetched only when a video is opened.
+const WatchPage        = lazy(() => import("./pages/Watch"));
 const ShortsPage       = lazy(() => import("./pages/ShortsPage"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
@@ -308,10 +311,12 @@ function AppContent() {
           )}
 
           {showUploadModal && (
-            <UploadModal
-              onClose={() => closeModal()}
-              onUploaded={handleUploadSuccess}
-            />
+            <Suspense fallback={null}>
+              <UploadModal
+                onClose={() => closeModal()}
+                onUploaded={handleUploadSuccess}
+              />
+            </Suspense>
           )}
 
           <UploadProgressWidget />

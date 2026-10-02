@@ -19,11 +19,8 @@ export default defineConfig({
     // "reachable" and preload it on every page anyway (e.g. ShortsPage's
     // ~190KB chunk was being preloaded on the homepage), quietly
     // defeating the code-splitting from App.tsx.
-    modulePreload: {
-      resolveDependencies: (filename, deps) => {
-        return deps.filter(dep => !dep.includes('page-ShortsPage'));
-      }
-    },
+    // modulePreload left at Vite defaults — the page-chunk workaround that
+    // used to live here is no longer needed (see manualChunks below).
     // Enable code splitting for better caching and parallel loading
     rollupOptions: {
      output: {
@@ -54,13 +51,11 @@ if (id.includes('node_modules/react-router-dom')) {
           if (id.includes('node_modules/openai')) {
             return 'openai';
           }
-          // Page components in separate chunks
-          if (id.includes('pages/')) {
-            const pageName = id.split('pages/')[1]?.split('.')[0];
-            if (pageName && pageName !== 'HomeFeed' && pageName !== 'Watch') {
-              return `page-${pageName}`;
-            }
-          }
+          // NOTE: no manual "page-*" chunks. React.lazy() in App.tsx already
+          // gives every page its own chunk. Forcing pages into manual chunks
+          // made Rollup park shared code (icons, utils, contexts) inside
+          // page-ShortsPage, so the homepage had to download ShortsPage,
+          // ChannelPage, History and LiveStream chunks on first load.
         },
       },
     },
