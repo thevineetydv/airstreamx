@@ -15,6 +15,7 @@ import { getAuth } from "firebase/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_URL } from "../utils/constants";
 import SponsoredBannersAdmin from "../components/SponsoredBannersAdmin";
+import ChannelsAdmin from "../components/ChannelsAdmin";
 
 /* ─── Types  ─────────────────────────────────────────────────── */
 
@@ -45,7 +46,7 @@ interface FeaturedEntry {
   is_active: boolean;
 }
 
-type Tab = "videos" | "featured" | "sponsored" | "maintenance";
+type Tab = "videos" | "channels" | "featured" | "sponsored" | "maintenance";
 type SortKey = "created_at" | "views" | "likes" | "title";
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -676,7 +677,7 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="px-4 sm:px-6 flex gap-1 border-b border-white/5">
-        {(["videos", "featured", "sponsored", "maintenance"] as Tab[]).map(t => (
+        {(["videos", "channels", "featured", "sponsored", "maintenance"] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -686,7 +687,7 @@ export default function AdminDashboard() {
                 : "border-transparent text-gray-500 hover:text-gray-300"
             }`}
           >
-            {t === "featured" ? "⭐ Featured" : t === "sponsored" ? "🏪 Sponsored" : t === "maintenance" ? "🧹 Maintenance" : "🎬 Videos"}
+            {t === "channels" ? "📺 Channels" : t === "featured" ? "⭐ Featured" : t === "sponsored" ? "🏪 Sponsored" : t === "maintenance" ? "🧹 Maintenance" : "🎬 Videos"}
           </button>
         ))}
       </div>
@@ -1034,6 +1035,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ══ SPONSORED TAB ══ */}
+        {tab === "channels" && <ChannelsAdmin />}
         {tab === "sponsored" && <SponsoredBannersAdmin />}
 
         {/* ══ MAINTENANCE TAB ══ */}
