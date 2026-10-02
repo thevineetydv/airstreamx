@@ -68,7 +68,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   // already locked in and sent to the server.
   const {
     uploading, progress, uploadSpeed, timeRemaining, processingStage,
-    xhrRef, beginUpload, updateProgress, finishUpload, cancelUpload,
+    beginUpload, updateProgress, finishUpload, cancelUpload,
   } = useUpload();
 
   const [step, setStep] = useState(1);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Bell } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,7 +8,6 @@ import SponsoredBanner from "../components/SponsoredBanner";
 import { API_URL } from "../utils/constants";
 import { channelUrl } from "../utils/channelUrl";
 import { useCachedData } from "../utils/useCachedData";
-import { invalidateCache } from "../utils/metadataCache";
 import { useAuth } from "../context/AuthContext";
 
 /* ─────────────────────────────────────────────────────────────

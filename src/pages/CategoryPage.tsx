@@ -100,23 +100,16 @@ export default function CategoryPage() {
 
   const category = CATEGORIES[slug as keyof typeof CATEGORIES];
 
-  if (!category) {
-    return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <h1 className="text-3xl font-bold mb-4">Category Not Found</h1>
-        <p className="text-gray-400">Sorry, this category doesn't exist.</p>
-      </div>
-    );
-  }
-
-  const categoryTitle = `${category.title} | AirStreamX`;
+  // Hooks must run on every render (rules-of-hooks), so the
+  // "not found" early return now happens AFTER them.
+  const categoryTitle = category ? `${category.title} | AirStreamX` : "Category Not Found | AirStreamX";
   const canonicalUrl = `https://airstreamx.com/category/${slug}`;
 
   // Set meta tags
   useMetaTags({
     title: categoryTitle,
-    description: category.description,
-    keywords: category.keywords,
+    description: category?.description ?? "",
+    keywords: category?.keywords ?? [],
     image: "https://airstreamx.com/og-image.jpg",
     url: canonicalUrl,
     canonicalUrl: canonicalUrl,
@@ -125,6 +118,7 @@ export default function CategoryPage() {
 
   // Fetch videos in category
   useEffect(() => {
+    if (!category) return;
     setLoading(true);
     setError(null);
 
@@ -142,7 +136,16 @@ export default function CategoryPage() {
         setError("Failed to load videos");
         setLoading(false);
       });
-  }, [slug]);
+  }, [slug, category]);
+
+  if (!category) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <h1 className="text-3xl font-bold mb-4">Category Not Found</h1>
+        <p className="text-gray-400">Sorry, this category doesn't exist.</p>
+      </div>
+    );
+  }
 
   return (
     <>

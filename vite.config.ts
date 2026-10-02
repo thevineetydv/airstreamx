@@ -189,7 +189,7 @@ terserOptions: {
         // where it falls among the tag's attributes.
         return html.replace(
           /<link\s+rel="stylesheet"([^>]*?)\shref="([^"]+\.css)"([^>]*)>/g,
-          (_match, before, href, after) =>
+          (_match, before, href, _after) =>
             `<link rel="preload" as="style" href="${href}" onload="this.onload=null;this.rel='stylesheet'">
           <noscript><link rel="stylesheet" href="${href}"></noscript>`
         );

@@ -306,7 +306,7 @@ const usePlayer = ({ video }: any) => {
         if (!isNaN(bufferedEnd) && isFinite(bufferedEnd) && bufferedEnd >= 0) {
           setState(s => ({ ...s, buffered: bufferedEnd }));
         }
-      } catch (e) {
+      } catch {
         setState(s => ({ ...s, buffered: 0 }));
       }
     }, 500);

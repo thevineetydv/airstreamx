@@ -248,7 +248,7 @@ export default function LibraryPanel({
     setIsDeleting(true);
 
     try {
-      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (user && typeof user.getIdToken === 'function') {
         const token = await user.getIdToken();
         headers["Authorization"] = `Bearer ${token}`;
