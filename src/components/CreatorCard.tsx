@@ -139,7 +139,8 @@ export default function CreatorCard({
         <Link
           to={resolvedPath}
           className="flex items-center gap-2.5 min-w-0 group/creator"
-          aria-label={`Visit ${resolvedName}'s channel`}
+          // No aria-label: the visible name + subscriber count already name
+          // this link, and an aria-label that hides that text fails WCAG 2.5.3.
         >
           {/* Avatar with hover ring */}
           <motion.div
@@ -150,7 +151,7 @@ export default function CreatorCard({
             {resolvedAvatarUrl ? (
               <img
                 src={resolvedAvatarUrl}
-                alt={resolvedName}
+                alt=""
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";

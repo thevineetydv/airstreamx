@@ -569,20 +569,21 @@ const Controls: React.FC<any> = ({
           ever overlapping. */}
       <div className="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto scrollbar-hide">
         <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-shrink-0">
-          <button onClick={onPlayPause} className="hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0">
-            {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+          <button type="button" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"} className="hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+            {isPlaying ? <Pause aria-hidden="true" size={22} fill="currentColor" /> : <Play aria-hidden="true" size={22} fill="currentColor" />}
           </button>
-          <button onClick={() => onSeekBy(-SEEK_INTERVAL)} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0">
-            <SkipBack size={18} fill="currentColor" />
+          <button type="button" onClick={() => onSeekBy(-SEEK_INTERVAL)} aria-label={`Rewind ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+            <SkipBack aria-hidden="true" size={18} fill="currentColor" />
           </button>
-          <button onClick={() => onSeekBy(SEEK_INTERVAL)} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0">
-            <SkipForward size={18} fill="currentColor" />
+          <button type="button" onClick={() => onSeekBy(SEEK_INTERVAL)} aria-label={`Forward ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+            <SkipForward aria-hidden="true" size={18} fill="currentColor" />
           </button>
           <div className="flex items-center gap-2 group ml-1">
-            <button onClick={onToggleMute} className="hover:text-red-400 transition-all hover:scale-110 min-w-[36px] flex items-center justify-center">
-              {isMuted || volume === 0 ? <VolumeX size={20} /> : volume < 0.5 ? <Volume1 size={20} /> : <Volume2 size={20} />}
+            <button type="button" onClick={onToggleMute} aria-label={isMuted || volume === 0 ? "Unmute" : "Mute"} className="hover:text-red-400 transition-all hover:scale-110 min-w-[36px] min-h-[32px] flex items-center justify-center">
+              {isMuted || volume === 0 ? <VolumeX aria-hidden="true" size={20} /> : volume < 0.5 ? <Volume1 aria-hidden="true" size={20} /> : <Volume2 aria-hidden="true" size={20} />}
             </button>
             <input type="range" min="0" max="1" step="0.01" value={isMuted ? 0 : volume}
+              aria-label="Volume"
               onChange={e => onVolume(parseFloat(e.target.value))}
               className="hidden sm:block w-0 group-hover:w-20 opacity-0 group-hover:opacity-100 transition-all duration-300 accent-red-400 cursor-pointer h-1" />
           </div>
