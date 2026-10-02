@@ -613,8 +613,10 @@ export default function AdminDashboard() {
   const refreshScores = useCallback(async () => {
     setRefreshingScores(true);
     try {
+      const token = await getToken();
       const res = await fetch(`${API_URL}/api/recommendations/refresh-scores`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed");
       showToast("Recommendation scores refreshed");
