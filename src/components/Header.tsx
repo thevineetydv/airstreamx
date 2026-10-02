@@ -1171,7 +1171,6 @@ export default function Header({
           />
         </form>
       </div>
-
       {/* Login modal */}
       {showLoginModal && (
         <LoginRequiredModal
