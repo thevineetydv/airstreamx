@@ -1883,9 +1883,11 @@ useEffect(() => {
                   <div className="relative" ref={shareMenuRef}>
                     <button
                       onClick={() => setShowShareMenu(v => !v)}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm"
+                      aria-label="Share"
+                      aria-expanded={showShareMenu}
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                     >
-                      <Share2 size={15} />
+                      <Share2 aria-hidden="true" size={15} />
                       <span className="hidden sm:inline">Share</span>
                     </button>
                     <AnimatePresence>
@@ -1920,9 +1922,10 @@ useEffect(() => {
                   {isVideoOwner && (
                     <button
                       onClick={openAnalyticsModal}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm"
+                      aria-label="Analytics"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                     >
-                      <BarChart3 size={15} />
+                      <BarChart3 aria-hidden="true" size={15} />
                       <span className="hidden sm:inline">Analytics</span>
                     </button>
                   )}
@@ -1930,9 +1933,10 @@ useEffect(() => {
                   {isVideoOwner && (
                     <button
                       onClick={openEditModal}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm"
+                      aria-label="Edit video"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                     >
-                      <Pencil size={15} />
+                      <Pencil aria-hidden="true" size={15} />
                       <span className="hidden sm:inline">Edit video</span>
                     </button>
                   )}
@@ -1940,9 +1944,11 @@ useEffect(() => {
                   <div className="relative ml-auto" ref={moreMenuRef}>
                     <button
                       onClick={() => setShowMoreMenu(v => !v)}
+                      aria-label="More actions"
+                      aria-expanded={showMoreMenu}
                       className="p-2 hover:bg-white/10 rounded-full transition min-h-[40px] min-w-[40px] flex items-center justify-center"
                     >
-                      <MoreVertical size={18} />
+                      <MoreVertical aria-hidden="true" size={18} />
                     </button>
                     <AnimatePresence>
                       {showMoreMenu && (
@@ -2001,9 +2007,9 @@ useEffect(() => {
 
               {current?.is_made_for_kids ? (
                 <div className="mt-4 sm:mt-6">
-                  <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 mb-3">
-                    <MessageSquare size={20} /> Comments
-                  </h3>
+                  <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2 mb-3">
+                    <MessageSquare aria-hidden="true" size={20} /> Comments
+                  </h2>
                   <div className="bg-[#212121] rounded-xl p-4 sm:p-5 text-sm text-gray-300">
                     <p>Comments are turned off for this video.</p>
                     <button
@@ -2026,11 +2032,12 @@ useEffect(() => {
               ) : (
               <div className="mt-4 sm:mt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                  <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                    <MessageSquare size={20} />{commentsTotal} Comments
-                  </h3>
+                  <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                    <MessageSquare aria-hidden="true" size={20} />{commentsTotal} Comments
+                  </h2>
                   <div className="flex items-center gap-3">
                     <select
+                      aria-label="Sort comments"
                       value={commentSort}
                       onChange={(e) => setCommentSort(e.target.value as "newest" | "top")}
                       className="bg-transparent border border-white/10 rounded-full px-2.5 py-1 text-xs sm:text-sm text-gray-300 hover:text-white transition outline-none cursor-pointer"
@@ -2368,7 +2375,7 @@ useEffect(() => {
             <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0">
               <div className="bg-[#212121] rounded-xl p-3 sm:p-4 lg:sticky lg:top-4">
                 <div className="flex items-center justify-between gap-3 mb-4">
-                  <h3 className="text-base sm:text-lg text-white font-semibold">Up next</h3>
+                  <h2 className="text-base sm:text-lg text-white font-semibold">Up next</h2>
                   <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                     <input type="checkbox" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} className="accent-red-500" />
                     <span>Autoplay</span>

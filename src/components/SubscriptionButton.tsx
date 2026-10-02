@@ -356,7 +356,9 @@ useEffect(() => {
           whileHover={{ scale: loading ? 1 : 1.03 }}
           whileTap={{ scale: loading ? 1 : 0.97 }}
           aria-pressed={sub.subscribed}
-          aria-label={sub.subscribed ? `Unsubscribe from ${channelName}` : `Subscribe to ${channelName}`}
+          // Accessible name must start with the visible text (WCAG 2.5.3),
+          // then add the channel name for context.
+          aria-label={`${loading ? "Loading…" : sub.subscribed ? "Subscribed" : "Subscribe"}${!loading && sub.subscriberCount > 0 ? ` ${formatCount(sub.subscriberCount)}` : ""}, ${channelName}`}
           className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold text-base transition-all duration-200 shadow-xl disabled:opacity-60 disabled:cursor-not-allowed ${sub.subscribed
             ? "bg-white/10 hover:bg-red-500/20 text-white border border-white/20 hover:border-red-500/50"
             : "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-red-500/30"
