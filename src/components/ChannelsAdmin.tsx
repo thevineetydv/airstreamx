@@ -1,13 +1,15 @@
 // components/ChannelsAdmin.tsx
 //
 // Admin Dashboard tab: search creators' channels and fix their channel
-// name / handle. Uses admin-only backend routes:
+// name / handle, and adjust the displayed subscriber count.
+// Uses admin-only backend routes:
 //   GET /api/admin/channels?search=&limit=
-//   PUT /api/admin/channels/:email   { channelName, handle }
+//   PUT /api/admin/channels/:email                    { channelName, handle }
+//   PUT /api/admin/channels/:email/subscriber-boost   { boost }
 
 import { useCallback, useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
-import { Loader2, Pencil, Search, X, Check } from "lucide-react";
+import { Loader2, Pencil, Search, X, Check, Users } from "lucide-react";
 import { API_URL } from "../utils/constants";
 
 interface AdminChannel {
@@ -16,6 +18,8 @@ interface AdminChannel {
   handle: string | null;
   avatar_url: string | null;
   video_count: number;
+  real_subscribers: number;
+  subscriber_boost: number;
   updated_at: string | null;
 }
 
@@ -36,6 +40,10 @@ export default function ChannelsAdmin() {
   const [editName, setEditName] = useState("");
   const [editHandle, setEditHandle] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Subscriber boost edit state (separate from name/handle editing)
+  const [boostEmail, setBoostEmail] = useState<string | null>(null);
+  const [boostValue, setBoostValue] = useState("");
 
   const fetchChannels = useCallback(async (query: string) => {
     setLoading(true);
@@ -102,6 +110,40 @@ export default function ChannelsAdmin() {
       setChannels(prev => prev.map(c => (c.email === email ? { ...c, ...data.channel } : c)));
       setEditingEmail(null);
       setNotice(`Saved: ${name}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startBoost = (c: AdminChannel) => {
+    setBoostEmail(c.email);
+    setBoostValue(String(c.subscriber_boost || 0));
+    setEditingEmail(null);
+    setError("");
+    setNotice("");
+  };
+
+  const saveBoost = async (email: string) => {
+    const boost = Number(boostValue);
+    if (!Number.isInteger(boost) || boost < 0 || boost > 1_000_000) {
+      setError("Boost must be a whole number between 0 and 1,000,000.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/api/admin/channels/${encodeURIComponent(email)}/subscriber-boost`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ boost }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Save failed (HTTP ${res.status})`);
+      setChannels(prev => prev.map(c => (c.email === email ? { ...c, subscriber_boost: boost } : c)));
+      setBoostEmail(null);
+      setNotice("Subscriber count updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -183,6 +225,44 @@ export default function ChannelsAdmin() {
                       <p className="text-xs text-gray-400 truncate">
                         {c.handle ? `@${c.handle} · ` : ""}{c.email} · {c.video_count} video{c.video_count !== 1 ? "s" : ""}
                       </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Subscribers: <span className="text-white">{c.real_subscribers}</span> real
+                        {c.subscriber_boost > 0 && (
+                          <> + <span className="text-amber-400">{c.subscriber_boost}</span> boost
+                          = <span className="text-white font-medium">{c.real_subscribers + c.subscriber_boost}</span> shown</>
+                        )}
+                      </p>
+                      {boostEmail === c.email && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <label className="text-xs text-gray-400" htmlFor={`boost-${c.email}`}>Boost</label>
+                          <input
+                            id={`boost-${c.email}`}
+                            type="number"
+                            min={0}
+                            max={1000000}
+                            value={boostValue}
+                            onChange={e => setBoostValue(e.target.value)}
+                            autoFocus
+                            className="w-28 px-2 py-1 bg-[#212121] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red-500/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveBoost(c.email)}
+                            disabled={saving}
+                            className="px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs rounded-lg"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBoostEmail(null)}
+                            disabled={saving}
+                            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -212,6 +292,15 @@ export default function ChannelsAdmin() {
                       </button>
                     </>
                   ) : (
+                    <>
+                    <button
+                      type="button"
+                      onClick={() => startBoost(c)}
+                      aria-label={`Adjust subscribers for ${c.channel_name || c.email}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg"
+                    >
+                      <Users aria-hidden="true" className="w-4 h-4" /> Subscribers
+                    </button>
                     <button
                       type="button"
                       onClick={() => startEdit(c)}
@@ -220,6 +309,7 @@ export default function ChannelsAdmin() {
                     >
                       <Pencil aria-hidden="true" className="w-4 h-4" /> Edit
                     </button>
+                    </>
                   )}
                 </div>
               </li>
