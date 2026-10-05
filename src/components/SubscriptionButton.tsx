@@ -7,7 +7,7 @@ import {
 } from "react";
 import { Bell, BellOff, Check, UserPlus, X, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { auth } from "../firebase";
+import { auth, signInWithGoogle } from "../firebase";
 import { API_URL } from "../utils/constants";
 
 interface SubscriptionButtonProps {
@@ -211,7 +211,11 @@ useEffect(() => {
   }, [channelId]);
 
   const handleSubscribe = async () => {
-    if (!isAuthenticated) { showError("Please sign in to subscribe"); return; }
+    // Logged-out viewers get the sign-in popup instead of a dead end
+    if (!isAuthenticated) {
+      signInWithGoogle().catch(() => showError("Please sign in to subscribe"));
+      return;
+    }
     const token = await getToken();
     if (!token) return;
     abortRef.current?.abort();

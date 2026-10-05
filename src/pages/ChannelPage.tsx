@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Bell, BellOff, Share2, Grid3X3, List, Play,
+  Share2, Grid3X3, List, Play,
   Eye, ThumbsUp, Calendar, Video, Users,
   CheckCircle2, Copy, Check, Search, SortAsc, Globe, Instagram, Twitter,
   Edit2, Save, X, ExternalLink,
@@ -15,9 +15,14 @@ import { API_URL } from "../utils/constants";
 import { useAuth } from "../context/AuthContext";
 import { resolveChannelParam } from "../utils/channelUrl";
 import PostsTab from "../components/PostsTab";
+import { SubscriptionButton } from "../components/SubscriptionButton";
 import ChannelCustomizationModal, {
   type ChannelCustomization as CustomizationData,
 } from "../components/ChannelCustomizationModal";
+
+// Emails are compared case-insensitively everywhere (owner checks etc.)
+const sameEmail = (a?: string | null, b?: string | null) =>
+  !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 // FIX #7: 180s = 3 minutes (was 60, comment said 3 min)
 const MAX_SHORT_DURATION = 180;
@@ -140,7 +145,6 @@ function defaultProfile(email: string): ChannelProfile {
 type TabType = "home" | "videos" | "shorts" | "posts" | "live" | "playlists" | "community" | "about";
 type SortType = "newest" | "oldest" | "popular" | "liked";
 type ViewMode = "grid" | "list";
-type NotificationLevel = "all" | "personalized" | "none";
 
 interface LiveStream {
   id: string | number;
@@ -164,13 +168,26 @@ export default function ChannelPage() {
 
   const { user, token } = useAuth();
 
+  // Not found / load error states (unknown handle, network failure)
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  // Every loadChannel() call gets a sequence number; responses from an older
+  // call (e.g. user switched channels quickly) are ignored.
+  const loadSeqRef = React.useRef(0);
+
   // State to resolve @handle to full email
   const [decodedEmail, setDecodedEmail] = useState<string>("");
 
   // Resolve handle to email if needed
   useEffect(() => {
+    let cancelled = false;
+    setNotFound(false);
+    setLoadError(null);
+    setDecodedEmail("");
+
     if (!decodedParam) {
-      setDecodedEmail("");
+      setNotFound(true);
       return;
     }
 
@@ -180,33 +197,37 @@ export default function ChannelPage() {
       return;
     }
 
-    // It's a handle — resolve to email via /api/channel/:handle
+    // It's a handle — resolve to email via /api/channel/:handle.
+    // No guessing of "handle@gmail.com" style emails: that could open
+    // a different person's channel. Unknown handle = "Channel not found".
     const resolveHandle = async () => {
       try {
         const res = await fetch(`${API_URL}/api/channel/${encodeURIComponent(decodedParam)}`);
-        if (res.ok) {
-          const data = await res.json();
-          const email = data?.email || data?.channel?.email || null;
-          if (email) {
-            setDecodedEmail(email);
-            return;
-          }
+        if (cancelled) return;
+        if (res.status === 404) {
+          setNotFound(true);
+          return;
         }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const email = data?.email || data?.channel?.email || null;
+        if (email) setDecodedEmail(email);
+        else setNotFound(true);
       } catch (e) {
+        if (cancelled) return;
         console.warn("[ChannelPage] handle resolve failed:", e);
+        setLoadError("Could not load this channel. Please check your connection and try again.");
       }
-      setDecodedEmail(decodedParam);
     };
     resolveHandle();
-  }, [decodedParam]);
+    return () => { cancelled = true; };
+  }, [decodedParam, retryKey]);
 
   const [videos, setVideos] = useState<Video[]>([]);
   const [stats, setStats] = useState<ChannelStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Subscription state comes exclusively from the API (PostgreSQL)
-  const [subscribed, setSubscribed] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortBy, setSortBy] = useState<SortType>("newest");
@@ -244,12 +265,9 @@ export default function ChannelPage() {
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
-  const [notificationLevel, setNotificationLevel] = useState<NotificationLevel>("all");
-  const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const notifMenuRef = React.useRef<HTMLDivElement>(null);
   const moreMenuRef = React.useRef<HTMLDivElement>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
 
@@ -258,7 +276,6 @@ export default function ChannelPage() {
     // IMPORTANT: Do NOT reset profile to defaults here!
     // loadChannel() will hydrate from the DB.
     // Only reset subscription status.
-    setSubscribed(false);
     loadChannel();
     loadLiveStreams();
   }, [decodedEmail]); // Re-run if email/handle changes
@@ -266,7 +283,7 @@ export default function ChannelPage() {
   // Re-check owner status when user changes (e.g., logs in after page load)
   useEffect(() => {
     if (user?.email && decodedEmail) {
-      setIsOwner(user.email === decodedEmail || user.email === decodedParam);
+      setIsOwner(sameEmail(user.email, decodedEmail));
     } else {
       setIsOwner(false);
     }
@@ -275,9 +292,6 @@ export default function ChannelPage() {
   // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
-        setShowNotifMenu(false);
-      }
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
         setShowMoreMenu(false);
       }
@@ -356,50 +370,19 @@ export default function ChannelPage() {
   };
 
   const loadChannel = async () => {
+    if (!decodedEmail) return;
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
+
     setLoading(true);
-    // Declared here (outside try) so the catch block can still reach it —
-    // it was previously declared inside try{} with `let`, which is
-    // block-scoped and invisible to catch{}. That meant the fallback
-    // error-handling path itself threw a ReferenceError instead of
-    // gracefully degrading.
-    let emailToUse = decodedEmail;
+    setLoadError(null);
+    setNotFound(false);
+    // Never carry the previous channel's id over to this one
+    channelIdRef.current = null;
+
+    // Declared outside try so the catch block can still reach it
+    const emailToUse = decodedEmail;
     try {
-      // If decodedEmail is just a handle (no @ sign), try to resolve it
-      // Strategy: attempt to construct possible emails (handle@domain) and see which one has videos
-      let resolvedFromVideos = false;
-
-      // If it looks like a handle (no @), try common domains
-      if (!decodedEmail.includes("@")) {
-        const possibleDomains = ["gmail.com", "yahoo.com", "outlook.com", "airstreamx.com"];
-
-        for (const domain of possibleDomains) {
-          const possibleEmail = `${decodedEmail}@${domain}`;
-          const encodedEmail = encodeURIComponent(possibleEmail);
-
-          try {
-            const videoRes = await fetch(`${API_URL}/videos?uploader=${encodedEmail}&limit=1`);
-            if (videoRes.ok) {
-              const data = await videoRes.json();
-              if (data.videos && data.videos.length > 0) {
-                emailToUse = possibleEmail;
-                resolvedFromVideos = true;
-                break;
-              }
-            }
-          } catch {
-            // Try next domain
-            continue;
-          }
-        }
-
-        // If we found a valid email, update state and rerun loadChannel
-        if (resolvedFromVideos) {
-          setDecodedEmail(emailToUse);
-          setLoading(false);
-          return;
-        }
-      }
-
       const encodedEmail = encodeURIComponent(emailToUse);
       let avatarUrl: string | undefined;
       let bannerUrl: string | undefined;
@@ -426,11 +409,26 @@ export default function ChannelPage() {
         fetch(`${API_URL}/api/channel/${encodedEmail}`)
           .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)),
       ]);
+      if (isStale()) return;
+
+      // Channel doesn't exist anywhere (no channel row, no customization,
+      // no videos) and it isn't the viewer's own empty channel → not found.
+      const channelMissing =
+        channelResult.status === "rejected" && String(channelResult.reason).includes("404");
+      const hasCustomization =
+        custResult.status === "fulfilled" && !!custResult.value?.customization;
+      const hasVideos =
+        videoResult.status === "fulfilled" && (videoResult.value?.videos?.length ?? 0) > 0;
+      if (channelMissing && !hasCustomization && !hasVideos && !sameEmail(user?.email, emailToUse)) {
+        setStats(null);
+        setNotFound(true);
+        return;
+      }
 
       // ── Process videos ─────────────────────────────────────────────────
       if (videoResult.status === "fulfilled") {
         const allVids: Video[] = videoResult.value.videos || [];
-        const matched = allVids.filter(v => v.uploader_email === emailToUse);
+        const matched = allVids.filter(v => sameEmail(v.uploader_email, emailToUse));
         localVids = matched.length > 0 ? matched : allVids;
         setVideos(localVids);
       } else {
@@ -473,7 +471,9 @@ export default function ChannelPage() {
       // ── Process channel profile (subscriber count) ─────────────────────
       if (channelResult.status === "fulfilled") {
         const chData = channelResult.value;
-        if (chData?.id) channelIdRef.current = Number(chData.id);
+        // `id` from /api/channel is the channel_customizations row id, NOT
+        // channels.id — using it for subscriptions caused FK errors.
+        if (chData?.channel_id) channelIdRef.current = Number(chData.channel_id);
         // Extract subscriber count — handle every field name your backend may use
         const raw =
           chData.subscriber_count ??
@@ -497,28 +497,9 @@ export default function ChannelPage() {
         console.warn("[loadChannel] Channel profile fetch error:", channelResult.reason);
       }
 
-      // ── Exhaustive subscriber-count fallback fan-out ───────────────────
-      // Only fires if the primary /api/channel fetch returned 0.
-      // Uses the SAME endpoint that SubscriptionButton uses on the Watch page
-      // (/api/subscribe/count/:channelId) — this is the authoritative source.
-if (subscriberCount === 0 && channelIdRef.current) {
-  try {
-    const countRes = await fetch(
-      `${API_URL}/api/subscribe/status/${channelIdRef.current}`,
-      token ? { headers: { Authorization: `Bearer ${token}` } } : {}
-    );
-    if (countRes.ok) {
-      const countData = await countRes.json();
-      if (typeof countData.subscriber_count === "number") {
-        subscriberCount = countData.subscriber_count;
-      }
-    }
-  } catch { /* non-critical */ }
-}
-
       // Owner check
-      const viewerIsOwner = !!user?.email && user.email === emailToUse;
-      if (viewerIsOwner) setIsOwner(true);
+      const viewerIsOwner = sameEmail(user?.email, emailToUse);
+      setIsOwner(viewerIsOwner);
 
       // The logged-in user's Firebase photo is only a valid fallback on
       // their OWN channel. Previously it was used for every channel without
@@ -540,121 +521,21 @@ if (subscriberCount === 0 && channelIdRef.current) {
         )
       );
 
-      // Check subscription status from API
-      await checkSubscription();
-      console.debug("[loadChannel] Complete!");
     } catch (err) {
+      if (isStale()) return;
       console.error("Failed to load channel:", err);
-      setStats(buildStatsShell(emailToUse, [], 0));
+      setLoadError("Could not load this channel. Please check your connection and try again.");
     } finally {
-      console.debug("[loadChannel] Setting loading to false");
-      setLoading(false);
-    }
-  };
-
-  // Subscription status comes from the API only — no localStorage reads or writes
-  const checkSubscription = useCallback(async () => {
-    if (!token || !user?.email) {
-      setSubscribed(false);
-      return;
-    }
-
-    try {
-      const encodedEmail = encodeURIComponent(decodedEmail);
-      const id = channelIdRef.current;
-      const endpoint = id
-        ? `${API_URL}/api/subscribe/status/${id}`
-        : `${API_URL}/api/subscribe/status/${encodedEmail}`;
-      const res = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const d = await res.json();
-        setSubscribed(d.subscribed ?? false);
-      }
-    } catch {
-      setSubscribed(false);
-    }
-  }, [token, user?.email, decodedEmail]);
-
-  // Re-check subscription when auth becomes ready (after refresh)
-  useEffect(() => {
-    if (token && user?.email && decodedEmail) {
-      checkSubscription();
-    }
-  }, [token, user?.email, decodedEmail, checkSubscription]);
-
-  const handleSubscribe = async () => {
-    if (!user || !token) {
-      navigate("/");
-      return;
-    }
-
-    const wasSubscribed = subscribed;
-    setSubscribed(!wasSubscribed); // optimistic
-    setSubscribing(true);
-
-    try {
-      const id = channelIdRef.current;
-      const endpoint = id
-        ? `${API_URL}/api/subscribe`
-        : `${API_URL}/api/subscribe/${encodeURIComponent(decodedEmail)}`;
-      const body = id ? JSON.stringify({ channelId: id }) : undefined;
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body,
-      });
-      if (res.ok) {
-        const d = await res.json();
-        const newSubscribed = d.subscribed ?? !wasSubscribed;
-        setSubscribed(newSubscribed);
-
-        // BUG 3 FIX: d.subscriberCount (camelCase) is undefined if backend
-        // returns subscriber_count (snake_case). Instead of guessing the field name,
-        // re-fetch the authoritative count from the subscriptionRoutes endpoint.
-        const countId = channelIdRef.current;
-if (countId) {
-  try {
-    const countRes = await fetch(
-      `${API_URL}/api/subscribe/status/${countId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (countRes.ok) {
-      const countData = await countRes.json();
-      if (typeof countData.subscriber_count === "number") {
-        setStats(prev => prev ? { ...prev, subscriberCount: countData.subscriber_count } : prev);
-      }
-    }
-  } catch { /* ignore — optimistic UI is fine */ }
-}
-
-		else {
-          // No channelId available — optimistically increment/decrement
-          setStats(prev => {
-            if (!prev) return prev;
-            const delta = newSubscribed ? 1 : -1;
-            return { ...prev, subscriberCount: Math.max(0, prev.subscriberCount + delta) };
-          });
-        }
-      } else {
-        setSubscribed(wasSubscribed); // revert on failure
-      }
-    } catch (err) {
-      console.error("Subscribe error:", err);
-      setSubscribed(wasSubscribed); // revert on error
-    } finally {
-      setSubscribing(false);
+      if (!isStale()) setLoading(false);
     }
   };
 
   // ── Profile editing ─────────────────────────────────────────────────────────
+  // Inline editing used a backend route that doesn't exist (PATCH
+  // /api/channels/profile), so "Add bio" always failed. All edits now go
+  // through the Customize channel modal, which has one working save path.
   const handleEditStart = () => {
-    setEditProfile({ ...profile });
-    setIsEditing(true);
+    setShowCustomizationModal(true);
   };
 
   const handleEditSave = async () => {
@@ -718,6 +599,13 @@ if (countId) {
   };
 
   const handleCustomizationSaved = (saved: CustomizationData) => {
+    // If the handle changed while we're on /@oldhandle, move to the new URL —
+    // otherwise a refresh (or a shared link) would show "Channel not found".
+    const newHandle = saved.handle?.trim().replace(/^@/, "");
+    if (newHandle && !decodedParam.includes("@") && newHandle.toLowerCase() !== decodedParam.toLowerCase()) {
+      navigate(`/@${newHandle}`, { replace: true });
+    }
+
     // Reload the full channel data from the server so the UI reflects what's in DB
     // This is the safest approach — avoids stale-state issues entirely
     loadChannel();
@@ -916,8 +804,26 @@ if (countId) {
     navigate("/");
   };
 
-  if (loading) return <ChannelSkeleton />;
-  if (!stats) return <ChannelNotFound />;
+  if (notFound) return <ChannelNotFound />;
+  if (loadError) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-6 text-center text-white">
+        <p className="text-gray-300">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadError(null);
+            if (decodedEmail) loadChannel();
+            else setRetryKey(k => k + 1);
+          }}
+          className="px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+  if (loading || !stats) return <ChannelSkeleton />;
 
   // Both come exclusively from the DB via loadChannel → stats
   const resolvedDisplayName = stats.displayName || formatDisplayName(decodedEmail);
@@ -1198,123 +1104,18 @@ if (countId) {
                 </>
               ) : !isOwner ? (
                 <>
-                  <button
-                    onClick={handleSubscribe}
-                    disabled={subscribing}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all active:scale-95 ${subscribed
-                      ? "bg-white/10 hover:bg-white/20 text-white border border-white/20"
-                      : "bg-white text-black hover:bg-gray-200"
-                      }`}
-                  >
-                    {subscribing ? (
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    ) : subscribed ? (
-                      <>
-                        <Users size={16} />
-                        <span>Subscribed</span>
-                      </>
-                    ) : (
-                      <span>Subscribe</span>
-                    )}
-                  </button>
-
-                  {/* Notification Menu */}
-                  {subscribed && (
-                    <div className="relative" ref={notifMenuRef}>
-                      <button
-                        onClick={() => setShowNotifMenu(!showNotifMenu)}
-                        className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition border border-white/20"
-                        title="Notification settings"
-                      >
-                        {notificationLevel === "all" ? (
-                          <Bell size={18} className="text-red-400" />
-                        ) : notificationLevel === "personalized" ? (
-                          <Bell size={18} className="text-gray-300" />
-                        ) : (
-                          <BellOff size={18} className="text-gray-400" />
-                        )}
-                      </button>
-                      <AnimatePresence>
-                        {showNotifMenu && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                            className="absolute right-0 top-12 w-56 bg-[#212121] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
-                          >
-                            <div className="p-3 border-b border-white/10">
-                              <p className="text-sm font-medium text-white">
-                                Notifications
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                Choose what updates you get
-                              </p>
-                            </div>
-                            {[
-                              {
-                                level: "all" as const,
-                                icon: Bell,
-                                label: "All",
-                                desc: "Get all notifications",
-                              },
-                              {
-                                level: "personalized" as const,
-                                icon: Sparkles,
-                                label: "Personalized",
-                                desc: "Occasional updates",
-                              },
-                              {
-                                level: "none" as const,
-                                icon: BellOff,
-                                label: "None",
-                                desc: "No notifications",
-                              },
-                            ].map(opt => (
-                              <button
-                                key={opt.level}
-                                onClick={() => {
-                                  setNotificationLevel(opt.level);
-                                  setShowNotifMenu(false);
-                                }}
-                                className={`w-full flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition text-left ${notificationLevel === opt.level
-                                  ? "bg-white/10"
-                                  : ""
-                                  }`}
-                              >
-                                <opt.icon
-                                  size={18}
-                                  className={
-                                    notificationLevel === opt.level
-                                      ? "text-red-400"
-                                      : "text-gray-400"
-                                  }
-                                />
-                                <div>
-                                  <p
-                                    className={`text-sm font-medium ${notificationLevel === opt.level
-                                      ? "text-white"
-                                      : "text-gray-300"
-                                      }`}
-                                  >
-                                    {opt.label}
-                                  </p>
-                                  <p className="text-xs text-gray-400">
-                                    {opt.desc}
-                                  </p>
-                                </div>
-                                {notificationLevel === opt.level && (
-                                  <Check
-                                    size={16}
-                                    className="text-red-400 ml-auto mt-0.5"
-                                  />
-                                )}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
+                  {/* Shared component (same as Watch page): resolves the real
+                      channel id from the email, uses a fresh login token,
+                      handles login prompt, errors and the notification bell. */}
+                  <SubscriptionButton
+                    key={stats.email}
+                    channelId={stats.email}
+                    channelName={stats.displayName}
+                    initialSubscriberCount={stats.subscriberCount}
+                    onSubscriptionChange={(_subscribed, count) =>
+                      setStats(prev => (prev && typeof count === "number" ? { ...prev, subscriberCount: count } : prev))
+                    }
+                  />
 
                   <button
                     onClick={handleShare}
@@ -1982,7 +1783,9 @@ if (countId) {
               {channelIdRef.current ? (
                 <PostsTab channelId={channelIdRef.current} isOwnChannel={isOwner} />
               ) : (
-                <p className="text-center text-gray-500 text-sm py-12">Loading…</p>
+                // channel_id comes from /api/channel once loading finishes;
+                // a channel with no channels row simply has no posts yet.
+                <p className="text-center text-gray-400 text-sm py-12">No posts yet.</p>
               )}
             </motion.div>
           )}
@@ -2193,7 +1996,7 @@ if (countId) {
 
       {isOwner && (
         <ChannelCustomizationModal
-          email={decodedEmail}
+          email={user?.email ?? decodedEmail}
           token={token}
           isOpen={showCustomizationModal}
           onClose={() => setShowCustomizationModal(false)}
