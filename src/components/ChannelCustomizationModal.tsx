@@ -609,7 +609,8 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         handle: data.handle,
         description: data.description,
         contactEmail: data.contactEmail,
-        upiId: data.upiId || "",
+        // Blank UPI must be sent as null: "" violates the DB format check
+        upiId: data.upiId || null,
         links: data.links,
       };
 
