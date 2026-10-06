@@ -369,12 +369,16 @@ export default function ChannelPage() {
     };
   };
 
-  const loadChannel = async () => {
+  // silent: refresh data in the background (e.g. after saving the Customize
+  // modal) without swapping the page for the skeleton. Showing the skeleton
+  // unmounted the open modal, which then re-mounted and closed again — the
+  // "popup closes, opens, closes" flicker.
+  const loadChannel = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!decodedEmail) return;
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setLoadError(null);
     setNotFound(false);
     // Never carry the previous channel's id over to this one
@@ -524,7 +528,8 @@ export default function ChannelPage() {
     } catch (err) {
       if (isStale()) return;
       console.error("Failed to load channel:", err);
-      setLoadError("Could not load this channel. Please check your connection and try again.");
+      // A failed background refresh keeps the data already on screen
+      if (!silent) setLoadError("Could not load this channel. Please check your connection and try again.");
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -606,9 +611,9 @@ export default function ChannelPage() {
       navigate(`/@${newHandle}`, { replace: true });
     }
 
-    // Reload the full channel data from the server so the UI reflects what's in DB
-    // This is the safest approach — avoids stale-state issues entirely
-    loadChannel();
+    // Reload the full channel data from the server so the UI reflects what's in DB,
+    // silently so the page (and the closing modal) stay mounted
+    loadChannel({ silent: true });
 
     // Optimistically update displayName / bio in profile state for instant feedback
     setProfile(prev => ({

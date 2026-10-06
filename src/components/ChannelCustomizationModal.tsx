@@ -187,18 +187,28 @@ function validateUpiId(id: string): string | null {
 }
 
 /**
- * isHandleTaken — checks via the backend API.
- * The localStorage scan has been removed; handle uniqueness is now
- * enforced server-side by the UNIQUE constraint on channel_customizations.handle.
- * This client-side function is kept as a fast debounced pre-check but
- * always returns false (not taken) so the save proceeds; the server
- * will return an error if the handle is genuinely taken.
+ * normalizeLinkUrl — adds https:// when no scheme is given and only allows
+ * http/https. Anything else (javascript:, data:, …) returns null: these links
+ * are rendered as <a href> on the About page, so a javascript: URL would be
+ * a stored XSS.
  */
-function isHandleTaken(_handle: string, _currentEmail: string): boolean {
-  // Real uniqueness is enforced by the DB UNIQUE constraint.
-  // A proper implementation would call GET /api/handle-available/:handle
-  // For now we optimistically allow — server rejects if taken.
-  return false;
+function normalizeLinkUrl(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname.includes(".")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function validateContactEmail(v: string): string | null {
+  if (!v.trim()) return null;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? null : "Contact email doesn't look valid.";
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -292,6 +302,15 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Saving is only allowed once the current values were loaded from the DB.
+  // Otherwise a slow/failed load followed by Save would overwrite the real
+  // channel (description, links, contact email…) with empty defaults.
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadKey, setReloadKey] = useState(0);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Values as loaded from the DB, used to detect "user removed this"
+  const originalRef = useRef({ avatar: "", banner: "", watermark: "", upi: "" });
+  const latestHandleRef = useRef("");
   const [copiedUrl, setCopied] = useState(false);
 
   // Form fields
@@ -328,6 +347,9 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   // ── Load on open — fetch from PostgreSQL, never localStorage ──
   useEffect(() => {
     if (!isOpen || !email) return;
+    let cancelled = false;
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setLoadState("loading"); setSaveError(null); setSaving(false);
     setSaved(false); setTab("basic"); setWatermarkError(null);
     setNameError(null); setHandleError(null); setHandleAvail(null); setUpiIdError(null);
 
@@ -346,6 +368,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         }
 
         const json = await res.json();
+        if (cancelled) return;
         const s: ChannelCustomization | null = json.customization ?? null;
 
         const history: HandleChange[] = s?.handleHistory ?? [];
@@ -368,8 +391,18 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         setWatermarkFileName(s?.watermarkFileName ?? "");
         setHandleHistory(history);
         setCooldown(cd);
+        originalRef.current = {
+          avatar: s?.avatarDataUrl ?? "",
+          banner: s?.bannerDataUrl ?? "",
+          watermark: s?.watermarkDataUrl ?? "",
+          upi: s?.upiId ?? "",
+        };
+        latestHandleRef.current = currentHandle;
+        setLoadState("ready");
       } catch (err) {
+        if (cancelled) return;
         console.error("[Modal] Load error:", err);
+        setLoadState("error");
         // Fallback to safe defaults on network error
         const defaultName = formatEmailName(email);
         setChannelName(defaultName);
@@ -382,14 +415,25 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         setHandleHistory([]); setCooldown({ changesInWindow: 0, locked: false, daysUntilSlot: 0, heldHandles: [] });
       }
     })();
-  }, [isOpen, email]);
+    return () => { cancelled = true; };
+  }, [isOpen, email, reloadKey]);
+
+  // Clear a pending auto-close timer if the modal unmounts
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+
+  // Closing is blocked while a save (incl. image uploads) is in progress
+  const safeClose = useCallback(() => {
+    if (saving) return;
+    onClose();
+  }, [saving, onClose]);
 
   // ESC close
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (!isOpen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") safeClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [isOpen, safeClose]);
 
   // ── Handle availability check ──────────────────────────────
   const checkHandle = useCallback((h: string) => {
@@ -399,16 +443,30 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     if (err) { setHandleError(err); return; }
     setHandleError(null);
     if (h.toLowerCase() === originalHandle.toLowerCase()) { setHandleAvail(true); return; }
-    checkTimerRef.current = setTimeout(() => {
-      const taken = isHandleTaken(h, email);
-      setHandleAvail(!taken);
-      if (taken) setHandleError("This handle is already taken.");
-    }, 350);
+    // Real availability check: /api/channel/:handle returns 404 when free.
+    // The DB unique constraint is still the final guard on save.
+    checkTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/channel/${encodeURIComponent(h)}`);
+        if (latestHandleRef.current !== h) return; // user kept typing
+        if (res.status === 404) { setHandleAvail(true); return; }
+        if (!res.ok) { setHandleAvail(null); return; }
+        const d = await res.json();
+        if (latestHandleRef.current !== h) return;
+        const owner = String(d?.email || "").toLowerCase();
+        const taken = !!owner && owner !== email.toLowerCase();
+        setHandleAvail(!taken);
+        if (taken) setHandleError("This handle is already taken.");
+      } catch {
+        setHandleAvail(null); // unknown — the server decides on save
+      }
+    }, 400);
   }, [originalHandle, email]);
 
   const onHandleChange = (raw: string) => {
     const clean = raw.replace(/^@+/, "").replace(/\s/g, "").toLowerCase();
     setHandle(clean);
+    latestHandleRef.current = clean;
     checkHandle(clean);
   };
 
@@ -425,6 +483,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     kind: "avatar" | "banner"
   ) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
     if (!file) return;
     setWatermarkError(null);
     if (!file.type.startsWith("image/")) {
@@ -452,6 +511,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
   // ── Watermark upload ───────────────────────────────────────
   const onWatermarkSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
     if (!file) return;
     setWatermarkError(null);
     const allowed = ["image/png", "image/gif", "image/bmp", "image/jpeg", "image/jpg"];
@@ -480,6 +540,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
 
   // ── Save ───────────────────────────────────────────────────
   const handleSave = async () => {
+    if (saving || loadState !== "ready") return;
     const nErr = validateChannelName(channelName);
     const handleChanged = handle.toLowerCase() !== originalHandle.toLowerCase();
     const hErr = handleChanged ? validateHandle(handle) : null;
@@ -501,6 +562,19 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     if (nErr) return failValidation(nErr, "basic");
     if (hErr) return failValidation(hErr, "basic");
     if (uErr) return failValidation(`UPI ID: ${uErr}`, "contact");
+    const cErr = validateContactEmail(contactEmail);
+    if (cErr) return failValidation(cErr, "contact");
+
+    // Links: normalize to https and reject anything that isn't a web address
+    const cleanLinks: ChannelLink[] = [];
+    for (const l of links) {
+      if (!l.url.trim()) continue;
+      const url = normalizeLinkUrl(l.url);
+      if (!url) {
+        return failValidation(`"${l.label || l.url}" is not a valid web address (e.g. https://instagram.com/you).`, "links");
+      }
+      cleanLinks.push({ ...l, label: l.label.trim(), url });
+    }
     if (handleChanged && handleAvail === false) {
       setHandleError("This handle is already taken.");
       return failValidation("This handle is already taken.", "basic");
@@ -547,7 +621,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
       description: description.trim(),
       contactEmail: contactEmail.trim(),
       upiId: upiId.trim() || undefined,
-      links: links.filter(l => l.url.trim()),
+      links: cleanLinks,
       // avatarDataUrl / bannerDataUrl hold Cloudinary URLs (returned from
       // the /api/upload/image endpoint) — NOT raw base64 data URIs.
       // Raw base64 is only used for preview; actual persistence happens
@@ -612,6 +686,12 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
         // Blank UPI must be sent as null: "" violates the DB format check
         upiId: data.upiId || null,
         links: data.links,
+        // Explicit removals: the backend otherwise keeps the old value when a
+        // field is sent empty, so "Remove" / clearing UPI never persisted.
+        clearAvatar: !data.avatarDataUrl && !!originalRef.current.avatar,
+        clearBanner: !data.bannerDataUrl && !!originalRef.current.banner,
+        clearWatermark: !data.watermarkDataUrl && !!originalRef.current.watermark,
+        clearUpi: !data.upiId && !!originalRef.current.upi,
       };
 
       // Only send images if they exist
@@ -664,12 +744,23 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
     if (data.avatarDataUrl) setAvatarDataUrl(data.avatarDataUrl);
     if (data.bannerDataUrl) setBannerDataUrl(data.bannerDataUrl);
     if (data.watermarkDataUrl) setWatermarkDataUrl(data.watermarkDataUrl);
+    setLinks(cleanLinks);
+    originalRef.current = {
+      avatar: data.avatarDataUrl ?? "",
+      banner: data.bannerDataUrl ?? "",
+      watermark: data.watermarkDataUrl ?? "",
+      upi: data.upiId ?? "",
+    };
     setHandleHistory(newHistory);
     setCooldown(computeCooldown(newHistory));
     setOriginalHandle(handle.trim());
     setSaving(false); setSaved(true);
     onSaved?.(data);
-    setTimeout(() => { setSaved(false); onClose(); }, 1400);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setSaved(false);
+      onClose();
+    }, 1400);
   };
 
   const copyUrl = () => {
@@ -694,7 +785,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-[100] flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(10px)" }}
-          onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+          onClick={e => { if (e.target === e.currentTarget) safeClose(); }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 20 }}
@@ -711,7 +802,7 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
                 <h2 className="text-[15px] font-bold text-white tracking-tight">Customize channel</h2>
                 <p className="text-[11px] text-gray-400 mt-0.5">Manage your public identity on AirStreamX</p>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition">
+              <button onClick={safeClose} aria-label="Close" disabled={saving} className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition">
                 <X size={16} />
               </button>
             </div>
@@ -734,6 +825,27 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto">
+              {loadState !== "ready" ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-20 px-6 text-center">
+                  {loadState === "loading" ? (
+                    <>
+                      <Loader2 size={22} className="animate-spin text-gray-400" />
+                      <p className="text-sm text-gray-400">Loading your channel details…</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-300">Couldn't load your channel details. Check your connection and try again.</p>
+                      <button
+                        type="button"
+                        onClick={() => setReloadKey(k => k + 1)}
+                        className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold"
+                      >
+                        Try again
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
               <AnimatePresence mode="wait">
 
                 {/* ══════ BASIC INFO ══════ */}
@@ -1293,12 +1405,13 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
                 )}
 
               </AnimatePresence>
+              )}
             </div>
 
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-white/[0.06] flex-shrink-0 bg-[#0d0d0d]">
-              <button onClick={onClose}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition rounded-lg hover:bg-white/5">
+              <button onClick={safeClose} disabled={saving}
+                className="px-4 py-2 text-sm text-gray-400 disabled:opacity-50 hover:text-white transition rounded-lg hover:bg-white/5">
                 Cancel
               </button>
 
@@ -1310,9 +1423,9 @@ export default function ChannelCustomizationModal({ email, token, isOpen, onClos
 
               <motion.button
                 onClick={handleSave}
-                disabled={saving || saved || !!nameError}
-                whileHover={!saving && !saved && !nameError ? { scale: 1.02 } : {}}
-                whileTap={!saving && !saved && !nameError ? { scale: 0.98 } : {}}
+                disabled={saving || saved || !!nameError || loadState !== "ready"}
+                whileHover={!saving && !saved && !nameError && loadState === "ready" ? { scale: 1.02 } : {}}
+                whileTap={!saving && !saved && !nameError && loadState === "ready" ? { scale: 0.98 } : {}}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${saved
                   ? "bg-emerald-500 text-white"
                   : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/20"
