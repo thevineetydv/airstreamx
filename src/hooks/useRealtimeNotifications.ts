@@ -8,7 +8,7 @@
 // whether the upload modal happens to be open.
 
 import { useEffect, useRef } from "react";
-import { getAuth } from "firebase/auth";
+import { getAuth, onIdTokenChanged, type User } from "firebase/auth";
 import { API_URL } from "../utils/constants";
 
 interface VideoReadyEvent {
@@ -28,44 +28,62 @@ export function useRealtimeNotifications(
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
-    (async () => {
-      const user = getAuth().currentUser;
-      if (!user) return; // not logged in — nothing to subscribe to
+    const close = () => {
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+      eventSource?.close();
+      eventSource = null;
+    };
 
-      const token = await user.getIdToken();
+    // EventSource doesn't support custom headers, so the auth token
+    // travels as a query param (verifyFirebaseToken checks req.query.token
+    // for this route).
+    const connect = async (user: User | null) => {
+      close();
+      if (!user || cancelled) return; // not logged in — nothing to subscribe to
+      let token: string;
+      try { token = await user.getIdToken(); } catch { return; }
       if (cancelled) return;
 
-      // EventSource doesn't support custom headers, so the auth token
-      // has to travel as a query param here rather than an Authorization
-      // header. Your verifyFirebaseToken middleware needs to also check
-      // req.query.token as a fallback for this one route.
-      const url = `${API_URL}/api/events/stream?token=${encodeURIComponent(token)}`;
-      eventSource = new EventSource(url);
+      const es = new EventSource(`${API_URL}/api/events/stream?token=${encodeURIComponent(token)}`);
+      eventSource = es;
 
-      eventSource.onmessage = (e) => {
+      es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data) as VideoReadyEvent | { type: "connected" };
           if (data.type === "video-ready") {
             callbackRef.current(data.videoId, data.title);
           }
         } catch {
-          // Heartbeat comments (": heartbeat") don't reach here — only
-          // real `data:` lines do — but guard anyway against malformed JSON.
+          // Heartbeat comments never reach here; guard against bad JSON anyway
         }
       };
 
-      eventSource.onerror = () => {
-        // Browser's EventSource auto-reconnects on its own after a
-        // network hiccup — no manual retry logic needed here.
-        console.warn("[realtime] SSE connection error (will auto-reconnect)");
+      es.onerror = () => {
+        // The browser retries by itself after a network blip, but gives up
+        // for good after an HTTP error (e.g. 401 once the 1-hour token in the
+        // URL has expired). In that case reconnect with a fresh token.
+        if (es.readyState === EventSource.CLOSED && !cancelled) {
+          retryTimer = setTimeout(() => connect(getAuth().currentUser), 15_000);
+        }
       };
-    })();
+    };
+
+    // Previously this ran once on mount, when Firebase usually hasn't
+    // restored the session yet — so after any page refresh the stream was
+    // never opened. Follow the auth state instead (also handles login/logout).
+    const unsubscribe = onIdTokenChanged(getAuth(), (user) => {
+      // Token refreshes fire this too; only reconnect when there's no live stream
+      if (!user) { close(); return; }
+      if (!eventSource || eventSource.readyState === EventSource.CLOSED) connect(user);
+    });
 
     return () => {
       cancelled = true;
-      eventSource?.close();
+      unsubscribe();
+      close();
     };
   }, []);
 }

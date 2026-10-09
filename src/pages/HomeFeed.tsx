@@ -566,6 +566,7 @@ function HeroVideo({ video }: { video: any }) {
   return (
     <Link
       to={`/watch?v=${video.public_id || video.id}`}
+      state={{ preview: video }}
       onMouseEnter={() => prefetchVideo(video)}
       onFocus={() => prefetchVideo(video)}
     >
@@ -891,7 +892,12 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     setLoadingMore(true);
     try {
       const { videos: nextVideos } = await fetchVideoPage(offsetRef.current);
-      if (nextVideos.length === 0) {
+      // Guard: if the server returned only videos we already have (e.g. an
+      // older backend that ignores `offset` and keeps sending page 1), stop
+      // instead of looping on the same page forever.
+      const known = new Set([...baseVideos, ...moreVideos].map((v) => String(v.id ?? v.public_id ?? "")));
+      const fresh = nextVideos.filter((v: any) => !known.has(String(v.id ?? v.public_id ?? "")));
+      if (nextVideos.length === 0 || fresh.length === 0) {
         setHasMore(false);
       } else {
         setMoreVideos((prev) => [...prev, ...nextVideos]);
@@ -903,7 +909,7 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
     } finally {
       setLoadingMore(false);
     }
-  }, [fetchVideoPage, loadingMore, hasMore, loading]);
+  }, [fetchVideoPage, loadingMore, hasMore, loading, baseVideos, moreVideos]);
 
   // Sentinel div at the bottom of the grid triggers loadMore ~2 screens
   // before the user actually hits the bottom, so the next page is ready
@@ -1328,7 +1334,8 @@ const VideoCard = React.memo(function VideoCard({ video }: { video: any }) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.25 }}
     >
-      <Link to={`/watch?v=${video.public_id || video.id}`} className="group block">
+      <Link to={`/watch?v=${video.public_id || video.id}`}
+      state={{ preview: video }} className="group block">
         <ThumbnailWithPreview
           video={video}
           className="aspect-video rounded-xl border border-white/[0.18]
@@ -1413,6 +1420,7 @@ const VideoCardList = React.memo(function VideoCardList({
     >
       <Link
         to={`/watch?v=${video.public_id || video.id}`}
+      state={{ preview: video }}
         className="group flex gap-3 md:gap-4 p-2 md:p-4 rounded-xl hover:bg-red-500/5 transition-colors"
       >
         <ThumbnailWithPreview

@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { Store, ExternalLink } from "lucide-react";
 import { API_URL } from "../utils/constants";
+import { safeHref } from "../utils/safeUrl";
 
 interface Banner {
   id: number;
@@ -34,7 +35,7 @@ export default function SponsoredBanner() {
 
   return (
     <a
-      href={banner.link_url}
+      href={safeHref(banner.link_url)}
       target="_blank"
       rel="noopener noreferrer sponsored"
       className="flex items-center gap-3 bg-[#212121] border border-red-500/20 rounded-xl px-3.5 py-3 mb-4 hover:border-red-500/40 transition-colors group"

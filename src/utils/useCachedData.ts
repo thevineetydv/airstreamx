@@ -21,7 +21,7 @@
  * ───────────────────────────────────────────────────────────── */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { cachedFetch, invalidateCache } from "./metadataCache";
+import { cachedFetch, setCache } from "./metadataCache";
 
 interface UseCachedDataOptions {
   ttl?: number;
@@ -66,6 +66,7 @@ export function useCachedData<T>(
 
     let cancelled = false;
     setError(null);
+    setLoading(true); // new key: don't report "loaded" for the previous key's data
 
     cachedFetch<T>(key, () => fetcherRef.current(), {
       ttl,
@@ -97,20 +98,17 @@ export function useCachedData<T>(
   }, [key, enabled, ttl]);
 
   const refresh = useCallback(async () => {
-    invalidateCache(key);
     setRevalidating(true);
     try {
       const fresh = await fetcherRef.current();
       setData(fresh);
-      // cachedFetch's internal setCached only runs inside cachedFetch,
-      // so we re-run it here through cachedFetch to keep the cache in sync.
-      await cachedFetch<T>(key, () => Promise.resolve(fresh), { ttl });
+      setCache(key, fresh); // keep the cached copy in sync
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setRevalidating(false);
     }
-  }, [key, ttl]);
+  }, [key]);
 
   return { data, loading, revalidating, refresh, error };
 }
