@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdHtml } from "../utils/jsonLd";
 
 /**
  * VideoObject Schema - Used on video watch pages
@@ -89,7 +90,7 @@ export const VideoSchema: React.FC<VideoSchemaProps> = ({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(schema) }}
     />
   );
 };

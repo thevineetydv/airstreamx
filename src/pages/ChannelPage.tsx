@@ -19,6 +19,7 @@ import { SubscriptionButton } from "../components/SubscriptionButton";
 import ChannelCustomizationModal, {
   type ChannelCustomization as CustomizationData,
 } from "../components/ChannelCustomizationModal";
+import { safeHref } from "../utils/safeUrl";
 
 // Emails are compared case-insensitively everywhere (owner checks etc.)
 const sameEmail = (a?: string | null, b?: string | null) =>
@@ -1065,7 +1066,10 @@ export default function ChannelPage() {
                       icon: <Instagram size={15} />,
                       label: "Instagram",
                     },
-                  ].filter(l => l.url);
+                  ]
+                    // Only real web links (blocks stored javascript: URLs)
+                    .map(l => ({ ...l, url: safeHref(l.url) }))
+                    .filter((l): l is typeof l & { url: string } => !!l.url);
                   return links.length > 0 ? (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {links.map(({ url, icon, label }) => (

@@ -8,6 +8,7 @@ import { TrendingUp, Flame } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Video {
+  public_id?: string;
   id: string | number;
   title: string;
   thumbnail: string;
@@ -97,7 +98,7 @@ function CreatorCardSkeleton() {
 
 function VideoCard({ video, rank }: { video: Video; rank: number }) {
   return (
-    <Link to={`/watch?id=${video.id}`} className="group block">
+    <Link to={`/watch?v=${video.public_id || video.id}`} state={{ preview: video }} className="group block">
       {/* Thumbnail */}
       <div className="relative aspect-video bg-[#212121] rounded-xl overflow-hidden mb-3">
         <img

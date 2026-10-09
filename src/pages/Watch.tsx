@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import Hls from "hls.js/light";
-import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { warmHls } from "../utils/hlsWarmup";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2, Flag, MoreVertical,
@@ -230,6 +230,7 @@ interface Video {
   url: string;
   thumbnail: string;
   public_id?: string;
+  visibility?: "public" | "unlisted" | "private";
   duration?: number;
   views?: number;
   uploader: string;
@@ -252,7 +253,14 @@ interface Video {
 interface Comment {
   id: string | number;
   comment: string;
-  user_email: string;
+  /** Only present on the viewer's own comments (the API no longer sends
+   *  other people's email addresses). */
+  user_email?: string;
+  author_name?: string;
+  author_avatar?: string;
+  author_handle?: string;
+  author_key?: string;
+  is_mine?: boolean;
   created_at: string;
   likes?: number;
   dislikes?: number;
@@ -266,7 +274,11 @@ interface Comment {
 
 async function enrichVideoWithChannelData(video: Video): Promise<Video> {
   const email = video.uploader_email || video.uploader;
-  if (!email || video.watermark_url) return video;
+  // /videos/:id already joins channel_customizations (channel_name, avatar,
+  // handle, watermark, banner). Only fall back to a second request for old
+  // responses that don't carry those fields — this extra round-trip ran in
+  // series before the player could start.
+  if (!email || video.watermark_url || "watermark_url" in video) return video;
   try {
     const res = await fetch(`${API_URL}/api/channel-customization/${encodeURIComponent(email)}`);
     if (!res.ok) return video;
@@ -284,6 +296,23 @@ async function enrichVideoWithChannelData(video: Video): Promise<Video> {
   } catch {
     return video;
   }
+}
+
+/** Display name for a comment author (API name first, old email fallback). */
+function commentAuthorName(c: Comment): string {
+  return c.author_name || formatEmailToName(c.user_email);
+}
+
+/** True when the comment belongs to the logged-in viewer. */
+function isOwnComment(c: Comment, viewerEmail: string | null): boolean {
+  if (typeof c.is_mine === "boolean") return c.is_mine;
+  return !!viewerEmail && !!c.user_email && c.user_email.toLowerCase() === viewerEmail.toLowerCase();
+}
+
+/** Auth header for comment reads, so the API can mark the viewer's own comments. */
+async function commentAuthHeaders(): Promise<HeadersInit | undefined> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 function TipButton({ creatorUpiId, creatorName }: { creatorUpiId?: string; creatorName?: string }) {
@@ -412,8 +441,14 @@ function TipButton({ creatorUpiId, creatorName }: { creatorUpiId?: string; creat
 
 export default function Watch() {
   const [searchParams] = useSearchParams();
-  const id = searchParams.get("v");
+  // `v` is the canonical param; `id` kept for old links that used ?id=
+  const id = searchParams.get("v") || searchParams.get("id");
   const navigate = useNavigate();
+  const location = useLocation();
+  // Video object handed over by the link that was clicked (Up next, home
+  // feed, end screen). Lets the player start immediately instead of
+  // waiting for /videos/:id to come back first.
+  const previewVideo = (location.state as { preview?: Video } | null)?.preview;
 
   const [videos, setVideos] = useState<Video[]>([]);
   const [current, setCurrent] = useState<Video | null>(null);
@@ -438,47 +473,17 @@ export default function Watch() {
     }
   }, [id]);
 
-  // Preload the up-next video (the one autoplay-next jumps to when the
-  // current video ends, and the top item in the sidebar suggestions list)
-  // — same technique as ShortsPage's preloader. A hidden, muted HLS
-  // instance warms the browser's HTTP cache with the next video's
-  // manifest and first few segments while the current one is still
-  // playing, so autoplay-next (or clicking the first suggestion) starts
-  // near-instantly instead of showing a buffering spinner.
+  // Warm the up-next video (where autoplay-next goes and the top item in
+  // the sidebar) so clicking it starts near-instantly. Waits a few seconds
+  // so it never competes with the CURRENT video's first segments, and only
+  // fetches the first segment (see utils/hlsWarmup for why the old hidden
+  // hls.js preloader was replaced — it downloaded most of the next video).
+  const nextUpUrl = videos.find(v => v.id !== current?.id)?.url;
   useEffect(() => {
-    const nextUrl = videos.find(v => v.id !== current?.id)?.url;
-    if (!nextUrl || !nextUrl.endsWith(".m3u8") || !Hls.isSupported()) return;
-
-    // Respect the existing Data Saver setting — skip this preload
-    // entirely when it's on, same reasoning as ShortsPage's preloader.
-    try {
-      if (localStorage.getItem("data_saver_mode") === "1") return;
-      // @ts-expect-error — navigator.connection is a widely-supported but
-      // not-yet-standard API; not all browsers have it, hence the guard.
-      if (navigator.connection?.saveData) return;
-    } catch {}
-
-    const preloadVideo = document.createElement("video");
-    preloadVideo.muted = true;
-    preloadVideo.style.display = "none";
-    document.body.appendChild(preloadVideo);
-
-    const hls = new Hls({
-      enableWorker: true,
-      maxBufferLength: 8,     // just enough for an instant start, not a full download
-      capLevelToPlayerSize: false,
-      startLevel: 0,          // lowest rendition — a preload shouldn't
-                                // compete for bandwidth with what's
-                                // actually playing right now
-    });
-    hls.attachMedia(preloadVideo);
-    hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(nextUrl));
-
-    return () => {
-      try { hls.destroy(); } catch {}
-      try { document.body.removeChild(preloadVideo); } catch {}
-    };
-  }, [videos, current?.id]);
+    if (!nextUpUrl) return;
+    const t = setTimeout(() => { warmHls(nextUpUrl); }, 4000);
+    return () => clearTimeout(t);
+  }, [nextUpUrl]);
 
   const [ambient, setAmbient] = useState("rgba(0,0,0,0)");
   const [ambientEnabled, setAmbientEnabled] = useState<boolean>(() => {
@@ -653,12 +658,38 @@ export default function Watch() {
       try {
         setError(null);
 
+        // Instant start: show the clicked video right away; the full record
+        // (description, UPI, watermark…) replaces it a moment later. The
+        // stream URL is identical, so the player is not restarted.
+        if (previewVideo?.url && (String(previewVideo.public_id) === id || String(previewVideo.id) === id)) {
+          setCurrent((prev) => (prev && String(prev.id) === String(previewVideo.id) ? prev : { ...previewVideo }));
+          setViews(previewVideo.views || 0);
+          setLoading(false);
+        }
+
         const videoCacheKey = `watch:video:${id}`;
         const { data: selected, isInitialLoading } = await cachedFetch(
           videoCacheKey,
           async () => {
-            const videoRes = await fetch(`${API_URL}/videos/${id}`);
-            if (!videoRes.ok) throw new Error("Video not found");
+            // Send the login token when there is one, so a creator can open
+            // their own private videos (others get "not found").
+            const auth = getAuth();
+            const fetchVideo = (tok?: string | null) => fetch(`${API_URL}/videos/${id}`,
+              tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined);
+            const token = await auth.currentUser?.getIdToken().catch(() => null);
+            let videoRes = await fetchVideo(token);
+            // On a fresh page load Firebase may not have restored the session
+            // yet. If the video was "not found" anonymously, wait for auth and
+            // retry once with the owner's token (private videos).
+            if (videoRes.status === 404 && !token) {
+              await auth.authStateReady().catch(() => {});
+              const retryToken = await auth.currentUser?.getIdToken().catch(() => null);
+              if (retryToken) videoRes = await fetchVideo(retryToken);
+            }
+            if (!videoRes.ok) {
+              throw Object.assign(new Error(videoRes.status === 404 ? "Video not found" : "Failed to load video"),
+                { status: videoRes.status });
+            }
             const videoData = await videoRes.json();
             if (!videoData.success || !videoData.video) throw new Error("Video not found");
 
@@ -678,10 +709,19 @@ export default function Watch() {
           },
           {
             ttl: 5 * 60 * 1000,
+            // Private videos stay in memory only — never written to localStorage
+            persist: (v) => v?.visibility !== "private",
             onUpdate: (fresh) => {
               setCurrent(fresh);
               setViews(fresh.views || 0);
               if (fresh?.thumbnail) getAverageColor(fresh.thumbnail).then(setAmbient);
+            },
+            // Background check found the video deleted / made private.
+            // Network hiccups (offline etc.) keep the cached copy on screen.
+            onError: (err) => {
+              if ((err as { status?: number })?.status !== 404) return;
+              setCurrent((prev) => (prev && (String(prev.id) === id || String(prev.public_id) === id) ? null : prev));
+              setError("Video not found");
             },
           }
         );
@@ -724,6 +764,8 @@ export default function Watch() {
       }
     };
     load();
+    // previewVideo is read only at the moment the id changes (it belongs to that navigation)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -748,7 +790,8 @@ export default function Watch() {
     const load = async () => {
       setLoadingComments(true);
       try {
-        const res = await fetch(`${API_URL}/videos/${current.id}/comments?limit=${COMMENTS_PAGE_SIZE}&offset=0&sort=${commentSort}`);
+        const res = await fetch(`${API_URL}/videos/${current.id}/comments?limit=${COMMENTS_PAGE_SIZE}&offset=0&sort=${commentSort}`,
+          { headers: await commentAuthHeaders() });
         if (res.ok) {
           const data = await res.json();
           const first = data.comments || [];
@@ -766,7 +809,8 @@ export default function Watch() {
     if (!current?.id || loadingMoreComments) return;
     try {
       setLoadingMoreComments(true);
-      const res = await fetch(`${API_URL}/videos/${current.id}/comments?limit=${COMMENTS_PAGE_SIZE}&offset=${commentsOffset}&sort=${commentSort}`);
+      const res = await fetch(`${API_URL}/videos/${current.id}/comments?limit=${COMMENTS_PAGE_SIZE}&offset=${commentsOffset}&sort=${commentSort}`,
+        { headers: await commentAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         const next = data.comments || [];
@@ -816,16 +860,25 @@ useEffect(() => {
 
 }, [current?.id]);
 
+// Record skip / watch progress when the viewer LEAVES a video (next video
+// or page exit). Keyed on the video id: it used to depend on the whole
+// `current` object, so any refresh of the same video's data (cache update,
+// edit, instant-start preview being replaced) recorded a bogus "skip" at
+// ~0% and taught the recommender the viewer disliked it.
+const currentRef = useRef(current);
+currentRef.current = current;
 useEffect(() => {
+  if (!current?.id) return;
   return () => {
-    if (!current || !playerRef.current) return;
+    const video = currentRef.current;
+    if (!video || !playerRef.current) return;
 
     const user = getAuth().currentUser;
     if (!user) return;
 
-  const playerState = playerRef.current.getState?.() || {};
+    const playerState = playerRef.current.getState?.() || {};
     const currentTime = playerState.currentTime || 0;
-    const duration = playerState.duration || current.duration || 0;
+    const duration = playerState.duration || video.duration || 0;
 
     if (duration <= 0) return;
 
@@ -833,12 +886,12 @@ useEffect(() => {
 
     const SKIP_THRESHOLD = 15;
     if (percentage < SKIP_THRESHOLD) {
-      recordSkip(current, percentage, user);
+      recordSkip(video, percentage, user);
     } else {
-      recordWatchProgress(current.id, percentage, current, user);
+      recordWatchProgress(video.id, percentage, video, user);
     }
   };
-}, [current]);
+}, [current?.id]);
 
 useEffect(() => {
   if (!current) return;
@@ -901,8 +954,10 @@ useEffect(() => {
   useEffect(() => {
     if (!current?.id) return;
     try {
+      // Always reset: otherwise the previous video's unsent text stayed in
+      // the box and was then auto-saved as THIS video's draft.
       const saved = localStorage.getItem(`draft:comment:${current.id}`);
-      if (saved) setCommentText(saved);
+      setCommentText(saved || "");
     } catch { }
   }, [current?.id]);
 
@@ -924,8 +979,8 @@ useEffect(() => {
    * text, which covers the normal case of typing a mention as you go. */
   const mentionCandidates = useMemo(() => {
     const names = new Set<string>();
-    comments.forEach((c) => { if (c.user_email) names.add(formatEmailToName(c.user_email)); });
-    Object.values(repliesByParent).flat().forEach((r) => { if (r.user_email) names.add(formatEmailToName(r.user_email)); });
+    comments.forEach((c) => { const n = commentAuthorName(c); if (n) names.add(n); });
+    Object.values(repliesByParent).flat().forEach((r) => { const n = commentAuthorName(r); if (n) names.add(n); });
     return Array.from(names);
   }, [comments, repliesByParent]);
 
@@ -974,6 +1029,7 @@ useEffect(() => {
       id: tempId,
       comment: textToPost,
       user_email: currentUserEmail || "",
+      is_mine: true,
       created_at: new Date().toISOString(),
       likes: 0,
       dislikes: 0,
@@ -997,18 +1053,13 @@ useEffect(() => {
         return;
       }
 
-      let res = await fetch(`${API_URL}/videos/${current.id}/comments`, {
+      // Single request: the old code retried any failure with a second POST,
+      // which could post the same comment twice.
+      const res = await fetch(`${API_URL}/videos/${current.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ comment: textToPost }),
       });
-      if (!res.ok) {
-        res = await fetch(`${API_URL}/videos/${current.id}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ text: textToPost, comment: textToPost, user_email: auth.currentUser?.email }),
-        });
-      }
       if (res.ok) {
         const data = await res.json();
         // Swap the temp optimistic row for the real server row (real id, etc).
@@ -1079,7 +1130,8 @@ useEffect(() => {
     if (!current?.id || repliesByParent[commentId]) return;
     try {
       setLoadingReplies(prev => ({ ...prev, [commentId]: true }));
-      const res = await fetch(`${API_URL}/videos/${current.id}/comments/${commentId}/replies`);
+      const res = await fetch(`${API_URL}/videos/${current.id}/comments/${commentId}/replies`,
+        { headers: await commentAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setRepliesByParent(prev => ({ ...prev, [commentId]: data.replies || [] }));
@@ -1121,6 +1173,7 @@ useEffect(() => {
       id: tempId,
       comment: textToPost,
       user_email: currentUserEmail || "",
+      is_mine: true,
       created_at: new Date().toISOString(),
       likes: 0,
       dislikes: 0,
@@ -1448,9 +1501,7 @@ useEffect(() => {
     });
 
     const renderRow = (reply: Comment): React.ReactNode => {
-      const isOwner =
-        Boolean(currentUserEmail) &&
-        reply.user_email?.toLowerCase() === currentUserEmail!.toLowerCase();
+      const isOwner = isOwnComment(reply, currentUserEmail);
       const isEditing = editingCommentId === reply.id;
       const isDeleting = deletingCommentId === reply.id;
       const kids = childrenOf[String(reply.id)] || [];
@@ -1464,8 +1515,8 @@ useEffect(() => {
             className="flex gap-2"
           >
             <CommentAvatar
-              email={reply.user_email}
-              avatarUrl={commenterAvatars[reply.user_email]}
+              email={commentAuthorName(reply)}
+              avatarUrl={reply.author_avatar || (reply.user_email ? commenterAvatars[reply.user_email] : undefined)}
               sizeClass="w-7 h-7"
               textClass="text-[11px]"
             />
@@ -1473,7 +1524,7 @@ useEffect(() => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-medium text-white">
-                  {formatEmailToName(reply.user_email)}
+                  {commentAuthorName(reply)}
                 </span>
 
                 <span className="text-[10px] text-gray-500">
@@ -1556,7 +1607,7 @@ useEffect(() => {
                     </button>
 
                     <button
-                      onClick={() => startReply(reply, formatEmailToName(reply.user_email))}
+                      onClick={() => startReply(reply, commentAuthorName(reply))}
                       className="text-xs text-gray-400 hover:text-white"
                     >
                       Reply
@@ -2118,7 +2169,7 @@ useEffect(() => {
                       ) : (
                         <div className="space-y-4">
                           {comments.map((c) => {
-                            const isOwner = Boolean(currentUserEmail) && c.user_email === currentUserEmail;
+                            const isOwner = isOwnComment(c, currentUserEmail);
                             const isEditing = editingCommentId === c.id;
                             const isDeleting = deletingCommentId === c.id;
                             const isPending = Boolean(c._pending);
@@ -2132,14 +2183,14 @@ useEffect(() => {
                                 className="flex gap-2 sm:gap-3"
                               >
                                 <CommentAvatar
-                                  email={c.user_email}
-                                  avatarUrl={commenterAvatars[c.user_email]}
+                                  email={commentAuthorName(c)}
+                                  avatarUrl={c.author_avatar || (c.user_email ? commenterAvatars[c.user_email] : undefined)}
                                   sizeClass="w-8 sm:w-10 h-8 sm:h-10"
                                   textClass="text-xs sm:text-sm"
                                 />
                                 <div className="flex-1 min-w-0">
                                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">
-                                    <span className="font-medium text-xs sm:text-sm text-white">{formatEmailToName(c.user_email)}</span>
+                                    <span className="font-medium text-xs sm:text-sm text-white">{commentAuthorName(c)}</span>
                                     {isPending ? (
                                       <span className="text-xs text-gray-500 italic">Sending…</span>
                                     ) : (
@@ -2392,7 +2443,15 @@ useEffect(() => {
                     <p className="text-center py-8 text-xs sm:text-sm text-gray-400">No more videos available</p>
                   ) : (
                     videos.map((v) => (
-                      <Link to={`/watch?v=${v.public_id || v.id}`} key={v.id} className="flex gap-2 sm:gap-3 p-2 rounded-lg hover:bg-white/5 transition group">
+                      <Link
+                        to={`/watch?v=${v.public_id || v.id}`}
+                        state={{ preview: v }}
+                        key={v.id}
+                        onPointerEnter={() => warmHls(v.url)}
+                        onTouchStart={() => warmHls(v.url)}
+                        onFocus={() => warmHls(v.url)}
+                        className="flex gap-2 sm:gap-3 p-2 rounded-lg hover:bg-white/5 transition group"
+                      >
                         <div className="relative w-28 sm:w-36 lg:w-40 flex-shrink-0 rounded-lg overflow-hidden bg-[#2a2a2a]" style={{ aspectRatio: "16/9" }}>
                           <img
                             src={cloudinaryResize(v.thumbnail, 280)}

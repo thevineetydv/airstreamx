@@ -12,6 +12,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { ENV } from "./utils/env";
+import { clearAllCache } from "./utils/metadataCache";
 
 // Firebase configuration - uses centralized ENV from utils/env.ts
 const firebaseConfig = {
@@ -69,4 +70,6 @@ try {
   }
 } catch { /* sessionStorage unavailable */ }
 
-export const logout = () => signOut(auth);
+// Clear cached API data on logout so the next person on this browser
+// never sees the previous user's private videos or recommendations.
+export const logout = () => signOut(auth).finally(() => clearAllCache());

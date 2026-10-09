@@ -154,7 +154,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         attempts++;
 
         try {
-          const res  = await fetch(`${API_URL}/videos/${key}`);
+          // Lightweight status endpoint: works for private/unlisted videos too
+          // and never returns a cached copy.
+          const res  = await fetch(`${API_URL}/videos/${key}/status`);
           const data = await res.json();
 
           // Handle both response shapes: { video: { status } } or { status }
@@ -164,8 +166,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             addNotification({
               type:    "success",
               title:   "🎉 Your video is live!",
-              message: `"${videoTitle}" has finished processing and is now public.`,
-              href:    `/watch/${key}`,
+              message: `"${videoTitle}" has finished processing and is ready to watch.`,
+              href:    `/watch?v=${key}`,
             });
             pollingTimers.current.delete(key);
             return; // done
@@ -218,8 +220,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     addNotification({
       type: "success",
       title: "🎉 Your video is live!",
-      message: `"${videoTitle}" has finished processing and is now public.`,
-      href: `/watch/${key}`,
+      message: `"${videoTitle}" has finished processing and is ready to watch.`,
+      href: `/watch?v=${key}`,
     });
   });
 

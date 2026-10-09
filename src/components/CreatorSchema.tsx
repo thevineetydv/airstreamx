@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdHtml } from "../utils/jsonLd";
 
 /**
  * Creator/Person Schema - Used on creator profile pages
@@ -77,7 +78,7 @@ export const CreatorSchema: React.FC<CreatorSchemaProps> = ({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(schema) }}
     />
   );
 };

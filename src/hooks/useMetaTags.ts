@@ -11,7 +11,7 @@ import { generateMetaTags, type MetaTagsConfig } from '../utils/metaTagGenerator
  *     title: `${video.title} - Watch on AirStreamX`,
  *     description: video.description,
  *     image: video.thumbnail,
- *     url: `https://airstreamx.com/watch?id=${videoId}`,
+ *     url: `https://airstreamx.com/watch?v=${videoId}`,
  *   });
  * };
  */

@@ -48,9 +48,6 @@ if (id.includes('node_modules/react-router-dom')) {
           if (id.includes('node_modules/firebase')) {
             return 'firebase';
           }
-          if (id.includes('node_modules/openai')) {
-            return 'openai';
-          }
           // NOTE: no manual "page-*" chunks. React.lazy() in App.tsx already
           // gives every page its own chunk. Forcing pages into manual chunks
           // made Rollup park shared code (icons, utils, contexts) inside
@@ -111,28 +108,27 @@ terserOptions: {
         clientsClaim: true,
         cleanupOutdatedCaches: true,
 
-        // Workbox's default precache behavior grabs EVERY built JS file
-        // up front, including route-specific chunks (page-ShortsPage-*.js,
-        // page-ChannelPage-*.js, etc.) that React.lazy() was specifically
-        // splitting out so they'd only load on actual navigation. Without
-        // this exclusion, the service worker force-downloads all of them
-        // in the background on the very first visit regardless — quietly
-        // defeating the code-splitting, and showing up in performance
-        // audits as if the homepage were loading ~180KB+ of Shorts-page
-        // JS it never needed.
-        globIgnores: ['**/page-*.js'],
-
-        // Instead, page-specific chunks are cached the first time they're
-        // actually requested (i.e. the first time someone navigates
-        // there), then served from cache on repeat visits.
+        // Precache only the app shell (what the first screen needs). Lazy
+        // route chunks are cached the first time a page is actually opened.
+        // The old rule ignored "page-*.js", but chunks are no longer named
+        // that way, so the service worker was downloading ALL ~60 files
+        // (~2 MB, incl. the admin dashboard and charts) on a visitor's
+        // first visit — on mobile data, competing with the first video.
+        globPatterns: [
+          'index.html',
+          'assets/style-*.css',
+          'assets/{index,vendor-react,router,firebase,animation}-*.js',
+          '*.{ico,svg}',
+        ],
         runtimeCaching: [
           {
-            urlPattern: /\/assets\/page-.*\.js$/,
-            handler: 'StaleWhileRevalidate',
+            // Hashed file names never change content -> cache-first is safe
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && /^\/assets\/.*\.(js|css)$/.test(url.pathname),
+            handler: 'CacheFirst',
             options: {
-              cacheName: 'route-chunks',
+              cacheName: 'lazy-chunks',
               expiration: {
-                maxEntries: 30,
+                maxEntries: 80,
                 maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
               },
             },
