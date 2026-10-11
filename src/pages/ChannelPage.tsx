@@ -20,6 +20,7 @@ import ChannelCustomizationModal, {
   type ChannelCustomization as CustomizationData,
 } from "../components/ChannelCustomizationModal";
 import { safeHref } from "../utils/safeUrl";
+import CreatorBadges from "../components/CreatorBadge";
 
 // Emails are compared case-insensitively everywhere (owner checks etc.)
 const sameEmail = (a?: string | null, b?: string | null) =>
@@ -234,6 +235,9 @@ export default function ChannelPage() {
   const [sortBy, setSortBy] = useState<SortType>("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [copied, setCopied] = useState(false);
+  // Server total of the creator's ready + public videos (drives badges;
+  // the loaded list is capped at 50 so its length can be lower)
+  const [publicVideoCount, setPublicVideoCount] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -436,9 +440,11 @@ export default function ChannelPage() {
         const matched = allVids.filter(v => sameEmail(v.uploader_email, emailToUse));
         localVids = matched.length > 0 ? matched : allVids;
         setVideos(localVids);
+        setPublicVideoCount(Math.max(Number(videoResult.value.total) || 0, localVids.length));
       } else {
         console.error("[loadChannel] Videos fetch error:", videoResult.reason);
         setVideos([]);
+        setPublicVideoCount(0);
       }
 
       // ── Process customization ──────────────────────────────────────────
@@ -950,6 +956,7 @@ export default function ChannelPage() {
                       />
                     </span>
                   )}
+                  <CreatorBadges videoCount={publicVideoCount} />
                 </div>
               )}
 

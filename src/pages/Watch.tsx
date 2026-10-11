@@ -248,6 +248,8 @@ interface Video {
   banner_url?: string;
   upi_id?: string;
   is_made_for_kids?: boolean;
+  /** Creator's published video count (for badges) */
+  uploader_video_count?: number;
 }
 
 interface Comment {
@@ -2033,6 +2035,7 @@ useEffect(() => {
                 channelId={current.uploader_email || current.uploader}
                 compact
                 showSubscribe
+                videoCount={current.uploader_video_count}
               />
 
               {current.description
