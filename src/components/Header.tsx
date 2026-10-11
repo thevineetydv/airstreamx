@@ -343,7 +343,7 @@ export default function Header({
   theme, q = "", setQ, handleUploadClick,
 }: HeaderProps) {
   const { user, login, logout } = useAuth();
-  const { notifications, unreadCount, markAsRead, clearAll: clearAllNotifications } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications, clearAll: clearAllNotifications } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -976,7 +976,7 @@ export default function Header({
               {/* [A3] exposes open/closed state */}
               <button
                 type="button"
-                onClick={() => setOpenNotifications(!openNotifications)}
+                onClick={() => { if (!openNotifications) refreshNotifications(); setOpenNotifications(!openNotifications); }}
                 aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
                 aria-expanded={openNotifications}
                 aria-controls={notifPanelId}
@@ -1006,7 +1006,7 @@ export default function Header({
                         {notifications.some(n => !n.read) && (
                           <button
                             type="button"
-                            onClick={() => notifications.forEach(n => markAsRead(n.id))}
+                            onClick={markAllAsRead}
                             className="text-xs text-gray-400 hover:text-red-300 transition-colors"
                           >
                             Mark all read
@@ -1029,11 +1029,22 @@ export default function Header({
                               className={`w-full text-left p-4 border-b border-white/5 transition-all ${n.href ? "cursor-pointer hover:bg-red-500/5" : "cursor-default"} ${!n.read ? "bg-red-500/10 border-l-2 border-l-red-500" : ""}`}
                             >
                               <span className="flex items-start gap-3">
+                                {n.image ? (
+                                  <img
+                                    src={n.image}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    className={`flex-shrink-0 w-20 aspect-video rounded-md object-cover bg-white/5 ${n.read ? "opacity-60" : ""}`}
+                                    onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+                                  />
+                                ) : (
                                 <span aria-hidden="true" className={`flex-shrink-0 w-2 h-2 rounded-full mt-2 ${n.type === "success" ? "bg-red-500" :
                                   n.type === "error" ? "bg-red-500" :
                                     n.type === "warning" ? "bg-yellow-500" :
                                       "bg-red-400"
                                   } ${n.read ? "opacity-30" : ""}`} />
+                                )}
                                 <span className="flex-1 min-w-0">
                                   {!n.read && <span className="sr-only">Unread: </span>}
                                   <span className="block text-sm font-medium text-white leading-snug">{n.title}</span>

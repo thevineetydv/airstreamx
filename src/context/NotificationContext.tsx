@@ -16,6 +16,8 @@ import {
 } from "react";
 import { API_URL } from "../utils/constants";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
+import { useBadgeCelebrations } from "../hooks/useBadgeCelebrations";
+import { useServerNotifications } from "../hooks/useServerNotifications";
 
 // ─────────────────────────────────────────────
 // Types
@@ -32,6 +34,10 @@ export interface AppNotification {
   type: NotificationType;
   /** Optional link to navigate to when clicked */
   href?: string;
+  /** Optional thumbnail (e.g. the new video) */
+  image?: string;
+  /** Epoch ms — used to sort local and server notifications together */
+  createdAt?: number;
 }
 
 interface NotificationContextValue {
@@ -41,6 +47,8 @@ interface NotificationContextValue {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
+  /** Re-check the server for new notifications (call when the bell opens) */
+  refreshNotifications: () => void;
   /**
    * Start polling a video until its status becomes "ready".
    * Fires a "Your video is live!" notification automatically.
@@ -74,34 +82,63 @@ function formatTime(date: Date): string {
 const POLL_INTERVAL_MS  = 5000;  // check every 5 seconds
 const MAX_POLL_ATTEMPTS = 72;    // give up after 6 minutes
 
+function readLocal(key: string): AppNotification[] {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return []; // corrupted/blocked storage — fall back to empty, don't crash
+  }
+}
+
 // ─────────────────────────────────────────────
 // Provider
 // ─────────────────────────────────────────────
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const STORAGE_KEY = "airstream_notifications";
+  // Server-side notifications (new uploads from subscribed channels)
+  const {
+    items: serverItems, uid, refresh: refreshServer,
+    markRead: markServerRead, markAllRead: markAllServerRead, clear: clearServer,
+  } = useServerNotifications();
 
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return []; // corrupted/blocked storage — fall back to empty, don't crash
-    }
-  });
+  // Local notifications (upload finished, badges…) are stored PER USER.
+  // The old single key showed one person's notifications to whoever
+  // logged in next on the same browser.
+  const storageKey = `airstream_notifications:${uid ?? "guest"}`;
+  const [localState, setLocalState] = useState<{ key: string; items: AppNotification[] }>(
+    () => ({ key: "", items: [] })
+  );
+  // Load the right user's list whenever the signed-in user changes
+  const notificationsLocal = localState.key === storageKey ? localState.items : readLocal(storageKey);
+  const setNotifications = useCallback(
+    (update: (prev: AppNotification[]) => AppNotification[]) =>
+      setLocalState((st) => {
+        const prev = st.key === storageKey ? st.items : readLocal(storageKey);
+        return { key: storageKey, items: update(prev) };
+      }),
+    [storageKey]
+  );
 
-  // Keep localStorage in sync whenever notifications change (new one
-  // added, marked read, cleared, etc.) — this is what survives a
-  // page refresh; before this, the whole list lived only in memory
-  // and vanished the moment the tab reloaded.
+  // Switch to the signed-in user's list (login / logout / account change)
   useEffect(() => {
+    setLocalState((st) => (st.key === storageKey ? st : { key: storageKey, items: readLocal(storageKey) }));
+  }, [storageKey]);
+
+  // Persist the current user's list
+  useEffect(() => {
+    if (localState.key !== storageKey) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+      localStorage.setItem(storageKey, JSON.stringify(localState.items));
     } catch {
-      // Storage full or blocked (private browsing) — notifications
-      // still work for the current session, just won't persist.
+      // Storage full or blocked (private browsing) — still works for this session
     }
-  }, [notifications]);
+  }, [localState, storageKey]);
+
+  // One-time cleanup of the old shared key
+  useEffect(() => {
+    try { localStorage.removeItem("airstream_notifications"); } catch { /* ignore */ }
+  }, []);
 
   // Track active polling timers so we never duplicate-poll the same video
   const pollingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -120,24 +157,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         ...n,
         id: `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         time: formatTime(new Date()),
+        createdAt: Date.now(),
         read: false,
       };
       setNotifications((prev) => [notification, ...prev].slice(0, 50));
     },
-    []
+    [setNotifications]
   );
 
   const markAsRead = useCallback((id: string) => {
+    if (id.startsWith("srv-")) { markServerRead(Number(id.slice(4))); return; }
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
-  }, []);
+  }, [markServerRead, setNotifications]);
 
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+    markAllServerRead();
+  }, [markAllServerRead, setNotifications]);
 
-  const clearAll = useCallback(() => setNotifications([]), []);
+  const clearAll = useCallback(() => {
+    setNotifications(() => []);
+    clearServer();
+  }, [clearServer, setNotifications]);
+
+  // Badge announcements (Rising Creator, …) — checked on login and
+  // whenever one of the creator's videos goes live.
+  const checkBadges = useBadgeCelebrations(addNotification);
 
   // ── Video-ready polling ───────────────────────
 
@@ -170,6 +217,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               href:    `/watch?v=${key}`,
             });
             pollingTimers.current.delete(key);
+            checkBadges();
             return; // done
           }
 
@@ -206,7 +254,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const timer = setTimeout(poll, POLL_INTERVAL_MS);
       pollingTimers.current.set(key, timer);
     },
-    [addNotification]
+    [addNotification, checkBadges]
   );
 
   // ── Real-time push (SSE) — the primary path now, YouTube-style ──
@@ -223,9 +271,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       message: `"${videoTitle}" has finished processing and is ready to watch.`,
       href: `/watch?v=${key}`,
     });
+    checkBadges();
   });
 
   // ─────────────────────────────────────────────
+
+  // Local + server notifications, newest first
+  const serverMapped: AppNotification[] = serverItems.map((n) => {
+    const at = new Date(n.created_at).getTime();
+    return {
+      id: `srv-${n.id}`,
+      type: "info",
+      title: n.channel_name ? `${n.channel_name} uploaded a new video` : "New video",
+      message: n.video_title || n.message,
+      time: formatTime(new Date(at)),
+      createdAt: at,
+      read: n.is_read,
+      href: n.video_id ? `/watch?v=${n.video_id}` : undefined,
+      image: n.video_thumbnail || undefined,
+    };
+  });
+  const notifications = [...notificationsLocal, ...serverMapped]
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -238,6 +305,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         markAsRead,
         markAllAsRead,
         clearAll,
+        refreshNotifications: refreshServer,
         startVideoReadyPolling,
       }}
     >

@@ -18,6 +18,7 @@ import { motion } from "framer-motion";
 import { useCreatorProfile } from "../hooks/useCreatorProfile";
 import { SubscriptionButton } from "./SubscriptionButton";
 import { useAuth } from "../context/AuthContext";
+import CreatorBadges from "./CreatorBadge";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ interface CreatorCardProps {
   compact?: boolean;
   /** Show the subscribe button. Defaults to true. */
   showSubscribe?: boolean;
+  /** Creator's published video count — drives badges (e.g. Rising Creator) */
+  videoCount?: number | null;
   className?: string;
 }
 
@@ -102,6 +105,7 @@ export default function CreatorCard({
   channelId,
   compact = true,
   showSubscribe = true,
+  videoCount,
   className = "",
 }: CreatorCardProps) {
   const creator = useCreatorProfile(email);
@@ -166,9 +170,12 @@ export default function CreatorCard({
 
           {/* Name + sub count */}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-1 break-words">
-              {resolvedName}
-            </p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-1 break-words min-w-0">
+                {resolvedName}
+              </p>
+              <CreatorBadges videoCount={videoCount} size="sm" />
+            </div>
             <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
               {fmtSubs(displayCount, displayLoaded)}
             </p>
@@ -233,6 +240,7 @@ export default function CreatorCard({
           <p className="font-bold text-white group-hover/creator:text-red-400 transition-colors">
             {resolvedName}
           </p>
+          <CreatorBadges videoCount={videoCount} size="sm" className="justify-center mt-1" />
           <p className="text-xs text-gray-400 mt-0.5">
             {fmtSubs(displayCount, displayLoaded)}
           </p>
