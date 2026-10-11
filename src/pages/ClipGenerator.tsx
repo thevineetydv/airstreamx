@@ -542,6 +542,7 @@ export default function ClipGenerator() {
   const [fileError, setFileError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const validateAndSetFile = (f: File | null | undefined) => {
     if (!f) return;
@@ -563,11 +564,17 @@ export default function ClipGenerator() {
     validateAndSetFile(e.dataTransfer.files[0]);
   }, []);
 
+  // Status and clip lists are private to the uploader — send the login token
+  const authHeaders = async (): Promise<Record<string, string>> => {
+    const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const startPolling = (id: number) => {
     let done = false;
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`${API_URL}/clips/status/${id}`);
+        const res = await fetch(`${API_URL}/clips/status/${id}`, { headers: await authHeaders() });
         const data = await res.json();
         const s = data.status as Stage;
         setStage(s);
@@ -589,7 +596,8 @@ export default function ClipGenerator() {
     // 20 minutes gives real headroom past the advertised "2-5 min for a
     // 1-hour video" for longer uploads, while still eventually surfacing
     // a clear error instead of silence.
-    setTimeout(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
       if (done) return;
       clearInterval(pollRef.current!);
       setStage("error");
@@ -599,7 +607,7 @@ export default function ClipGenerator() {
 
   const fetchClips = async (id: number) => {
     try {
-      const res = await fetch(`${API_URL}/clips/video/${id}`);
+      const res = await fetch(`${API_URL}/clips/video/${id}`, { headers: await authHeaders() });
       const data = await res.json();
       setClips(data.clips || []);
     } catch (err) {
@@ -607,7 +615,10 @@ export default function ClipGenerator() {
     }
   };
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
 
   const handleUpload = async () => {
     if (!file) return;
