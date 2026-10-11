@@ -540,6 +540,11 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
 
       let lastTime = Date.now();
       let lastLoadedBytes = 0;
+      // Kept across progress events: the old code fell back to the React
+      // state captured when the upload started (always 0), so speed and
+      // time-left flickered to 0 between the 500 ms measurements.
+      let speed = 0;
+      let remaining = 0;
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
@@ -549,9 +554,6 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
           const now = Date.now();
           const timeDiff = (now - lastTime) / 1000; // seconds
           const bytesDiff = e.loaded - lastLoadedBytes;
-
-          let speed = uploadSpeed;
-          let remaining = timeRemaining;
 
           if (timeDiff > 0.5) { // Update every 500ms
             speed = bytesDiff / timeDiff; // bytes per second
@@ -564,12 +566,10 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
             lastLoadedBytes = e.loaded;
           }
 
-          // Processing stage
-          const stage =
-            currentProgress < 30 ? "Uploading video..." :
-            currentProgress < 60 ? "Processing metadata..." :
-            currentProgress < 90 ? "Generating thumbnails..." :
-            "Finalizing...";
+          // Honest stage text: this is only the file transfer. Processing
+          // (transcoding, thumbnails) happens on the server afterwards and is
+          // reported by the "video is live" notification.
+          const stage = currentProgress < 100 ? "Uploading video..." : "Finishing upload...";
 
           updateProgress(currentProgress, speed, remaining, stage);
         }

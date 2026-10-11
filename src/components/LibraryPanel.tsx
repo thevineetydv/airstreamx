@@ -130,7 +130,7 @@ function VideoActionsMenu({ video, onDelete, onClose }: VideoActionsMenuProps) {
       <button
         onClick={() => {
           // Share logic
-          navigator.clipboard.writeText(window.location.origin + `/watch/${video.id}`);
+          navigator.clipboard.writeText(window.location.origin + `/watch?v=${video.public_id || video.id}`);
           alert("Link copied to clipboard!");
           onClose();
         }}

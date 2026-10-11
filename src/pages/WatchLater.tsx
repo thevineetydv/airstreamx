@@ -10,6 +10,7 @@ import { BookmarkCheck, ShieldAlert, Trash2, X } from "lucide-react";
 const LS_KEY = "watch_later_ids";
 
 type VideoItem = {
+  public_id?: string;
   id: number;
   title: string;
   thumbnail: string | null;
@@ -160,7 +161,7 @@ export default function WatchLaterPage() {
                   <X className="w-3.5 h-3.5" />
                 </button>
 
-                <Link to={`/watch?id=${v.id}`}>
+                <Link to={`/watch?v=${v.public_id || v.id}`}>
                   <div className="aspect-video bg-black relative">
                     {v.thumbnail ? (
                       <img

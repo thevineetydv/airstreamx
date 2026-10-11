@@ -192,6 +192,8 @@ function AppContent() {
 
                   {/* ─── WATCH ────────────────────────────────────── */}
                   <Route path="/watch" element={<WatchPage />} />
+                  {/* Old share links used /watch/:id — send them to the real URL */}
+                  <Route path="/watch/:legacyId" element={<LegacyWatchRedirect />} />
 
                   {/* ─── SHORTS ───────────────────────────────────── */}
                   <Route
@@ -354,4 +356,9 @@ function HandleOrNotFound() {
   }
 
   return <Navigate to="/404" replace />;
+}
+/** /watch/123 (old share format) -> /watch?v=123 */
+function LegacyWatchRedirect() {
+  const { legacyId } = useParams<{ legacyId: string }>();
+  return <Navigate to={legacyId ? `/watch?v=${encodeURIComponent(legacyId)}` : "/"} replace />;
 }

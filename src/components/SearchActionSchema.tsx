@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdHtml } from "../utils/jsonLd";
 
 /**
  * SearchAction Schema - Enables search box in Google Search results
@@ -33,7 +34,7 @@ export const SearchActionSchema: React.FC<SearchActionSchemaProps> = ({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(schema) }}
     />
   );
 };

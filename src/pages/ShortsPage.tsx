@@ -14,6 +14,7 @@ import {
   Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
 import Hls from "hls.js/light";
+import { warmHls } from "../utils/hlsWarmup";
 import { getAuth } from "firebase/auth";
 import { API_URL } from "../utils/constants";
 import { getChannelWatermark } from "../utils/channelUrl";
@@ -109,20 +110,11 @@ function getHookText(id: number): string {
  * ───────────────────────────────────────────── */
 function useVideoPreloader(nextUrl: string | undefined) {
   useEffect(() => {
-    if (!nextUrl || !nextUrl.endsWith(".m3u8") || !Hls.isSupported()) return;
+    if (!nextUrl || !nextUrl.endsWith(".m3u8")) return;
 
-    // Mobile skip — this runs a SECOND, hidden HLS decoder alongside the
-    // one already decoding the Short someone is actively watching. On
-    // desktop that's a non-issue; on the budget/mid-range Android
-    // hardware this app's actual audience mostly uses, decoding two HLS
-    // streams at once competes for the same limited CPU/GPU headroom as
-    // the UI thread — the exact kind of thing that shows up as "the
-    // whole page feels laggy" or taps (like Share) feeling unresponsive,
-    // even though nothing about THOSE features changed. Preloading still
-    // helps real switching speed, but only where the hardware can
-    // actually afford it.
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-    if (isMobile) return;
+    // Runs on mobile too: the warm-up is a plain fetch of one small
+    // segment — no second decoder, so it costs no CPU/GPU on budget phones
+    // (the reason the old hidden-<video> preloader was desktop-only).
 
     // Respect the existing Data Saver setting (Settings page) — this
     // preload uses real mobile data ahead of the user actually watching
@@ -137,36 +129,10 @@ function useVideoPreloader(nextUrl: string | undefined) {
       if (navigator.connection?.saveData) return;
     } catch {}
 
-    // link rel="prefetch" only fetches the .m3u8 manifest text file — it
-    // has no concept of HLS needing the .ts/.m4s segments the manifest
-    // references, so the real "wait for the first segment to download"
-    // delay was completely unaddressed by the old version of this hook.
-    // This spins up a hidden, muted HLS instance on an offscreen <video>
-    // so the browser's own HTTP cache gets warmed with the manifest AND
-    // the next Short's first few seconds — by the time the user actually
-    // swipes to it, the real player's requests mostly hit cache instead
-    // of the network.
-    const video = document.createElement("video");
-    video.muted = true;
-    video.style.display = "none";
-    document.body.appendChild(video);
-
-    const hls = new Hls({
-      enableWorker: true,
-      maxBufferLength: 8,       // only the first few seconds — this is a
-                                  // warm-up, not a full download
-      capLevelToPlayerSize: false,
-      startLevel: 0,            // lowest rendition on purpose: preloading
-                                  // shouldn't compete for bandwidth with
-                                  // whatever's actually playing right now
-    });
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(nextUrl));
-
-    return () => {
-      try { hls.destroy(); } catch {}
-      try { document.body.removeChild(video); } catch {}
-    };
+    // Only the first segment, via plain fetch — a hidden hls.js preloader
+    // treats maxBufferLength as a minimum and kept downloading the whole
+    // next Short (see utils/hlsWarmup).
+    warmHls(nextUrl);
   }, [nextUrl]);
 }
 
@@ -304,7 +270,7 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
       });
       if (res.ok) {
         const data = await res.json();
-        setComments(prev => [data.comment || { id: Date.now(), user_email: auth.currentUser!.email, comment_text: text, created_at: new Date().toISOString() }, ...prev]);
+        setComments(prev => [data.comment || { id: Date.now(), user_email: auth.currentUser!.email, comment: text, created_at: new Date().toISOString() }, ...prev]);
         setText("");
       }
     } finally { setSubmitting(false); }
@@ -348,15 +314,16 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
             <p className="text-center py-12 text-white/25 text-sm">No comments yet</p>
           ) : comments.map((c: any) => (
             <div key={c.id} className="flex gap-3">
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getAvatarColor(c.user_email || "")} flex items-center justify-center text-xs font-bold flex-shrink-0 text-white`}>
-                {(c.user_email || "?")[0].toUpperCase()}
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getAvatarColor(c.author_key || c.user_email || "")} flex items-center justify-center text-xs font-bold flex-shrink-0 text-white`}>
+                {(c.author_name || c.user_email || "?")[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 mb-0.5">
-                  <span className="text-white/80 text-xs font-semibold">@{(c.user_email || "").split("@")[0]}</span>
+                  <span className="text-white/80 text-xs font-semibold">@{c.author_handle || c.author_name || (c.user_email || "").split("@")[0]}</span>
                   <span className="text-white/25 text-[10px]">{new Date(c.created_at).toLocaleDateString()}</span>
                 </div>
-                <p className="text-white/65 text-sm leading-relaxed">{c.comment_text}</p>
+                {/* API rows use `comment`; `comment_text` only on old optimistic rows */}
+                <p className="text-white/65 text-sm leading-relaxed">{c.comment ?? c.comment_text}</p>
               </div>
             </div>
           ))}
@@ -690,7 +657,7 @@ function ShortPlayer({
     else video.removeAttribute("crossorigin");
 
     if (Hls.isSupported() && (videoUrl.includes(".m3u8") || videoUrl.includes("hls"))) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 20, startLevel: 0 });
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 20, maxMaxBufferLength: 30, maxBufferSize: 15e6, startLevel: 0 });
       hlsRef.current = hls;
       hls.loadSource(videoUrl); hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
@@ -1333,7 +1300,8 @@ export default function ShortsPage({
     if (commentCounts[short.id] !== null && commentCounts[short.id] !== undefined) return;
     fetch(`${API_URL}/videos/${short.id}/comments`)
       .then(r => r.json())
-      .then(d => setCommentCounts(prev => ({ ...prev, [short.id]: Array.isArray(d.comments) ? d.comments.length : 0 })))
+      // `total` is the real count; comments.length capped it at one page (20)
+      .then(d => setCommentCounts(prev => ({ ...prev, [short.id]: typeof d.total === "number" ? d.total : (Array.isArray(d.comments) ? d.comments.length : 0) })))
       .catch(() => setCommentCounts(prev => ({ ...prev, [short.id]: 0 })));
   }, [activeIndex, shorts]);
 

@@ -361,7 +361,7 @@ const usePlayer = ({ video }: any) => {
  * useVideoAPI
  * ───────────────────────────────────────────────────────────────────────── */
 
-const useVideoAPI = (videoId: any) => {
+const useVideoAPI = (videoId: any, initialLikes = 0) => {
   const auth = getAuth();
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!auth.currentUser);
   const [likes, setLikes] = useState(0);
@@ -394,17 +394,30 @@ const useVideoAPI = (videoId: any) => {
     });
   }, [auth]);
 
+  // NOTE: the view is recorded once by the Watch page. This hook used to
+  // POST /view as well (a duplicate request + CORS preflight per video).
+
+  // New video: reset per-video state right away. Previously the old video's
+  // liked/disliked state stayed visible until the status calls returned,
+  // and logged-out viewers always saw 0 likes.
   useEffect(() => {
-    if (!videoId) return;
-    fetch(`${API_BASE}/videos/${videoId}/view`, { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => { });
-  }, [videoId]);
+    setLiked(false); setDisliked(false);
+    setLikes(Number(initialLikes) || 0); setDislikes(0);
+  }, [videoId, initialLikes]);
 
   useEffect(() => {
     if (!videoId || !isAuthenticated) return;
-    (async () => {
-      try { const r = await req(`${API_BASE}/videos/${videoId}/like-status`); if (r.ok) { const d = await r.json(); setLiked(d.liked || false); setLikes(d.likes || 0); } } catch { }
-      try { const r = await req(`${API_BASE}/videos/${videoId}/dislike-status`); if (r.ok) { const d = await r.json(); setDisliked(d.disliked || false); setDislikes(d.dislikes || 0); } } catch { }
-    })();
+    let cancelled = false;
+    // Both status calls in parallel (they used to run one after the other)
+    Promise.all([
+      req(`${API_BASE}/videos/${videoId}/like-status`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      req(`${API_BASE}/videos/${videoId}/dislike-status`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([l, d]) => {
+      if (cancelled) return;
+      if (l) { setLiked(l.liked || false); setLikes(l.likes || 0); }
+      if (d) { setDisliked(d.disliked || false); setDislikes(d.dislikes || 0); }
+    });
+    return () => { cancelled = true; };
   }, [videoId, isAuthenticated, req]);
 
   const toggleLike = useCallback(async () => {
@@ -413,7 +426,10 @@ const useVideoAPI = (videoId: any) => {
     try {
       const r = await req(`${API_BASE}/videos/${videoId}/like`, { method: "POST" });
       if (!r.ok) { setError("Failed to update like"); return false; }
-      const d = await r.json(); setLiked(d.liked); setLikes(p => d.liked ? p + 1 : Math.max(p - 1, 0)); return true;
+      const d = await r.json(); setLiked(d.liked); setLikes(p => d.liked ? p + 1 : Math.max(p - 1, 0));
+      // The server removes an existing dislike when liking — keep the UI in sync
+      if (d.liked) setDisliked(prev => { if (prev) setDislikes(n => Math.max(n - 1, 0)); return false; });
+      return true;
     } catch { setError("Network error"); return false; } finally { setLoading(false); }
   }, [videoId, isAuthenticated, req]);
 
@@ -421,7 +437,12 @@ const useVideoAPI = (videoId: any) => {
     if (!isAuthenticated) { setError("Please log in"); return false; }
     try {
       const r = await req(`${API_BASE}/videos/${videoId}/dislike`, { method: "POST" });
-      if (r.ok) { const d = await r.json(); setDisliked(d.disliked); setDislikes(p => d.disliked ? p + 1 : Math.max(p - 1, 0)); return true; }
+      if (r.ok) {
+        const d = await r.json(); setDisliked(d.disliked); setDislikes(p => d.disliked ? p + 1 : Math.max(p - 1, 0));
+        // The server removes an existing like when disliking — keep the UI in sync
+        if (d.disliked) setLiked(prev => { if (prev) setLikes(n => Math.max(n - 1, 0)); return false; });
+        return true;
+      }
     } catch { setError("Failed to update dislike"); }
     return false;
   }, [videoId, isAuthenticated, req]);
@@ -517,7 +538,8 @@ const Controls: React.FC<any> = ({
       {/* ── SEEKBAR ── */}
       <div className="relative w-full cursor-pointer mb-4" style={{ height: 20, overflow: "visible" }}
         onMouseMove={onMove} onMouseLeave={onLeave} onClick={onClick}
-        role="slider" aria-label="Seek" aria-valuenow={Math.floor(currentTime)} aria-valuemin={0} aria-valuemax={Math.floor(duration)}>
+        role="slider" tabIndex={0} aria-label="Seek" aria-valuenow={Math.floor(currentTime)} aria-valuemin={0} aria-valuemax={Math.floor(duration)}
+        aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}>
 
         {/* Track */}
         <div style={{
@@ -964,7 +986,7 @@ const VideoEndScreen: React.FC<{
         if (nextId) {
           onDismiss(); // Close the end screen FIRST
           setTimeout(() => {
-            navigate(`/watch?v=${nextId}`);
+            navigate(`/watch?v=${nextId}`, { state: { preview: nextVideo } });
           }, 50); // Small delay to let dismiss complete
         }
       }
@@ -1116,7 +1138,7 @@ const VideoEndScreen: React.FC<{
             <motion.div
               initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
-              onClick={() => navigate(`/watch?v=${nextVideo.public_id || nextVideo.id}`)}
+              onClick={() => navigate(`/watch?v=${nextVideo.public_id || nextVideo.id}`, { state: { preview: nextVideo } })}
               style={{
                 flex: 1, position: "relative", borderRadius: 10, overflow: "hidden",
                 cursor: "pointer", background: "#0F0F0F",
@@ -1279,7 +1301,7 @@ const VideoEndScreen: React.FC<{
               key={v.id}
               initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.12 + i * 0.08, duration: 0.28 }}
-              onClick={() => navigate(`/watch?v=${v.public_id || v.id}`)}
+              onClick={() => navigate(`/watch?v=${v.public_id || v.id}`, { state: { preview: v } })}
               style={{
                 display: "flex", gap: 9, cursor: "pointer", borderRadius: 8, padding: "6px 6px",
                 border: "1px solid transparent", transition: "all 0.2s",
@@ -1383,7 +1405,7 @@ const VideoPlayer = forwardRef<any, any>(
   ({ video, autoPlay = true, startTime = 0, className = "", onVideoEnd, onTheaterModeChange, suggestions = [], autoplayNext = true }, ref) => {
     const safeVideo = video?.url ? video : { id: null, url: null };
     const { vRef, hlsRef, state, actions } = usePlayer({ video: safeVideo });
-    const { likes, liked, toggleLike, dislikes, disliked, toggleDislike, error: apiError, isAuthenticated } = useVideoAPI(video?.id ?? null);
+    const { likes, liked, toggleLike, dislikes, disliked, toggleDislike, error: apiError, isAuthenticated } = useVideoAPI(video?.id ?? null, video?.likes ?? 0);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
@@ -1613,11 +1635,21 @@ const VideoPlayer = forwardRef<any, any>(
 
     useEffect(() => { if (!ripple) return; const t = setTimeout(() => setRipple(null), 600); return () => clearTimeout(t); }, [ripple]);
 
+    // Read "is playing" through a ref so a timer started while paused still
+    // hides the controls once playback starts.
+    const isPlayingRef = useRef(state.isPlaying);
+    isPlayingRef.current = state.isPlaying;
     const resetHide = useCallback(() => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       setShowControls(true); setShowCursor(true);
-      hideTimer.current = setTimeout(() => { if (state.isPlaying) { setShowControls(false); setShowCursor(false); } }, CONTROL_HIDE_DELAY);
-    }, [state.isPlaying]);
+      hideTimer.current = setTimeout(() => {
+        // Keep controls on screen while a keyboard user is inside them —
+        // hiding unmounts the focused button and drops focus to <body>.
+        const c = containerRef.current;
+        if (c && c.contains(document.activeElement) && document.activeElement !== c) return;
+        if (isPlayingRef.current) { setShowControls(false); setShowCursor(false); }
+      }, CONTROL_HIDE_DELAY);
+    }, []);
 
     const handleDoubleClick = useCallback((e: React.MouseEvent) => {
       const r = e.currentTarget.getBoundingClientRect();
@@ -1648,8 +1680,17 @@ const VideoPlayer = forwardRef<any, any>(
 
     useEffect(() => {
       const fn = (e: KeyboardEvent) => {
-        if (["INPUT", "TEXTAREA"].includes((document.activeElement as HTMLElement)?.tagName)) return;
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+        // Browser/OS shortcuts (Ctrl+F find, Ctrl+L, Cmd+K…) must keep working
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        // Ignore while a dialog is open on top of the page (share, report, login…)
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
         const k = e.key.toLowerCase();
+        // Space/Enter on a focused button or link must activate THAT control,
+        // not toggle the video (keyboard users couldn't press Subscribe/Like)
+        if ((k === " " || k === "enter") && (tag === "BUTTON" || tag === "A" || target?.getAttribute("role") === "button")) return;
         switch (k) {
 		 case " ": case "k": e.preventDefault(); handleTogglePlay(); break;
           case "f": e.preventDefault(); toggleFullscreen(); break;
@@ -1707,7 +1748,7 @@ useImperativeHandle(ref, () => ({
                  tall on small phones but still immersive on big screens */
               ...(isTheaterMode ? { height: "clamp(42vw, 56svh, 80vh)" } : {}),
             }}
-            onMouseMove={resetHide} onMouseEnter={resetHide} onTouchStart={resetHide} onDoubleClick={handleDoubleClick}>
+            onMouseMove={resetHide} onMouseEnter={resetHide} onTouchStart={resetHide} onFocusCapture={resetHide} onKeyDown={resetHide} onDoubleClick={handleDoubleClick}>
 
 
             <AnimatePresence>

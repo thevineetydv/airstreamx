@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdHtml } from "../utils/jsonLd";
 
 /**
  * FAQPage Schema - For FAQ pages
@@ -47,7 +48,7 @@ export const FAQSchema: React.FC<FAQSchemaProps> = ({ items }) => {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(schema) }}
     />
   );
 };

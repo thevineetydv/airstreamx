@@ -81,6 +81,7 @@ const CATEGORIES = {
 };
 
 interface Video {
+  public_id?: string;
   id: string | number;
   title: string;
   thumbnail: string;
@@ -213,7 +214,7 @@ export default function CategoryPage() {
 
 function VideoCard({ video }: { video: Video }) {
   return (
-    <Link to={`/watch?id=${video.id}`} className="group cursor-pointer">
+    <Link to={`/watch?v=${video.public_id || video.id}`} state={{ preview: video }} className="group cursor-pointer">
       <div className="relative overflow-hidden rounded-lg bg-gray-900 aspect-video mb-3">
         <img
           src={video.thumbnail}

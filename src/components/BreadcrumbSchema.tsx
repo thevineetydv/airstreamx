@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdHtml } from "../utils/jsonLd";
 
 /**
  * Breadcrumb Schema - Used on all pages to show navigation hierarchy
@@ -47,7 +48,7 @@ export const BreadcrumbSchema: React.FC<BreadcrumbSchemaProps> = ({ items }) => 
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(schema) }}
     />
   );
 };

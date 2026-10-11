@@ -77,29 +77,28 @@ export default function HistoryPage() {
 
       // ── 2. Fetch video metadata for every entry ──────────────────────────
       //
-      // ✅ CACHED — and using the SAME cache key format as Watch.tsx
-      // (`watch:video:${id}`). This means:
-      //   - If you already opened this video on the Watch page, History
-      //     shows its thumbnail/title INSTANTLY (no network call at all).
-      //   - If you open it from History first, then click into Watch,
-      //     Watch page also loads instantly — the cache is shared.
-      //
-      // Each entry still resolves independently and in parallel, so one
+      // Cached per video (memory only), so revisiting History is instant.
+      // Each entry resolves independently and in parallel, so one
       // slow/failed video doesn't block the others from showing.
       try {
         const results = await Promise.all(
           list.map(async (e): Promise<HistoryEntry> => {
             try {
               const { data } = await cachedFetch(
-                `watch:video:${e.id}`,
+                // Own key: Watch caches a fully resolved record (stream URL,
+                // watermark) under watch:video:*, this is the raw API shape.
+                `history:video:${e.id}`,
                 async () => {
                   const res = await fetch(`${API_URL}/videos/${e.id}`);
-                  if (!res.ok) throw new Error("Video fetch failed");
+                  if (!res.ok) throw Object.assign(new Error("Video fetch failed"), { status: res.status });
                   const json = await res.json();
                   return json.video ?? json;
                 },
                 {
                   ttl: 5 * 60 * 1000, // 5 minutes — same as Watch.tsx
+                  // Memory only: a long history must not push the home feed
+                  // and recently watched videos out of the 60-entry storage cache.
+                  persist: false,
                   onUpdate: (fresh: any) => {
                     // Background refresh resolved with newer data —
                     // patch just this one entry's info in place.

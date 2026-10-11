@@ -31,32 +31,21 @@ export default function LikedPage() {
       setLoading(true);
       try {
         if (!user) { setLiked([]); return; }
-        const res = await fetch(`${API_URL}/videos?limit=200`);
-        const data = await res.json();
-        const all: VideoItem[] = (data.videos || []).map((v: any) => ({
+        // One request for the user's liked videos. The old version loaded the
+        // 30 newest videos and then sent a like-status request for EACH one,
+        // so older liked videos never appeared and the page fired ~60 calls.
+        const token = await getAuth().currentUser!.getIdToken();
+        const res = await fetch(`${API_URL}/api/me/liked-videos?limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = res.ok ? await res.json() : { videos: [] };
+        setLiked((data.videos || []).map((v: any) => ({
           id: v.id,
           public_id: v.public_id || null,
           title: v.title,
           thumbnail: v.thumbnail || null,
           mood_tags: Array.isArray(v.mood_tags) ? v.mood_tags : [],
-        }));
-        const auth = getAuth();
-        const token = await auth.currentUser!.getIdToken();
-        const checks = await Promise.all(
-          all.slice(0, 200).map(async v => {
-            try {
-              const r = await fetch(`${API_URL}/videos/${v.id}/like-status`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!r.ok) return null;
-              const j = await r.json();
-              return j.liked ? v : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-        setLiked(checks.filter(Boolean) as VideoItem[]);
+        })));
       } finally {
         setLoading(false);
       }
