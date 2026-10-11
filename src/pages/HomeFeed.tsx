@@ -786,6 +786,8 @@ export default function HomeFeed({ searchQuery = "" }: HomeFeedProps) {
       params.append("offset", String(offset));
 
       const res = await fetch(`${API_URL}/videos?${params.toString()}`);
+      // Never cache a server error as an "empty feed"
+      if (!res.ok) throw Object.assign(new Error(`Failed to load videos (${res.status})`), { status: res.status });
       const data = await res.json();
       // Client-side filter kept as a safety net in case the backend hasn't
       // shipped `type=long` support yet — remove once confirmed server-side.
