@@ -37,7 +37,9 @@ const SECTIONS = [
     body: [
       "You retain ownership of everything you upload — videos, Shorts, thumbnails, comments, and posts.",
       "By uploading content, you grant AirStreamX a worldwide, non-exclusive, royalty-free license to host, store, reproduce, adapt (e.g. generating thumbnails or clips via our AI Clip Generator), and display your content solely for the purpose of operating and promoting the Service.",
-      "You confirm that you own or have the necessary rights to everything you upload, and that it doesn't infringe anyone else's copyright, trademark, privacy, or other rights.",
+      "You are solely responsible for the content you upload and for any consequences of publishing it. AirStreamX does not pre-screen uploads and is not responsible for content posted by creators.",
+      "Only upload content that is your own original work, or that you have a valid licence or written permission to use — including any music, video clips, images, or other material inside your video. Do not upload films, TV shows, songs, sports broadcasts, or other people's videos unless you hold the rights to them.",
+      "By uploading, you confirm that your content does not infringe anyone else's copyright, trademark, privacy, or other rights. Content that breaks this rule may be removed without notice, and repeat violations can lead to suspension or termination of your account (see Section 6).",
     ],
   },
   {
@@ -135,7 +137,7 @@ export default function TermsOfServicePage() {
             The rules that keep AirStreamX fair
           </h1>
           <p className="text-gray-400 text-sm">
-            Last updated: 19 September 2026
+            Last updated: 12 October 2026
           </p>
           <p className="text-gray-300 text-base leading-relaxed mt-6">
             These Terms govern your use of AirStreamX. Please read them carefully — they cover
