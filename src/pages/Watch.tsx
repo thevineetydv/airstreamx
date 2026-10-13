@@ -16,6 +16,7 @@ import { LoginRequiredModal } from "../components/LoginRequiredModal";
 import CreatorCard from "../components/CreatorCard";
 import { API_URL, LS } from "../utils/constants";
 import { cachedFetch } from "../utils/metadataCache";
+import ReportVideoModal from "../components/ReportVideoModal";
 import { recordWatch, recordWatchProgress, recordSkip, getRecommendations } from "../utils/RecommendationEngine";
 /* ─────────────────────────────────────────────────────────────
  * HELPERS
@@ -514,6 +515,7 @@ export default function Watch() {
   const [showDescription, setShowDescription] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   // ── Edit video (owner-only, like YouTube's "Edit video" on your own
   // upload) — quick title/description edit without leaving the watch page.
@@ -2017,14 +2019,27 @@ useEffect(() => {
                           transition={{ duration: 0.15 }}
                           className="absolute right-0 top-full mt-2 bg-[#212121] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[160px]"
                         >
-                          <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-lg transition text-left text-sm min-h-[44px]">
-                            <Flag size={16} /><span>Report</span>
+                          <button
+                            type="button"
+                            onClick={() => { setShowMoreMenu(false); setShowReport(true); }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-lg transition text-left text-sm min-h-[44px]"
+                          >
+                            <Flag size={16} /><span>Report a problem</span>
                           </button>
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </div>
                 </div>
+              )}
+
+              {showReport && current && (
+                <ReportVideoModal
+                  videoId={current.public_id || current.id}
+                  videoTitle={current.title}
+                  getPosition={() => document.querySelector("video")?.currentTime}
+                  onClose={() => setShowReport(false)}
+                />
               )}
 
               <CreatorCard

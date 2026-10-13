@@ -20,6 +20,7 @@ import { API_URL } from "../utils/constants";
 import { getChannelWatermark } from "../utils/channelUrl";
 import Header from "../components/Header";
 import { SubscriptionButton } from "../components/SubscriptionButton";
+import ReportVideoModal from "../components/ReportVideoModal";
 /* ─────────────────────────────────────────────
  * CONSTANTS
  * ───────────────────────────────────────────── */
@@ -354,8 +355,8 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
 /* ─────────────────────────────────────────────
  * MORE MENU
  * ───────────────────────────────────────────── */
-function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle }: {
-  short: Short; onClose: () => void; ambientMode: boolean; onAmbientToggle: () => void;
+function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle, onReport }: {
+  short: Short; onClose: () => void; ambientMode: boolean; onAmbientToggle: () => void; onReport: () => void;
 }) {
   const navigate = useNavigate();
   const items = [
@@ -373,7 +374,7 @@ function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle }: {
     },
     { icon: <ThumbsDown className="w-4 h-4" />, label: "Not interested", onClick: onClose },
     { icon: <MessageCircleOff className="w-4 h-4" />, label: "Don't recommend channel", onClick: onClose },
-    { icon: <Flag className="w-4 h-4" />, label: "Report", onClick: onClose, danger: true },
+    { icon: <Flag className="w-4 h-4" />, label: "Report a problem", onClick: () => { onClose(); onReport(); }, danger: true },
   ];
 
   // Portal — same reason as ShareModal/CommentPanel above.
@@ -450,6 +451,7 @@ function SideActions({
   const [showShare, setShowShare] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const iconSize = isMobile ? "w-7 h-7" : "w-6 h-6";
   const btnSize = isMobile ? "w-12 h-12" : "w-11 h-11";
@@ -583,9 +585,17 @@ function SideActions({
           <MoreMenuSheet
             short={short} onClose={() => setShowMore(false)}
             ambientMode={ambientMode} onAmbientToggle={onAmbientToggle}
+            onReport={() => setShowReport(true)}
           />
         )}
       </AnimatePresence>
+      {showReport && (
+        <ReportVideoModal
+          videoId={short.public_id || short.id}
+          videoTitle={short.title}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </>
   );
 }
