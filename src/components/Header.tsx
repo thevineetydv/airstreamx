@@ -31,7 +31,7 @@ import {
   Menu, Mic, MicOff, Search as SearchIcon, Upload,
   Loader2, Bell, History, Settings, User, LogOut, X,
   TrendingUp, Clock, Zap, Home, Library, ThumbsUp, PlaySquare,
-  Radio, ArrowRight, Scissors, Plus, FileText,
+  Radio, ArrowRight, Scissors, Plus, FileText, ShieldCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation, Link } from "react-router-dom";
@@ -346,6 +346,26 @@ export default function Header({
   const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications, clearAll: clearAllNotifications } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Show "Admin Dashboard" in the account menu only for admins. The server
+  // decides (GET /api/admin/check → 200 for admins, 403 otherwise); the
+  // admin routes themselves stay protected server-side either way.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    setIsAdmin(false);
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`${API_URL}/api/admin/check`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!cancelled) setIsAdmin(res.ok);
+      } catch {
+        // offline — leave the link hidden
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   // Stable ids for aria-controls / aria-activedescendant
   const baseId = useId().replace(/:/g, "");
@@ -1135,6 +1155,9 @@ export default function Header({
                           <MenuItem icon={Settings} label="Settings" onClick={() => { navigate("/settings"); setOpenMenu(false); }} />
                           <MenuItem icon={History} label="Watch History" onClick={() => { navigate("/history"); setOpenMenu(false); }} />
                           <MenuItem icon={ThumbsUp} label="Liked Videos" onClick={() => { navigate("/liked"); setOpenMenu(false); }} />
+                          {isAdmin && (
+                            <MenuItem icon={ShieldCheck} label="Admin Dashboard" onClick={() => { navigate("/admin"); setOpenMenu(false); }} />
+                          )}
                         </div>
                         <div className="p-2 border-t border-red-500/20">
                           <button
