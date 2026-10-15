@@ -14,10 +14,21 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Slackbot|Slack-ImgProxy).*"
+          "value": ".*(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Slackbot|Slack-ImgProxy|Pinterest|redditbot|SkypeUriPreview).*"
         }
       ],
       "destination": "https://backend.airstreamx.com/og-preview"
+    },
+    {
+      "source": "/shorts/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Slackbot|Slack-ImgProxy|Pinterest|redditbot|SkypeUriPreview).*"
+        }
+      ],
+      "destination": "https://backend.airstreamx.com/og-preview?v=:id&kind=shorts"
     },
     {
       "source": "/(.*)",
