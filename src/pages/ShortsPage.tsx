@@ -9,7 +9,7 @@ import {
   Heart, MessageSquare, Share2, Volume2, VolumeX,
   Pause, Play, ChevronUp, ChevronDown, ChevronLeft,
   Music2, Eye, Bookmark, BookmarkCheck,
-  X, Send, Check, ExternalLink, MoreVertical, Flag,
+  X, Send, MoreVertical, Flag,
   AlignLeft, ListPlus, Monitor, ThumbsDown, MessageCircleOff,
   Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
@@ -21,6 +21,7 @@ import { getChannelWatermark } from "../utils/channelUrl";
 import Header from "../components/Header";
 import { SubscriptionButton } from "../components/SubscriptionButton";
 import ReportVideoModal from "../components/ReportVideoModal";
+import ShareSheet from "../components/ShareSheet";
 /* ─────────────────────────────────────────────
  * CONSTANTS
  * ───────────────────────────────────────────── */
@@ -174,74 +175,6 @@ function useAmbientColor(videoRef: React.RefObject<HTMLVideoElement | null>, act
 /* ─────────────────────────────────────────────
  * SHARE MODAL
  * ───────────────────────────────────────────── */
-function ShareModal({ short, onClose }: { short: Short; onClose: () => void }) {
-  const url = `${window.location.origin}/shorts/${short.public_id || short.id}`;
-  const text = `Check out this Short: ${cleanTitle(short.title)}`;
-  const [copied, setCopied] = useState(false);
-
-  const options = [
-    { name: "WhatsApp", bg: "#25D366", icon: "💬", action: () => window.open(`https://wa.me/?text=${encodeURIComponent(text + "\n" + url)}`) },
-    { name: "Telegram", bg: "#2AABEE", icon: "✈️", action: () => window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`) },
-    { name: "Twitter/X", bg: "#111", icon: "𝕏", action: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`) },
-    { name: "Facebook", bg: "#1877F2", icon: "f", action: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`) },
-    { name: "Copy link", bg: "#444", icon: "🔗", action: () => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); } },
-  ];
-
-  // Rendered via a portal to document.body — this modal is opened from
-  // inside the mobile Short player's drag-transform wrapper, and CSS
-  // `transform` on any ancestor makes that ancestor the containing
-  // block for `position: fixed` descendants instead of the real
-  // viewport. Without the portal, this "fixed inset-0" bottom sheet
-  // was confining itself to that small transformed wrapper's box
-  // instead of covering the actual screen.
-  return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 380, damping: 38 }}
-        className="w-full max-w-sm rounded-t-3xl p-5 pb-8"
-        style={{ background: "#212121", border: "1px solid rgba(255,255,255,0.08)" }}
-        onClick={e => e.stopPropagation()}
-        data-testid="share-sheet"
-      >
-        <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-5" />
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-white font-semibold text-sm">Share</p>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center" data-testid="close-share-sheet">
-            <X className="w-3.5 h-3.5 text-white/60" />
-          </button>
-        </div>
-        <div className="grid grid-cols-5 gap-3 mb-4">
-          {options.map(opt => (
-            <button key={opt.name} onClick={opt.action} className="flex flex-col items-center gap-1.5 group">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg group-hover:scale-105 group-active:scale-95 transition-transform" style={{ background: opt.bg }}>
-                {opt.icon}
-              </div>
-              <span className="text-white/40 text-[10px] text-center">{opt.name}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <ExternalLink className="w-3 h-3 text-white/30 flex-shrink-0" />
-          <span className="text-white/35 text-xs flex-1 truncate">{url}</span>
-          <button
-            onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-            className="text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 flex-shrink-0"
-            style={{ background: copied ? "rgba(52,211,153,0.2)" : "rgba(239,68,68,0.8)", color: "white" }}
-          >
-            {copied ? <><Check className="w-3 h-3" /> Copied</> : "Copy"}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>,
-    document.body
-  );
-}
 
 /* ─────────────────────────────────────────────
  * COMMENT PANEL
@@ -277,7 +210,7 @@ function CommentPanel({ short, onClose }: { short: Short; onClose: () => void })
     } finally { setSubmitting(false); }
   };
 
-  // Portal — same reason as ShareModal above: this opens from inside the
+  // Portal (CSS transforms on ancestors break position:fixed): this opens from inside the
   // mobile drag-transform wrapper, which breaks `position: fixed`
   // containment without this.
   return createPortal(
@@ -377,7 +310,7 @@ function MoreMenuSheet({ short, onClose, ambientMode, onAmbientToggle, onReport 
     { icon: <Flag className="w-4 h-4" />, label: "Report a problem", onClick: () => { onClose(); onReport(); }, danger: true },
   ];
 
-  // Portal — same reason as ShareModal/CommentPanel above.
+  // Portal — same reason as CommentPanel above.
   return createPortal(
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -580,7 +513,16 @@ function SideActions({
 
       <AnimatePresence>
         {showComments && <CommentPanel short={short} onClose={() => setShowComments(false)} />}
-        {showShare && <ShareModal short={short} onClose={() => setShowShare(false)} />}
+        {showShare && (
+          <ShareSheet
+            short
+            videoId={short.public_id || short.id}
+            title={cleanTitle(short.title)}
+            channel={short.channel_name}
+            thumbnail={short.thumbnail}
+            onClose={() => setShowShare(false)}
+          />
+        )}
         {showMore && (
           <MoreMenuSheet
             short={short} onClose={() => setShowMore(false)}

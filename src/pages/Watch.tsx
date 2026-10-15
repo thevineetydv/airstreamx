@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2, Flag, MoreVertical,
   MessageSquare, Eye, Calendar,
-  ChevronDown, ChevronUp, Copy, Check,
+  ChevronDown, ChevronUp, Check,
   Pencil, Trash2, X as XIcon,
   ThumbsUp, ThumbsDown, Pin, AlertTriangle, BarChart3,
 } from "lucide-react";
@@ -17,6 +17,8 @@ import CreatorCard from "../components/CreatorCard";
 import { API_URL, LS } from "../utils/constants";
 import { cachedFetch } from "../utils/metadataCache";
 import ReportVideoModal from "../components/ReportVideoModal";
+import ShareSheet from "../components/ShareSheet";
+import { parseStartTime } from "../utils/share";
 import { recordWatch, recordWatchProgress, recordSkip, getRecommendations } from "../utils/RecommendationEngine";
 /* ─────────────────────────────────────────────────────────────
  * HELPERS
@@ -446,6 +448,8 @@ export default function Watch() {
   const [searchParams] = useSearchParams();
   // `v` is the canonical param; `id` kept for old links that used ?id=
   const id = searchParams.get("v") || searchParams.get("id");
+  // ?t=95 / ?t=1m35s — start playback at a shared moment
+  const startAt = parseStartTime(searchParams.get("t"));
   const navigate = useNavigate();
   const location = useLocation();
   // Video object handed over by the link that was clicked (Up next, home
@@ -513,7 +517,8 @@ export default function Watch() {
 
   const [views, setViews] = useState(0);
   const [showDescription, setShowDescription] = useState(false);
-  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [sharePosition, setSharePosition] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
@@ -530,7 +535,6 @@ export default function Watch() {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [showComments, setShowComments] = useState(true);
   const [showKidsCommentInfo, setShowKidsCommentInfo] = useState(false);
@@ -581,7 +585,6 @@ export default function Watch() {
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
   const replyInputRef = useRef<HTMLInputElement>(null);
 
-  const shareMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
 
@@ -1795,28 +1798,9 @@ useEffect(() => {
     }
   }, [current?.id]);
 
-  const handleShare = useCallback((platform: string) => {
-    const url = window.location.href;
-    const text = `Check out: ${current?.title}`;
-    const map: Record<string, string> = {
-      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(text + " " + url)}`,
-      telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
-    };
-    if (platform === "copy") {
-      navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } else if (map[platform]) {
-      window.open(map[platform], "_blank");
-    }
-    setShowShareMenu(false);
-  }, [current?.title]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
-      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) setShowShareMenu(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) setShowMoreMenu(false);
     };
     document.addEventListener("mousedown", fn);
@@ -1905,6 +1889,7 @@ useEffect(() => {
                   onTheaterModeChange={(v: boolean) => setIsTheater(v)}
                   suggestions={videos.slice(0, 8)}
                   autoplayNext={autoplay}
+                  startTime={startAt}
                 />
               </div>
 
@@ -1940,42 +1925,28 @@ useEffect(() => {
 
               {!focusMode && (
                 <div className="flex flex-row flex-wrap items-center gap-1.5">
-                  <div className="relative" ref={shareMenuRef}>
-                    <button
-                      onClick={() => setShowShareMenu(v => !v)}
-                      aria-label="Share"
-                      aria-expanded={showShareMenu}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
-                    >
-                      <Share2 aria-hidden="true" size={15} />
-                      <span className="hidden sm:inline">Share</span>
-                    </button>
-                    <AnimatePresence>
-                      {showShareMenu && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.92, y: -8 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.92, y: -8 }}
-                          transition={{ duration: 0.15 }}
-                          className="absolute top-full left-0 mt-2 bg-[#212121] border border-white/10 rounded-xl p-2 shadow-2xl z-50 min-w-[180px]"
-                        >
-                          {[
-                            { icon: "𝕏", label: "Twitter", key: "twitter" },
-                            { icon: "📘", label: "Facebook", key: "facebook" },
-                            { icon: "💬", label: "WhatsApp", key: "whatsapp" },
-                            { icon: "✈️", label: "Telegram", key: "telegram" },
-                            { icon: copied ? <Check size={14} /> : <Copy size={14} />, label: copied ? "Copied!" : "Copy link", key: "copy" },
-                          ].map((item) => (
-                            <button key={item.key} onClick={() => handleShare(item.key)}
-                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-lg transition text-left text-sm min-h-[44px]">
-                              <span className="text-base">{item.icon}</span>
-                              <span>{item.label}</span>
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSharePosition(document.querySelector("video")?.currentTime || 0);
+                      setShowShare(true);
+                    }}
+                    aria-label="Share"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
+                  >
+                    <Share2 aria-hidden="true" size={15} />
+                    <span className="hidden sm:inline">Share</span>
+                  </button>
+                  {showShare && (
+                    <ShareSheet
+                      videoId={current.public_id || current.id}
+                      title={current.title}
+                      channel={current.channel_name}
+                      thumbnail={current.thumbnail}
+                      position={sharePosition}
+                      onClose={() => setShowShare(false)}
+                    />
+                  )}
 
                   <TipButton creatorUpiId={current.upi_id} creatorName={current.channel_name} />
 
