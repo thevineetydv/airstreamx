@@ -103,16 +103,25 @@ export const getDisplayName = (
 
 /**
  * Clean up raw filename-style video titles
- * "Pablo_Escobar_-_1080p.mp4" → "Pablo Escobar"
+ *   "Pablo_Escobar_-_1080p.mp4"                    → "Pablo Escobar"
+ *   "Song - Zee Music Company (720p, h264) (1)"    → "Song - Zee Music Company"
  */
+const TECH_TAG = String.raw`(?:8K|4K|2K|UHD|FHD|HD|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|AVC|[hx]\.?26[45]|BluRay|WEBRip|WEB-DL|BRRip|DVDRip|\d{2,3}fps)`;
+const BRACKETED_TECH = new RegExp(String.raw`\s*[(\[]\s*${TECH_TAG}(?:(?:\s*[,/|+]\s*|\s+)${TECH_TAG})*\s*[)\]]`, "gi");
+// Outside brackets only strip unambiguous tags ("HD video" is a normal phrase)
+const LOOSE_TECH = /[_\s]+(8K|4K|2K|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|x264|x265|h264|h265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)\b[\w.-]*/gi;
+
 export const formatVideoTitle = (title: string): string => {
   if (!title) return "Untitled";
-  return title
-    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
-    .replace(/[_\s]+(4K|2K|1080p|720p|480p|360p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi, "")
-    .replace(/_/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  let t = title
+    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|3gp)$/i, "")
+    .replace(BRACKETED_TECH, "")
+    .replace(LOOSE_TECH, "")
+    .replace(/_/g, " ");
+  // Trailing copy counters from downloads: "(1)", "(2)", " - Copy"
+  for (let i = 0; i < 3; i++) t = t.replace(/\s*(?:\(\d{1,2}\)|-\s*Copy)\s*$/i, "");
+  t = t.replace(/\s{2,}/g, " ").replace(/[\s\-–|,]+$/, "").trim();
+  return t || title.trim() || "Untitled";
 };
 
 // ─── Math Utilities ───────────────────────────────────────────

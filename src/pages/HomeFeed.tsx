@@ -9,6 +9,7 @@ import { API_URL } from "../utils/constants";
 import { channelUrl } from "../utils/channelUrl";
 import { useCachedData } from "../utils/useCachedData";
 import { useAuth } from "../context/AuthContext";
+import { formatVideoTitle } from "../utils/format";
 
 /* ─────────────────────────────────────────────────────────────
  * CATEGORIES
@@ -180,19 +181,6 @@ function formatChannelName(raw: string): string {
     .join(" ");
 }
 
-/** Clean up raw filename-style titles */
-function formatVideoTitle(title: string): string {
-  if (!title) return "Untitled";
-  return title
-    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
-    .replace(
-      /[_\s]+(8K|4K|2K|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi,
-      ""
-    )
-    .replace(/_/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
 
 /**
  * getDisplayName — uses only server-provided fields.

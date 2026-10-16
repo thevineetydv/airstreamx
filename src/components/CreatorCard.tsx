@@ -170,8 +170,10 @@ export default function CreatorCard({
 
           {/* Name + sub count */}
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-1 break-words min-w-0">
+            {/* Wraps on narrow phones so the badge drops below instead of
+                cutting the channel name to "airstr…" */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+              <p className="text-sm font-semibold text-white group-hover/creator:text-red-400 transition-colors leading-tight line-clamp-1 break-all min-w-0">
                 {resolvedName}
               </p>
               <CreatorBadges videoCount={videoCount} size="sm" />
@@ -187,8 +189,9 @@ export default function CreatorCard({
             to this row feeling bulky. Replaced with a plain label on
             your own channel — you can't subscribe to yourself. */}
         {showSubscribe && isOwnChannel && (
-          <span className="flex-shrink-0 text-xs text-gray-500 font-medium px-3 py-2">
-            This is your channel
+          <span className="flex-shrink-0 text-xs text-gray-500 font-medium px-2 sm:px-3 py-2">
+            <span className="sm:hidden">Your channel</span>
+            <span className="hidden sm:inline">This is your channel</span>
           </span>
         )}
         {showSubscribe && !isOwnChannel && (
