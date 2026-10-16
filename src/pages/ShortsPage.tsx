@@ -1,6 +1,6 @@
 import React, {
   useEffect, useState, useRef, useCallback,
-  createContext, useContext, useMemo,
+  createContext, useContext, useMemo, lazy, Suspense,
 } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -20,8 +20,9 @@ import { API_URL } from "../utils/constants";
 import { getChannelWatermark } from "../utils/channelUrl";
 import Header from "../components/Header";
 import { SubscriptionButton } from "../components/SubscriptionButton";
-import ReportVideoModal from "../components/ReportVideoModal";
-import ShareSheet from "../components/ShareSheet";
+// Loaded only when opened — keeps them out of the first page load
+const ReportVideoModal = lazy(() => import("../components/ReportVideoModal"));
+const ShareSheet = lazy(() => import("../components/ShareSheet"));
 import { formatVideoTitle } from "../utils/format";
 /* ─────────────────────────────────────────────
  * CONSTANTS
@@ -511,6 +512,7 @@ function SideActions({
       <AnimatePresence>
         {showComments && <CommentPanel short={short} onClose={() => setShowComments(false)} />}
         {showShare && (
+          <Suspense fallback={null}>
           <ShareSheet
             short
             videoId={short.public_id || short.id}
@@ -519,6 +521,7 @@ function SideActions({
             thumbnail={short.thumbnail}
             onClose={() => setShowShare(false)}
           />
+          </Suspense>
         )}
         {showMore && (
           <MoreMenuSheet
@@ -529,11 +532,13 @@ function SideActions({
         )}
       </AnimatePresence>
       {showReport && (
+        <Suspense fallback={null}>
         <ReportVideoModal
           videoId={short.public_id || short.id}
           videoTitle={short.title}
           onClose={() => setShowReport(false)}
         />
+        </Suspense>
       )}
     </>
   );
