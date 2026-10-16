@@ -594,10 +594,10 @@ const Controls: React.FC<any> = ({
           <button type="button" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"} className="hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
             {isPlaying ? <Pause aria-hidden="true" size={22} fill="currentColor" /> : <Play aria-hidden="true" size={22} fill="currentColor" />}
           </button>
-          <button type="button" onClick={() => onSeekBy(-SEEK_INTERVAL)} aria-label={`Rewind ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+          <button type="button" onClick={() => onSeekBy(-SEEK_INTERVAL)} aria-label={`Rewind ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] hidden sm:flex items-center justify-center">
             <SkipBack aria-hidden="true" size={18} fill="currentColor" />
           </button>
-          <button type="button" onClick={() => onSeekBy(SEEK_INTERVAL)} aria-label={`Forward ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+          <button type="button" onClick={() => onSeekBy(SEEK_INTERVAL)} aria-label={`Forward ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] hidden sm:flex items-center justify-center">
             <SkipForward aria-hidden="true" size={18} fill="currentColor" />
           </button>
           <div className="flex items-center gap-2 group ml-1">
@@ -1651,7 +1651,59 @@ const VideoPlayer = forwardRef<any, any>(
       }, CONTROL_HIDE_DELAY);
     }, []);
 
+    // ── Touch gestures (phones) ──────────────────────────────────────
+    // Single tap: show / hide the controls (it used to pause the video).
+    // Double tap on the left / right third: seek -10 s / +10 s, YouTube-style.
+    const isTouchDevice = useMemo(
+      () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
+      []
+    );
+    const showControlsRef = useRef(showControls);
+    showControlsRef.current = showControls;
+    const controlsWereVisible = useRef(false);
+    const lastTapRef = useRef<{ t: number; side: "left" | "right" | "center" } | null>(null);
+    const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastTouchAt = useRef(0);
+
+    const handleContainerTouchStart = useCallback(() => {
+      controlsWereVisible.current = showControlsRef.current;
+      resetHide();
+    }, [resetHide]);
+
+    const handleVideoTouchEnd = useCallback((e: React.TouchEvent<HTMLVideoElement>) => {
+      const c = containerRef.current;
+      const touch = e.changedTouches[0];
+      if (!c || !touch) return;
+      e.preventDefault(); // no synthetic click (would toggle play) and no double-tap zoom
+      lastTouchAt.current = Date.now();
+      const r = c.getBoundingClientRect();
+      const x = touch.clientX - r.left;
+      const side = x < r.width / 3 ? "left" : x > (r.width * 2) / 3 ? "right" : "center";
+      const now = Date.now();
+      const prev = lastTapRef.current;
+      lastTapRef.current = { t: now, side };
+
+      if (prev && now - prev.t < 300 && side !== "center" && prev.side === side) {
+        if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+        actions.seekBy(side === "left" ? -SEEK_INTERVAL : SEEK_INTERVAL);
+        setRipple({ side, key: now });
+        return;
+      }
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+      singleTapTimer.current = setTimeout(() => {
+        // Controls were already showing → this tap hides them (while playing)
+        if (controlsWereVisible.current && isPlayingRef.current) {
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+          setShowControls(false);
+        }
+      }, 300);
+    }, [actions]);
+
+    useEffect(() => () => { if (singleTapTimer.current) clearTimeout(singleTapTimer.current); }, []);
+
     const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+      // Touch double-taps are handled above; ignore the browser's emulated dblclick
+      if (Date.now() - lastTouchAt.current < 800) return;
       const r = e.currentTarget.getBoundingClientRect();
       const side = e.clientX - r.left < r.width / 2 ? "left" : "right";
       actions.seekBy(side === "left" ? -SEEK_INTERVAL : SEEK_INTERVAL);
@@ -1668,9 +1720,29 @@ const VideoPlayer = forwardRef<any, any>(
 
     const toggleFullscreen = useCallback(() => {
       const c = containerRef.current; if (!c) return;
-      if (!document.fullscreenElement) { c.requestFullscreen?.().catch(() => { }); setIsFullscreen(true); }
-      else { document.exitFullscreen?.(); setIsFullscreen(false); }
-    }, []);
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (o: string) => Promise<void>;
+      };
+      if (!document.fullscreenElement) {
+        if (c.requestFullscreen) {
+          c.requestFullscreen()
+            .then(() => {
+              // Phones: rotate to landscape for landscape videos
+              const v = vRef.current;
+              if (isTouchDevice && v && v.videoWidth >= v.videoHeight) orientation?.lock?.("landscape").catch(() => { });
+            })
+            .catch(() => { });
+          setIsFullscreen(true);
+        } else {
+          // iPhone Safari has no element fullscreen — use the native video one
+          (vRef.current as HTMLVideoElement & { webkitEnterFullscreen?: () => void } | null)?.webkitEnterFullscreen?.();
+        }
+      } else {
+        document.exitFullscreen?.();
+        try { orientation?.unlock?.(); } catch { /* not supported */ }
+        setIsFullscreen(false);
+      }
+    }, [isTouchDevice, vRef]);
 
     useEffect(() => {
       const fn = () => setIsFullscreen(!!document.fullscreenElement);
@@ -1739,16 +1811,15 @@ useImperativeHandle(ref, () => ({
           <div ref={containerRef}
             className={`group relative w-full bg-black overflow-hidden shadow-2xl
               ${isTheaterMode
-                ? "rounded-none sm:rounded-xl"
+                ? "rounded-none sm:rounded-xl aspect-video sm:aspect-auto sm:h-[clamp(42vw,56svh,80vh)]"
                 : "rounded-none sm:rounded-2xl aspect-video"}`}
             style={{
               cursor: showCursor ? "default" : "none",
               zIndex: 1,
-              /* Theater: fill most of the visual viewport; clamp so it's not too
-                 tall on small phones but still immersive on big screens */
-              ...(isTheaterMode ? { height: "clamp(42vw, 56svh, 80vh)" } : {}),
+              /* Theater height applies from the sm breakpoint up (class above).
+                 On phones a fixed height taller than 16:9 added black bars. */
             }}
-            onMouseMove={resetHide} onMouseEnter={resetHide} onTouchStart={resetHide} onFocusCapture={resetHide} onKeyDown={resetHide} onDoubleClick={handleDoubleClick}>
+            onMouseMove={resetHide} onMouseEnter={resetHide} onTouchStart={handleContainerTouchStart} onFocusCapture={resetHide} onKeyDown={resetHide} onDoubleClick={handleDoubleClick}>
 
 
             <AnimatePresence>
@@ -1806,7 +1877,8 @@ useImperativeHandle(ref, () => ({
               className="block z-10 w-full h-full object-contain cursor-pointer"
               poster={video.poster} 
               playsInline 
-              onClick={handleTogglePlay}
+              onClick={() => { if (Date.now() - lastTouchAt.current > 800) handleTogglePlay(); }}
+              onTouchEnd={handleVideoTouchEnd}
               style={{
                 display: 'block',
                 backfaceVisibility: 'hidden',
@@ -1920,8 +1992,8 @@ useImperativeHandle(ref, () => ({
               <img
                 src={channelWatermark}
                 alt="Channel watermark"
-                className="absolute right-3 z-20 h-9 w-9 rounded-sm object-contain opacity-80 shadow-lg transition-opacity hover:opacity-100 sm:h-11 sm:w-11"
-                style={{ bottom: showControls ? 72 : 16 }}
+                className="absolute right-2 sm:right-3 z-20 h-6 w-6 rounded-sm object-contain opacity-60 sm:opacity-80 shadow-lg transition-opacity hover:opacity-100 sm:h-11 sm:w-11"
+                style={{ bottom: showControls ? 72 : 10 }}
               />
             )}
 
@@ -1951,6 +2023,23 @@ useImperativeHandle(ref, () => ({
                     }
                   </div>
                 </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Phones: big centre play/pause while the controls are showing
+                (a single tap now shows/hides the controls instead of pausing) */}
+            <AnimatePresence>
+              {isTouchDevice && showControls && !state.error && !state.isBuffering && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={(e) => { e.stopPropagation(); handleTogglePlay(); resetHide(); }}
+                  onTouchEnd={(e) => e.stopPropagation()}
+                  aria-label={state.isPlaying ? "Pause" : "Play"}
+                  className="absolute left-1/2 top-[40%] -translate-x-1/2 -translate-y-1/2 z-30 w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white active:scale-90"
+                >
+                  {state.isPlaying ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" className="ml-1" />}
+                </motion.button>
               )}
             </AnimatePresence>
 

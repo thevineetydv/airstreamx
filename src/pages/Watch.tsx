@@ -18,6 +18,7 @@ import { API_URL, LS } from "../utils/constants";
 import { cachedFetch } from "../utils/metadataCache";
 import ReportVideoModal from "../components/ReportVideoModal";
 import ShareSheet from "../components/ShareSheet";
+import { formatVideoTitle } from "../utils/format";
 import { parseStartTime } from "../utils/share";
 import { recordWatch, recordWatchProgress, recordSkip, getRecommendations } from "../utils/RecommendationEngine";
 /* ─────────────────────────────────────────────────────────────
@@ -115,16 +116,6 @@ function getDisplayName(v: any): string {
   if (typeof v === "string") return formatEmailToName(v);
   if (v.channel_name?.trim() && !v.channel_name.includes("@")) return v.channel_name.trim();
   return formatEmailToName(v.uploader_email || v.uploader);
-}
-
-function formatVideoTitle(title: string): string {
-  if (!title) return "Untitled";
-  return title
-    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
-    .replace(/[_\s]+(8K|4K|2K|2160p|1440p|1080p|720p|480p|360p|240p|144p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi, "")
-    .replace(/_/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
 }
 
 const formatViews = (num: number): string => {
@@ -361,8 +352,7 @@ function TipButton({ creatorUpiId, creatorName }: { creatorUpiId?: string; creat
         }}
         className="flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-red-500 to-red-600 rounded-full hover:opacity-90 transition text-xs sm:text-sm font-medium"
       >
-        <span className="hidden sm:inline">💝 Tip</span>
-        <span className="sm:hidden">💝</span>
+        <span>💝 Tip</span>
       </button>
 
       {showLoginModal && (
@@ -518,6 +508,35 @@ export default function Watch() {
   const [views, setViews] = useState(0);
   const [showDescription, setShowDescription] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  // ── Mini player (phones/tablets): keep the video playing in a corner
+  //    while the viewer scrolls down to comments / suggestions.
+  const playerSlotRef = useRef<HTMLDivElement>(null);
+  const slotHeightRef = useRef<number>(0);
+  const [miniPlayer, setMiniPlayer] = useState(false);
+  const [miniDismissed, setMiniDismissed] = useState(false);
+
+  useEffect(() => {
+    setMiniDismissed(false);
+    setMiniPlayer(false);
+  }, [id]);
+
+  useEffect(() => {
+    const slot = playerSlotRef.current;
+    if (!slot || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => {
+      const small = window.matchMedia("(max-width: 1023px)").matches;
+      const v = slot.querySelector("video");
+      const playing = !!v && !v.paused && !v.ended;
+      if (!entry.isIntersecting && small && playing && !miniDismissed && !document.fullscreenElement) {
+        slotHeightRef.current = slot.offsetHeight; // keep the gap so the page doesn't jump
+        setMiniPlayer(true);
+      } else if (entry.isIntersecting) {
+        setMiniPlayer(false);
+      }
+    }, { threshold: 0, rootMargin: "-56px 0px 0px 0px" });
+    io.observe(slot);
+    return () => io.disconnect();
+  }, [miniDismissed, current?.id]);
   const [sharePosition, setSharePosition] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -1878,11 +1897,36 @@ useEffect(() => {
                 />
               )}
 
+              {/* Slot keeps the page height while the player floats as a mini player */}
+              <div ref={playerSlotRef} style={miniPlayer ? { height: slotHeightRef.current } : undefined}>
               <div
-                className={`relative w-full bg-black shadow-2xl overflow-hidden ${isTheater ? "rounded-none sm:rounded-3xl" : "rounded-xl sm:rounded-2xl"
-                  }`}
-                style={{ zIndex: 20, isolation: "isolate" }}
+                className={miniPlayer
+                  ? "fixed right-3 z-50 w-[58vw] max-w-[340px] bg-black rounded-xl shadow-2xl overflow-hidden ring-1 ring-white/15"
+                  : `relative w-full bg-black shadow-2xl overflow-hidden ${isTheater ? "rounded-none sm:rounded-3xl" : "rounded-xl sm:rounded-2xl"}`}
+                style={miniPlayer
+                  ? { bottom: "calc(16px + env(safe-area-inset-bottom))", isolation: "isolate" }
+                  : { zIndex: 20, isolation: "isolate" }}
               >
+                {miniPlayer && (
+                  <div className="absolute top-1 right-1 z-[60] flex gap-1">
+                    <button
+                      type="button"
+                      aria-label="Back to video"
+                      onClick={() => playerSlotRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                      className="w-8 h-8 rounded-full bg-black/70 text-white flex items-center justify-center"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Close mini player"
+                      onClick={() => { document.querySelector<HTMLVideoElement>("video")?.pause(); setMiniDismissed(true); setMiniPlayer(false); }}
+                      className="w-8 h-8 rounded-full bg-black/70 text-white flex items-center justify-center"
+                    >
+                      <XIcon size={16} />
+                    </button>
+                  </div>
+                )}
                 <VideoPlayer
                   ref={playerRef}
                   video={{ ...current, poster: current.thumbnail, watermark_url: current.watermark_url || "" }}
@@ -1891,6 +1935,7 @@ useEffect(() => {
                   autoplayNext={autoplay}
                   startTime={startAt}
                 />
+              </div>
               </div>
 
               {isTheater && (
@@ -1935,7 +1980,7 @@ useEffect(() => {
                     className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                   >
                     <Share2 aria-hidden="true" size={15} />
-                    <span className="hidden sm:inline">Share</span>
+                    <span>Share</span>
                   </button>
                   {showShare && (
                     <ShareSheet
@@ -1957,6 +2002,7 @@ useEffect(() => {
                       className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                     >
                       <BarChart3 aria-hidden="true" size={15} />
+                      <span className="sm:hidden">Stats</span>
                       <span className="hidden sm:inline">Analytics</span>
                     </button>
                   )}
@@ -1968,6 +2014,7 @@ useEffect(() => {
                       className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-xs sm:text-sm min-h-[32px]"
                     >
                       <Pencil aria-hidden="true" size={15} />
+                      <span className="sm:hidden">Edit</span>
                       <span className="hidden sm:inline">Edit video</span>
                     </button>
                   )}

@@ -22,6 +22,7 @@ import Header from "../components/Header";
 import { SubscriptionButton } from "../components/SubscriptionButton";
 import ReportVideoModal from "../components/ReportVideoModal";
 import ShareSheet from "../components/ShareSheet";
+import { formatVideoTitle } from "../utils/format";
 /* ─────────────────────────────────────────────
  * CONSTANTS
  * ───────────────────────────────────────────── */
@@ -68,11 +69,7 @@ function fmtCount(n: number): string {
 }
 
 function cleanTitle(t: string): string {
-  if (!t) return "";
-  return t
-    .replace(/\.(mp4|mkv|avi|mov|webm|flv|wmv)$/i, "")
-    .replace(/[_\s]+(4K|2K|1080p|720p|480p|360p|HDR|SDR|HEVC|x264|x265|BluRay|WEBRip|WEB-DL|BRRip|DVDRip)[\w.-]*/gi, "")
-    .replace(/_/g, " ").replace(/\s{2,}/g, " ").trim();
+  return t ? formatVideoTitle(t) : "";
 }
 
 function getDisplayName(short: Short): string {
