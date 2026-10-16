@@ -490,7 +490,7 @@ const Controls: React.FC<any> = ({
   isFullscreen, onToggleFullscreen, likes, liked, onToggleLike, disliked,
   onToggleDislike, isPiPSupported, isAuthenticated, levels, currentLevel, onSetLevel,
   isTheaterMode, onToggleTheater, onShowHelp, spriteUrl,
-  onReactStart, onReactEnd, brightness, onSetBrightness,
+  onReactStart, onReactEnd, brightness, onSetBrightness, isTouch,
 }) => {
    const [showQuality, setShowQuality] = useState(false);
   const [isReacting, setIsReacting] = useState(false);
@@ -591,7 +591,7 @@ const Controls: React.FC<any> = ({
           ever overlapping. */}
       <div className="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto scrollbar-hide">
         <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-shrink-0">
-          <button type="button" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"} className="hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center">
+          <button type="button" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"} className={`hover:text-red-400 transition-all active:scale-90 hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] items-center justify-center ${isTouch ? "hidden" : "flex"}`}>
             {isPlaying ? <Pause aria-hidden="true" size={22} fill="currentColor" /> : <Play aria-hidden="true" size={22} fill="currentColor" />}
           </button>
           <button type="button" onClick={() => onSeekBy(-SEEK_INTERVAL)} aria-label={`Rewind ${SEEK_INTERVAL} seconds`} className="hover:text-red-400 active:scale-90 transition-all hover:scale-110 flex-shrink-0 min-w-[32px] min-h-[32px] hidden sm:flex items-center justify-center">
@@ -1646,7 +1646,10 @@ const VideoPlayer = forwardRef<any, any>(
         // Keep controls on screen while a keyboard user is inside them —
         // hiding unmounts the focused button and drops focus to <body>.
         const c = containerRef.current;
-        if (c && c.contains(document.activeElement) && document.activeElement !== c) return;
+        const active = document.activeElement as HTMLElement | null;
+        let keyboardFocus = false;
+        try { keyboardFocus = !!active?.matches(":focus-visible"); } catch { /* old browsers */ }
+        if (c && active && c.contains(active) && active !== c && keyboardFocus) return;
         if (isPlayingRef.current) { setShowControls(false); setShowCursor(false); }
       }, CONTROL_HIDE_DELAY);
     }, []);
@@ -2006,7 +2009,7 @@ useImperativeHandle(ref, () => ({
             {state.error && <ErrorDisplay message={state.error} onRetry={() => { actions.clearError(); window.location.reload(); }} />}
 
             <AnimatePresence>
-              {showPlayPauseOverlay && !state.error && (
+              {showPlayPauseOverlay && !state.error && !isTouchDevice && (
                 <motion.div
                   key={state.isPlaying ? "play-flash" : "pause-flash"}
                   initial={{ opacity: 0, scale: 0.7 }}
@@ -2030,16 +2033,21 @@ useImperativeHandle(ref, () => ({
                 (a single tap now shows/hides the controls instead of pausing) */}
             <AnimatePresence>
               {isTouchDevice && showControls && !state.error && !state.isBuffering && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={(e) => { e.stopPropagation(); handleTogglePlay(); resetHide(); }}
-                  onTouchEnd={(e) => e.stopPropagation()}
-                  aria-label={state.isPlaying ? "Pause" : "Play"}
-                  className="absolute left-1/2 top-[40%] -translate-x-1/2 -translate-y-1/2 z-30 w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white active:scale-90"
-                >
-                  {state.isPlaying ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" className="ml-1" />}
-                </motion.button>
+                // Centring lives on a plain wrapper: framer-motion writes its own
+                // inline transform (scale), which wiped out the translate(-50%)
+                // classes and pushed the button down-right of centre.
+                <div key="centre-play" className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                    onClick={(e) => { e.stopPropagation(); handleTogglePlay(); resetHide(); }}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    aria-label={state.isPlaying ? "Pause" : "Play"}
+                    className="pointer-events-auto w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white active:scale-90"
+                  >
+                    {state.isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+                  </motion.button>
+                </div>
               )}
             </AnimatePresence>
 
@@ -2068,6 +2076,7 @@ useImperativeHandle(ref, () => ({
                       isTheaterMode={isTheaterMode} onToggleTheater={toggleTheaterMode}
                       onShowHelp={() => setShowHelp(true)}
                       spriteUrl={spriteUrl}
+                      isTouch={isTouchDevice}
                     />
                   </div>
                 </motion.div>
