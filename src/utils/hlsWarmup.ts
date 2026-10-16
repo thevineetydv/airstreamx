@@ -14,6 +14,8 @@
  * helper has a hard, small upper bound and can never "keep going".
  */
 
+import { abrStartConfig, isDataSaver } from "./abr";
+
 const warmed = new Set<string>();          // master URLs already warmed
 let inFlight: AbortController | null = null; // only one warm-up at a time
 
@@ -21,28 +23,29 @@ function absolute(url: string, base: string): string {
   try { return new URL(url, base).toString(); } catch { return url; }
 }
 
-function isDataSaver(): boolean {
-  try {
-    if (localStorage.getItem("data_saver_mode") === "1") return true;
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    return !!conn?.saveData;
-  } catch {
-    return false;
-  }
-}
 
-/** Pick the lowest-bandwidth variant — the one the players start on (startLevel: 0). */
-function lowestVariant(master: string, masterUrl: string): string | null {
+/**
+ * Pick the variant the player will start on: the best one that fits the
+ * remembered / hinted bandwidth (see utils/abr), else the lowest.
+ */
+function startVariant(master: string, masterUrl: string): string | null {
   const lines = master.split(/\r?\n/);
-  let best: { bw: number; uri: string } | null = null;
+  const variants: { bw: number; uri: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line.startsWith("#EXT-X-STREAM-INF")) continue;
     const bw = Number(/BANDWIDTH=(\d+)/.exec(line)?.[1] ?? Infinity);
     const uri = lines.slice(i + 1).find(l => l.trim() && !l.startsWith("#"))?.trim();
-    if (uri && (!best || bw < best.bw)) best = { bw, uri };
+    if (uri) variants.push({ bw, uri });
   }
-  return best ? absolute(best.uri, masterUrl) : null;
+  if (!variants.length) return null;
+  variants.sort((a, b) => a.bw - b.bw);
+  const { startLevel, abrEwmaDefaultEstimate } = abrStartConfig();
+  let pick = variants[0];
+  if (startLevel === -1) {
+    for (const v of variants) if (v.bw <= abrEwmaDefaultEstimate * 0.8) pick = v;
+  }
+  return absolute(pick.uri, masterUrl);
 }
 
 function firstSegments(playlist: string, playlistUrl: string, count: number): string[] {
@@ -76,7 +79,7 @@ export async function warmHls(masterUrl: string | undefined | null, opts: { segm
 
     // A media playlist (no variants) can be used directly
     const playlistUrl = masterText.includes("#EXT-X-STREAM-INF")
-      ? lowestVariant(masterText, masterUrl)
+      ? startVariant(masterText, masterUrl)
       : masterUrl;
     if (!playlistUrl) return;
 

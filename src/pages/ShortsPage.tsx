@@ -14,6 +14,7 @@ import {
   Home, Zap, Users, Library, TrendingUp,
 } from "lucide-react";
 import Hls from "hls.js/light";
+import { abrStartConfig, rememberBandwidth } from "../utils/abr";
 import { warmHls } from "../utils/hlsWarmup";
 import { getAuth } from "firebase/auth";
 import { API_URL } from "../utils/constants";
@@ -606,7 +607,18 @@ function ShortPlayer({
     else video.removeAttribute("crossorigin");
 
     if (Hls.isSupported() && (videoUrl.includes(".m3u8") || videoUrl.includes("hls"))) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 20, maxMaxBufferLength: 30, maxBufferSize: 15e6, startLevel: 0 });
+      // Shorts are short: starting at the lowest quality meant most clips
+      // ended before ABR switched up. Start from the measured / hinted
+      // bandwidth instead, sized to the full-screen player.
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false, // VOD, not live
+        capLevelToPlayerSize: true,
+        maxDevicePixelRatio: 2,
+        maxBufferLength: 20, maxMaxBufferLength: 30, maxBufferSize: 15e6,
+        abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.8,
+        ...abrStartConfig(),
+      });
       hlsRef.current = hls;
       hls.loadSource(videoUrl); hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false));
@@ -620,7 +632,7 @@ function ShortPlayer({
       video.onerror = () => { setLoading(false); setVideoError(true); };
     }
     video.loop = false;
-    return () => { hlsRef.current?.destroy(); hlsRef.current = null; video.removeAttribute("src"); };
+    return () => { rememberBandwidth(hlsRef.current); hlsRef.current?.destroy(); hlsRef.current = null; video.removeAttribute("src"); };
   }, [videoUrl, ambientMode]);
 
   /* ── Manual retry after a failed load ── */
@@ -707,7 +719,7 @@ function ShortPlayer({
 
   /* ── Cleanup ── */
   useEffect(() => () => {
-    hlsRef.current?.destroy(); hlsRef.current = null;
+    rememberBandwidth(hlsRef.current); hlsRef.current?.destroy(); hlsRef.current = null;
     const v = videoRef.current;
     if (v) { v.pause(); v.muted = true; v.removeAttribute("src"); v.load(); }
   }, []);
@@ -1689,10 +1701,8 @@ export default function ShortsPage({
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
-              <span className="text-white/55 text-xs font-medium"
-                style={{ background: "rgba(0,0,0,0.35)", borderRadius: 20, padding: "3px 10px", backdropFilter: "blur(6px)" }}>
-                {activeIndex + 1} / {shorts.length}
-              </span>
+              {/* No "4 / 21" counter here on phones: it sat on top of the hook
+                  text pill, and the progress dots already show position. */}
               <div style={{ width: 36 }} /> {/* spacer */}
             </div>
 

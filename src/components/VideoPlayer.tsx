@@ -15,6 +15,7 @@ import {
   ThumbsDown, HelpCircle, X,
 } from "lucide-react";
 import Hls from "hls.js/light";
+import { abrStartConfig, rememberBandwidth } from "../utils/abr";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../utils/constants";
 import { getAuth } from "firebase/auth";
@@ -1567,8 +1568,10 @@ const VideoPlayer = forwardRef<any, any>(
           const isMobile = !!window.matchMedia?.("(max-width: 768px), (pointer: coarse)").matches;
           const hls = new Hls({
             enableWorker: true, lowLatencyMode: live, startFragPrefetch: !live, capLevelToPlayerSize: true,
-            maxDevicePixelRatio: isMobile ? 1.5 : Number.POSITIVE_INFINITY,
-            startLevel: live ? -1 : 0, abrEwmaDefaultEstimate: live ? 1_200_000 : 900_000,
+            // DPR 2 on phones: 1.5 capped a portrait player at ~480p, which
+            // looked soft on today's high-density screens.
+            maxDevicePixelRatio: isMobile ? 2 : Number.POSITIVE_INFINITY,
+            ...(live ? { startLevel: -1, abrEwmaDefaultEstimate: 1_200_000 } : abrStartConfig()),
             abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
             maxBufferLength: live ? 6 : (isMobile ? 15 : 20),
             maxMaxBufferLength: live ? 12 : (isMobile ? 30 : 60),
@@ -1630,7 +1633,10 @@ const VideoPlayer = forwardRef<any, any>(
         el.addEventListener("loadedmetadata", () => { if (startTime > 0) el.currentTime = startTime; safePlay(); }, { once: true });
       }
 
-      return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } el.src = ""; el.load(); };
+      return () => {
+        if (hlsRef.current) { rememberBandwidth(hlsRef.current); hlsRef.current.destroy(); hlsRef.current = null; }
+        el.src = ""; el.load();
+      };
     }, [video?.url, autoPlay, startTime, actions]);
 
     useEffect(() => { if (!ripple) return; const t = setTimeout(() => setRipple(null), 600); return () => clearTimeout(t); }, [ripple]);
