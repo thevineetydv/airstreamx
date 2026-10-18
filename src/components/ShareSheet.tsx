@@ -1,5 +1,8 @@
 // components/ShareSheet.tsx
 //
+// Every completed share is counted (POST /videos/:id/share) so shared
+// videos rise on Trending.
+//
 // One share dialog for long videos and Shorts:
 //   • "Share to Story" — makes a 9:16 story image and opens the phone's
 //     share sheet (Instagram / WhatsApp / Facebook Stories); on desktop it
@@ -15,6 +18,7 @@ import {
   videoShareUrl, shareTargetUrl, copyText, canNativeShare, createStoryCardSafe,
   downloadBlob, fmtClock, type ShareTarget,
 } from "../utils/share";
+import { trackShare } from "../utils/trending";
 
 interface Props {
   videoId: string | number;
@@ -56,12 +60,16 @@ export default function ShareSheet({ videoId, title, channel, thumbnail, short, 
   const copy = async () => {
     const ok = await copyText(url);
     setCopied(ok);
-    if (ok) setTimeout(() => setCopied(false), 2000);
+    if (ok) {
+      trackShare(videoId, "copy");
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const nativeShare = async () => {
     try {
       await navigator.share({ title, text, url });
+      trackShare(videoId, "native");
     } catch {
       // user cancelled — nothing to do
     }
@@ -86,6 +94,7 @@ export default function ShareSheet({ videoId, title, channel, thumbnail, short, 
       if (nav.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title, text: `${text}\n${url}` });
+          trackShare(videoId, "story");
           const copiedOk = await copyText(url);
           setNotice(copiedOk
             ? "Link copied — paste it with the Link sticker in your story 🔗"
@@ -97,6 +106,7 @@ export default function ShareSheet({ videoId, title, channel, thumbnail, short, 
       } else {
         downloadBlob(blob, "airstreamx-story.png");
         await copyText(url);
+        trackShare(videoId, "story");
         setNotice("Story image downloaded and link copied. Post the image to your story and add the link with the Link sticker 🔗");
       }
     } catch {
@@ -157,6 +167,7 @@ export default function ShareSheet({ videoId, title, channel, thumbnail, short, 
               href={shareTargetUrl(t.key, url, text)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackShare(videoId, t.key)}
               className="flex flex-col items-center gap-1.5 group"
             >
               <span className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold group-hover:scale-105 transition" style={{ background: t.bg }} aria-hidden="true">

@@ -1235,6 +1235,17 @@ export default function ShortsPage({
         const data = await res.json();
         const all = data.videos || [];
         const filtered: Short[] = all.filter((v: Short) => v.duration > 0 && v.duration <= MAX_SHORT_DURATION);
+        // A Short opened from a link (Trending, WhatsApp…) may be older than
+        // the latest 50 videos — load it and show it first, otherwise the
+        // feed silently opened on a different Short.
+        if (id && !filtered.some((s) => s.public_id === id || String(s.id) === id)) {
+          try {
+            const one = await fetch(`${API_URL}/videos/${encodeURIComponent(id)}`);
+            const d = one.ok ? await one.json() : null;
+            const v = d?.video as Short | undefined;
+            if (v?.url && v.duration > 0 && v.duration <= MAX_SHORT_DURATION) filtered.unshift(v);
+          } catch { /* fall back to the normal feed */ }
+        }
         setShorts(filtered);
         const counts: Record<number, number> = {};
         const cc: Record<number, number | null> = {};
@@ -1244,6 +1255,8 @@ export default function ShortsPage({
       } catch { }
       finally { setLoading(false); }
     })();
+    // Load once: `id` only matters for the link the page was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Update URL when active short changes */

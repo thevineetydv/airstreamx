@@ -7,7 +7,7 @@ import {
   MessageSquare, Eye, Calendar,
   ChevronDown, ChevronUp, Check,
   Pencil, Trash2, X as XIcon,
-  ThumbsUp, ThumbsDown, Pin, AlertTriangle, BarChart3,
+  ThumbsUp, ThumbsDown, Pin, AlertTriangle, BarChart3, Flame,
 } from "lucide-react";
 import VideoPlayer from "../components/VideoPlayer";
 import { getAuth } from "firebase/auth";
@@ -20,6 +20,7 @@ import ReportVideoModal from "../components/ReportVideoModal";
 import ShareSheet from "../components/ShareSheet";
 import { formatVideoTitle } from "../utils/format";
 import { parseStartTime } from "../utils/share";
+import { getTrendingRank } from "../utils/trending";
 import { recordWatch, recordWatchProgress, recordSkip, getRecommendations } from "../utils/RecommendationEngine";
 /* ─────────────────────────────────────────────────────────────
  * HELPERS
@@ -506,6 +507,8 @@ export default function Watch() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const [views, setViews] = useState(0);
+  // "🔥 #3 on Trending" chip (top 20 only)
+  const [trendingRank, setTrendingRank] = useState<number | null>(null);
   const [showDescription, setShowDescription] = useState(false);
   const [showShare, setShowShare] = useState(false);
   // ── Mini player (phones/tablets): keep the video playing in a corner
@@ -870,6 +873,16 @@ export default function Watch() {
     };
     loadReactions();
   }, [current?.id, currentUserEmail]);
+
+useEffect(() => {
+  setTrendingRank(null);
+  if (!current?.id) return;
+  let alive = true;
+  getTrendingRank(current.id, current.public_id).then((rank) => {
+    if (alive) setTrendingRank(rank);
+  });
+  return () => { alive = false; };
+}, [current?.id, current?.public_id]);
 
 useEffect(() => {
   if (!current?.id) return;
@@ -1960,6 +1973,14 @@ useEffect(() => {
                   {formatVideoTitle(current.title)}
                 </h1>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-400">
+                  {trendingRank && (
+                    <Link
+                      to="/trending"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 font-semibold hover:bg-orange-500/25"
+                    >
+                      <Flame size={13} aria-hidden="true" />#{trendingRank} on Trending
+                    </Link>
+                  )}
                   <span className="flex items-center gap-1.5"><Eye size={14} />{formatViews(views)} views</span>
                   <span className="flex items-center gap-1.5">
                     <Calendar size={14} />
