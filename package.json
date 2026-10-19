@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "test:editor": "node tests/studio-editor/editor.test.mjs"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
@@ -16,6 +17,7 @@
     "framer-motion": "^12.23.24",
     "hls.js": "^1.6.15",
     "lucide-react": "^0.541.0",
+    "mediabunny": "^1.61.6",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",

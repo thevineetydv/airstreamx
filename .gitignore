@@ -40,3 +40,6 @@ modified_files.txt
 # Test screenshots from responsive testing — regenerate on demand,
 # don't need to live in version control
 responsive-test-screenshots/
+
+# Studio Editor Playwright output
+studio-editor-screenshots/

@@ -38,6 +38,8 @@ const LiveStream       = lazy(() => import("./pages/LiveStream"));
 const LiveStreamsBrowser = lazy(() => import("./components/LiveStreamsBrowser"));
 const GoLivePage       = lazy(() => import("./pages/GoLivePage"));
 const ClipGenerator    = lazy(() => import("./pages/ClipGenerator"));
+// Studio Editor (video editing + WebCodecs export) — heavy, so only loaded on /studio/editor
+const StudioEditor     = lazy(() => import("./features/studio-editor/StudioEditorPage"));
 
 // ─── Sidebar nav pages (were imported but routes were MISSING — FIX #1) ───────
 const Library          = lazy(() => import("./pages/Library"));
@@ -112,6 +114,9 @@ function AppContent() {
   const isWatchPage  = location.pathname === "/watch";
   const isLivePage   = location.pathname.startsWith("/live/watch");
   const isShortsPage = location.pathname.startsWith("/shorts");
+  // The editor is a full-screen tool: no site header / bottom nav, like Shorts.
+  const isEditorPage = location.pathname.startsWith("/studio/editor");
+  const isFullBleed  = isShortsPage || isEditorPage;
 
   React.useEffect(() => {
     const handleOnline = () => {
@@ -152,7 +157,7 @@ function AppContent() {
             </div>
           )}
 
-          {!isFullscreen && !isShortsPage && (
+          {!isFullscreen && !isFullBleed && (
             <Header
               theme={theme}
               setTheme={setTheme}
@@ -167,14 +172,14 @@ function AppContent() {
 
           <main
             className={`flex flex-1 w-full
-              ${(isFullscreen || isShortsPage) ? "h-screen" : "h-[calc(100vh-64px)]"}
-              ${isWatchPage || isLivePage || isShortsPage ? "px-0 py-0" : "px-4 md:px-6 py-4"}
-              ${!isWatchPage && !isLivePage ? "pb-20 md:pb-4" : ""}
+              ${isEditorPage ? "h-[100dvh]" : (isFullscreen || isShortsPage) ? "h-screen" : "h-[calc(100vh-64px)]"}
+              ${isWatchPage || isLivePage || isFullBleed ? "px-0 py-0" : "px-4 md:px-6 py-4"}
+              ${!isWatchPage && !isLivePage && !isEditorPage ? "pb-20 md:pb-4" : ""}
               overflow-hidden`}
           >
             <section
               className={`flex-1 min-w-0 ${
-                isShortsPage ? "overflow-hidden" : "overflow-y-auto custom-scrollbar"
+                isFullBleed ? "overflow-hidden" : "overflow-y-auto custom-scrollbar"
               }`}
             >
               <Suspense fallback={<PageLoader />}>
@@ -244,6 +249,9 @@ function AppContent() {
                   {/* ─── CLIP GENERATOR ───────────────────────────── */}
                   <Route path="/clip-generator" element={<ClipGenerator />} />
 
+                  {/* ─── STUDIO EDITOR ────────────────────────────── */}
+                  <Route path="/studio/editor" element={<StudioEditor />} />
+
                   {/* ─── CHANNEL — explicit prefix form ──────────── */}
                   <Route path="/channel/:handle" element={<ChannelPage />} />
 
@@ -304,7 +312,7 @@ function AppContent() {
             </section>
           </main>
 
-          {!isFullscreen && !isWatchPage && !isLivePage && (
+          {!isFullscreen && !isWatchPage && !isLivePage && !isEditorPage && (
             <BottomNav onUploadClick={() => openModal()} />
           )}
 

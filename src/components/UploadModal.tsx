@@ -69,6 +69,7 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
   const {
     uploading, progress, uploadSpeed, timeRemaining, processingStage,
     beginUpload, updateProgress, finishUpload, cancelUpload,
+    takePendingFile,
   } = useUpload();
 
   const [step, setStep] = useState(1);
@@ -308,6 +309,14 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
     // User can edit it manually after — but new file = new title
     setTitle(baseName.substring(0, 100));
   };
+
+  // A file exported from the Studio Editor arrives here pre-selected.
+  // Runs once on open; takePendingFile() clears it so it is never reused.
+  useEffect(() => {
+    const handedOver = takePendingFile();
+    if (handedOver) processFile(handedOver);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -926,6 +935,15 @@ export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
                           Select File
                         </button>
                       </div>
+
+                      <Link
+                        to="/studio/editor"
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
+                        className="mt-4 text-sm font-semibold text-zinc-400 hover:text-white underline-offset-4 hover:underline"
+                        data-testid="open-studio-editor"
+                      >
+                        ✂️ Edit first in Studio Editor
+                      </Link>
 
                       <input
                         ref={fileInputRef}
