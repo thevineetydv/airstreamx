@@ -1,18 +1,23 @@
-// AirStreamX Studio Editor — Phase 1 (MVP).
-// Import clips, trim / split / delete / reorder on a timeline, preview,
-// export MP4 in the browser and hand it to the normal upload flow.
+// AirStreamX Studio Editor.
+// Phase 1: import clips, trim / split / delete / reorder, preview, export MP4
+// in the browser and hand it to the normal upload flow.
+// Phase 2: text, stickers, 📍 area tag and Local Deal banner overlays.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Film, Pause, Play, Plus, Scissors, Trash2, ZoomIn, ZoomOut,
+  ArrowLeft, ChevronLeft, ChevronRight, Film, MapPin, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { editorReducer, initialEditorState } from "./model/reducer";
 import { clipStarts, formatTime, trimClip } from "./model/timeline";
 import { probeFile } from "./media/probe";
 import { usePreviewEngine } from "./preview/usePreviewEngine";
 import Timeline from "./timeline/Timeline";
+import PreviewStage from "./preview/PreviewStage";
+import OverlayPanel from "./overlays/OverlayPanel";
+import { outputSize } from "./export/size";
+import { clampOverlayTimes, createOverlay, rememberOverlay, type OverlayKind, type OverlayPatch } from "./model/overlays";
 import { isWebCodecsSupported } from "./media/support";
 
 const ExportPanel = lazy(() => import("./export/ExportPanel"));
@@ -23,7 +28,7 @@ const MAX_PPS = 200;
 export default function StudioEditorPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
-  const { assets, clips, selectedClipId } = state;
+  const { assets, clips, selectedClipId, overlays, selectedOverlayId } = state;
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<string | null>(null);
@@ -111,12 +116,54 @@ export default function StudioEditorPage() {
     }
   };
 
+  // ── Overlays ──
+  const selectedOverlay = overlays.find((o) => o.id === selectedOverlayId) ?? null;
+
+  const addOverlay = (kind: OverlayKind) => {
+    pause();
+    const o = createOverlay(kind, time, duration);
+    dispatch({ type: "addOverlay", overlay: o });
+    // Make sure the new overlay is visible in the preview.
+    if (time < o.start || time >= o.end) seek(o.start);
+  };
+
+  const updateOverlay = useCallback((id: string, patch: OverlayPatch) => {
+    dispatch({ type: "updateOverlay", id, patch });
+  }, []);
+
+  const selectOverlay = useCallback((id: string | null) => {
+    dispatch({ type: "selectOverlay", id });
+  }, []);
+
+  // Selecting a bar on the timeline jumps the playhead into it, so it shows in the preview.
+  const timeRef = useRef(time);
+  timeRef.current = time;
+  const overlaysRef = useRef(overlays);
+  overlaysRef.current = overlays;
+  const selectOverlayFromTimeline = useCallback((id: string) => {
+    pause();
+    dispatch({ type: "selectOverlay", id });
+    const o = overlaysRef.current.find((x) => x.id === id);
+    if (o && (timeRef.current < o.start || timeRef.current >= o.end)) seek(o.start + 0.01);
+  }, [pause, seek]);
+
+  const setOverlayTime = useCallback((id: string, start: number, end: number) => {
+    dispatch({ type: "updateOverlay", id, patch: { start, end } });
+  }, []);
+
+  const closeOverlayPanel = () => {
+    if (selectedOverlay) rememberOverlay(selectedOverlay);
+    selectOverlay(null);
+  };
+
   const goBack = () => {
     if (clips.length && !window.confirm("Leave the editor? Your edits will be lost.")) return;
     navigate(-1);
   };
 
   const hasClips = clips.length > 0;
+  // Preview uses the export frame shape, so overlay positions match the final video.
+  const stage = outputSize("720p", assets[clips[0]?.assetId]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black text-white" data-testid="studio-editor">
@@ -148,13 +195,16 @@ export default function StudioEditorPage() {
       {/* Preview */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
         {hasClips ? (
-          <video
-            ref={videoRef}
-            playsInline
-            preload="auto"
-            className="max-h-full max-w-full"
-            onClick={toggle}
-            data-testid="preview-video"
+          <PreviewStage
+            videoRef={videoRef}
+            aspect={stage.width / stage.height}
+            time={time}
+            overlays={overlays}
+            selectedOverlayId={selectedOverlayId}
+            onSelectOverlay={selectOverlay}
+            onMoveOverlay={updateOverlay}
+            onTapEmpty={toggle}
+            onDragStart={pause}
           />
         ) : (
           <button
@@ -214,22 +264,52 @@ export default function StudioEditorPage() {
             onScrubStart={pause}
             onSelect={onSelect}
             onTrim={handleTrim}
+            overlays={overlays}
+            selectedOverlayId={selectedOverlayId}
+            onSelectOverlay={selectOverlayFromTimeline}
+            onOverlayTime={setOverlayTime}
           />
 
-          {/* Tools */}
-          <div className="grid grid-cols-5 gap-1 px-2 py-2 text-[11px] text-gray-300">
-            <ToolButton icon={<Scissors size={20} />} label="Split" onClick={splitHere} testId="tool-split" />
-            <ToolButton icon={<Trash2 size={20} />} label="Delete" onClick={deleteSelected} disabled={!selectedClipId} testId="tool-delete" />
-            <ToolButton icon={<ChevronLeft size={20} />} label="Move left" onClick={() => move(-1)} disabled={selectedIndex <= 0} testId="tool-left" />
-            <ToolButton icon={<ChevronRight size={20} />} label="Move right" onClick={() => move(1)} disabled={selectedIndex < 0 || selectedIndex >= clips.length - 1} testId="tool-right" />
-            <ToolButton icon={<Plus size={20} />} label="Add clip" onClick={() => fileInputRef.current?.click()} disabled={!!importing} testId="tool-add" />
-          </div>
+          {selectedOverlay ? (
+            <OverlayPanel
+              overlay={selectedOverlay}
+              onChange={(patch) => updateOverlay(selectedOverlay.id, patch)}
+              onSetStart={() => {
+                const c = clampOverlayTimes(time, Math.max(selectedOverlay.end, time + 0.3), duration);
+                setOverlayTime(selectedOverlay.id, c.start, c.end);
+              }}
+              onSetEnd={() => {
+                const c = clampOverlayTimes(Math.min(selectedOverlay.start, time - 0.3), time, duration);
+                setOverlayTime(selectedOverlay.id, c.start, c.end);
+              }}
+              onDelete={() => dispatch({ type: "removeOverlay", id: selectedOverlay.id })}
+              onDone={closeOverlayPanel}
+            />
+          ) : (
+            <>
+              {/* Add overlays: compact chips so all four fit on a phone */}
+              <div className="grid grid-cols-4 gap-1.5 px-2 pt-2 text-[11px] font-semibold">
+                <AddChip icon={<Type size={14} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
+                <AddChip icon={<Smile size={14} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
+                <AddChip icon={<MapPin size={14} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
+                <AddChip icon={<Tag size={14} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
+              </div>
+              {/* Clip tools */}
+              <div className="grid grid-cols-5 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
+                <ToolButton icon={<Scissors size={20} />} label="Split" onClick={splitHere} testId="tool-split" />
+                <ToolButton icon={<Trash2 size={20} />} label="Delete" onClick={deleteSelected} disabled={!selectedClipId} testId="tool-delete" />
+                <ToolButton icon={<ChevronLeft size={20} />} label="Move left" onClick={() => move(-1)} disabled={selectedIndex <= 0} testId="tool-left" />
+                <ToolButton icon={<ChevronRight size={20} />} label="Move right" onClick={() => move(1)} disabled={selectedIndex < 0 || selectedIndex >= clips.length - 1} testId="tool-right" />
+                <ToolButton icon={<Plus size={20} />} label="Add clip" onClick={() => fileInputRef.current?.click()} disabled={!!importing} testId="tool-add" />
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {showExport && (
         <Suspense fallback={null}>
-          <ExportPanel clips={clips} assets={assets} onClose={() => setShowExport(false)} />
+          <ExportPanel clips={clips} overlays={overlays} assets={assets} onClose={() => setShowExport(false)} />
         </Suspense>
       )}
     </div>
@@ -242,10 +322,23 @@ function ToolButton(props: { icon: React.ReactNode; label: string; onClick: () =
       onClick={props.onClick}
       disabled={props.disabled}
       data-testid={props.testId}
-      className="flex flex-col items-center gap-1 rounded-xl py-2 active:bg-white/10 disabled:opacity-30"
+      className="flex flex-col items-center gap-1 rounded-xl py-1.5 active:bg-white/10 disabled:opacity-30"
     >
       {props.icon}
       <span>{props.label}</span>
+    </button>
+  );
+}
+
+function AddChip(props: { icon: React.ReactNode; label: string; onClick: () => void; testId: string }) {
+  return (
+    <button
+      onClick={props.onClick}
+      data-testid={props.testId}
+      className="flex items-center justify-center gap-1 rounded-full bg-white/10 py-2 text-white active:bg-white/20"
+    >
+      {props.icon}
+      {props.label}
     </button>
   );
 }
