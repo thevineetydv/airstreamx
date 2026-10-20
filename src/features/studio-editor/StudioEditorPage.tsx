@@ -3,12 +3,13 @@
 // in the browser and hand it to the normal upload flow.
 // Phase 2: text, stickers, 📍 area tag and Local Deal banner overlays.
 // Phase 3: original sound volume/mute, built-in music library, voice-over.
+// Phase 4: auto captions (Whisper in the browser), editable, burn-in or subtitle track.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Film, MapPin, Music, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, Captions, ChevronLeft, ChevronRight, Film, MapPin, Music, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { editorReducer, initialEditorState } from "./model/reducer";
 import { clipStarts, formatTime, trimClip } from "./model/timeline";
@@ -19,6 +20,9 @@ import PreviewStage from "./preview/PreviewStage";
 import OverlayPanel from "./overlays/OverlayPanel";
 import { outputSize } from "./export/size";
 import AudioPanel from "./audio/AudioPanel";
+import CaptionsPanel from "./captions/CaptionsPanel";
+import { useCaptionGenerator, type AsrModelId } from "./captions/useCaptionGenerator";
+import { captionAt, chunksToCaptions, manualCaption, type Caption, type CaptionLanguage, type CaptionSettings } from "./model/captions";
 import { usePreviewAudio } from "./audio/usePreviewAudio";
 import { useVoiceRecorder } from "./audio/useVoiceRecorder";
 import { newVoiceOver, type AudioSettings } from "./model/audio";
@@ -33,7 +37,7 @@ const MAX_PPS = 200;
 export default function StudioEditorPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
-  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio } = state;
+  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio, captions } = state;
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<string | null>(null);
@@ -47,6 +51,7 @@ export default function StudioEditorPage() {
   // ── Audio (Phase 3) ──
   const recorder = useVoiceRecorder();
   const [audioOpen, setAudioOpen] = useState(false);
+  const [captionsOpen, setCaptionsOpen] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   usePreviewAudio({ videoRef, playing, time, total: duration, audio, recording: recorder.recording });
 
@@ -133,6 +138,7 @@ export default function StudioEditorPage() {
   const addOverlay = (kind: OverlayKind) => {
     pause();
     setAudioOpen(false);
+    setCaptionsOpen(false);
     const o = createOverlay(kind, time, duration);
     dispatch({ type: "addOverlay", overlay: o });
     // Make sure the new overlay is visible in the preview.
@@ -155,6 +161,7 @@ export default function StudioEditorPage() {
   const selectOverlayFromTimeline = useCallback((id: string) => {
     pause();
     setAudioOpen(false);
+    setCaptionsOpen(false);
     dispatch({ type: "selectOverlay", id });
     const o = overlaysRef.current.find((x) => x.id === id);
     if (o && (timeRef.current < o.start || timeRef.current >= o.end)) seek(o.start + 0.01);
@@ -216,8 +223,39 @@ export default function StudioEditorPage() {
   const openAudio = useCallback((voiceId: string | null = null) => {
     dispatch({ type: "selectOverlay", id: null });
     setSelectedVoiceId(voiceId);
+    setCaptionsOpen(false);
     setAudioOpen(true);
   }, []);
+
+  // ── Captions (Phase 4) ──
+  const captionGen = useCaptionGenerator();
+  const activeCaption = captionAt(captions.items, time) ?? null;
+
+  const openCaptions = useCallback(() => {
+    pause();
+    dispatch({ type: "selectOverlay", id: null });
+    setAudioOpen(false);
+    setCaptionsOpen(true);
+  }, [pause]);
+
+  const generateCaptions = async (model: AsrModelId, language: CaptionLanguage) => {
+    pause();
+    dispatch({ type: "setCaptions", patch: { language } });
+    const chunks = await captionGen.generate({ clips, assets, audio, model, language });
+    if (!chunks) return;
+    const items = chunksToCaptions(chunks, duration);
+    dispatch({ type: "setCaptions", patch: { items } });
+    if (!items.length) setError("No speech was recognised. Try a different language or the Accurate model.");
+  };
+
+  const setCaptions = useCallback((patch: Partial<CaptionSettings>) => dispatch({ type: "setCaptions", patch }), []);
+  const editCaption = useCallback((id: string, patch: Partial<Caption>) => dispatch({ type: "editCaption", id, patch }), []);
+
+  const onSelectCaption = useCallback((id: string) => {
+    const c = state.captions.items.find((x) => x.id === id);
+    openCaptions();
+    if (c) seek(c.start + 0.01);
+  }, [state.captions.items, openCaptions, seek]);
 
   const onSelectAudio = useCallback((id: string) => {
     pause();
@@ -281,6 +319,7 @@ export default function StudioEditorPage() {
             aspect={stage.width / stage.height}
             time={time}
             overlays={overlays}
+            captions={captions}
             selectedOverlayId={selectedOverlayId}
             onSelectOverlay={selectOverlay}
             onMoveOverlay={updateOverlay}
@@ -359,9 +398,31 @@ export default function StudioEditorPage() {
             selectedVoiceId={audioOpen ? selectedVoiceId : null}
             onSelectAudio={onSelectAudio}
             onMoveVoice={onMoveVoice}
+            captionItems={captions.items}
+            activeCaptionId={captionsOpen ? activeCaption?.id ?? null : null}
+            onSelectCaption={onSelectCaption}
           />
 
-          {audioOpen ? (
+          {captionsOpen ? (
+            <CaptionsPanel
+              captions={captions}
+              job={captionGen.job}
+              time={time}
+              activeId={activeCaption?.id ?? null}
+              onGenerate={(model, language) => void generateCaptions(model, language)}
+              onCancel={captionGen.cancel}
+              onChange={setCaptions}
+              onEdit={editCaption}
+              onDelete={(id) => dispatch({ type: "removeCaption", id })}
+              onAdd={() => {
+                pause();
+                const c = manualCaption(time, duration, captions.items);
+                dispatch({ type: "addCaption", caption: c });
+              }}
+              onSeek={(t) => { pause(); seek(t); }}
+              onDone={() => setCaptionsOpen(false)}
+            />
+          ) : audioOpen ? (
             <AudioPanel
               audio={audio}
               time={time}
@@ -392,12 +453,13 @@ export default function StudioEditorPage() {
           ) : (
             <>
               {/* Add overlays: compact chips so all four fit on a phone */}
-              <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[11px] font-semibold">
-                <AddChip icon={<Type size={14} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
-                <AddChip icon={<Smile size={14} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
-                <AddChip icon={<MapPin size={14} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
-                <AddChip icon={<Tag size={14} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
-                <AddChip icon={<Music size={14} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
+              <div className="grid grid-cols-6 gap-1 px-2 pt-2 text-[10px] font-semibold">
+                <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
+                <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
+                <AddChip icon={<MapPin size={16} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
+                <AddChip icon={<Tag size={16} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
+                <AddChip icon={<Music size={16} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
+                <AddChip icon={<Captions size={16} />} label="Captions" onClick={openCaptions} testId="tool-captions" />
               </div>
               {/* Clip tools */}
               <div className="grid grid-cols-5 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
@@ -414,7 +476,7 @@ export default function StudioEditorPage() {
 
       {showExport && (
         <Suspense fallback={null}>
-          <ExportPanel clips={clips} overlays={overlays} audio={audio} assets={assets} onClose={() => setShowExport(false)} />
+          <ExportPanel clips={clips} overlays={overlays} audio={audio} captions={captions} assets={assets} onClose={() => setShowExport(false)} />
         </Suspense>
       )}
     </div>
@@ -440,7 +502,7 @@ function AddChip(props: { icon: React.ReactNode; label: string; onClick: () => v
     <button
       onClick={props.onClick}
       data-testid={props.testId}
-      className="flex items-center justify-center gap-1 rounded-full bg-white/10 px-1 py-2 text-white active:bg-white/20"
+      className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/10 py-1.5 text-white active:bg-white/20"
     >
       {props.icon}
       {props.label}

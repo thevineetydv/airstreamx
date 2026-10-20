@@ -3,6 +3,7 @@
 
 import type { Overlay } from "./overlays";
 import type { AudioSettings } from "./audio";
+import type { CaptionSettings } from "./captions";
 
 /** A small preview frame taken from the source file at a given source time. */
 export interface Thumb {
@@ -46,6 +47,8 @@ export interface EditorState {
   selectedOverlayId: string | null;
   /** Original sound, background music, voice-overs. */
   audio: AudioSettings;
+  /** Auto / manual captions and how they are exported. */
+  captions: CaptionSettings;
 }
 
 /** Shortest clip we allow after a trim or split. */

@@ -3,7 +3,6 @@
 // Nothing is sent to the server until the user chooses to upload.
 
 import {
-  AudioBufferSink,
   AudioBufferSource,
   BlobSource,
   BufferTarget,
@@ -11,6 +10,7 @@ import {
   Input,
   Mp4OutputFormat,
   Output,
+  TextSubtitleSource,
   VideoSampleSink,
   getFirstEncodableAudioCodec,
   getFirstEncodableVideoCodec,
@@ -21,15 +21,17 @@ import { VIDEO_FORMATS } from "../media/formats";
 import { outputSize, type ExportResolution } from "./size";
 import { drawOverlaysAt } from "../render/drawOverlays";
 import type { Overlay } from "../model/overlays";
-import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
-import { loadTrackBuffer } from "../audio/library";
-import { clipDuration } from "../model/timeline";
+import type { AudioSettings } from "../model/audio";
+import { LANGUAGE_CODE, toSrt, toVtt, type CaptionSettings } from "../model/captions";
+import { drawCaptionAt } from "../render/drawCaptions";
+import { MixCancelled, mixTimeline } from "../audio/mixer";
 import type { Clip, MediaAsset } from "../model/types";
+import { FPS, frameCount } from "./timing";
 
 export type { ExportResolution } from "./size";
 export { outputSize } from "./size";
 
-export const FPS = 30;
+export { FPS } from "./timing";
 const SAMPLE_RATE = 48000;
 const AUDIO_CHANNELS = 2;
 /** Audio is rendered in windows of this size so RAM use stays small on phones. */
@@ -51,16 +53,13 @@ export interface ExportPlan {
 
 export interface ExportResult {
   file: File;
+  /** Captions as a SubRip file, when "Subtitle track" is on. */
+  srt: File | null;
   plan: ExportPlan;
   seconds: number;
 }
 
 export class ExportCancelled extends Error {}
-
-/** Number of output frames for a clip. Audio uses the same length so A/V never drifts. */
-function frameCount(clip: Clip): number {
-  return Math.max(1, Math.round(clipDuration(clip) * FPS));
-}
 
 export function estimateBytes(clips: Clip[], res: ExportResolution): number {
   const seconds = clips.reduce((s, c) => s + frameCount(c) / FPS, 0);
@@ -90,6 +89,7 @@ interface RunOptions {
   clips: Clip[];
   overlays: Overlay[];
   audio: AudioSettings;
+  captions: CaptionSettings;
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
   /** 0..1 */
@@ -101,7 +101,7 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, overlays, audio, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, audio, captions, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
   const plan = await planExport(resolution, assets[clips[0].assetId]);
@@ -128,6 +128,17 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
     ? new AudioBufferSource({ codec: plan.audioCodec, bitrate: AUDIO_BITRATE })
     : null;
   if (audioSource) output.addAudioTrack(audioSource);
+
+  // Captions: burned into pixels and/or a soft subtitle track (WebVTT) in the MP4.
+  const hasCaptions = captions.items.some((c) => c.text.trim());
+  const burnCaptions = hasCaptions && captions.burnIn;
+  const subtitleSource = hasCaptions && captions.subtitleTrack ? new TextSubtitleSource("webvtt") : null;
+  if (subtitleSource) {
+    output.addSubtitleTrack(subtitleSource, {
+      languageCode: LANGUAGE_CODE[captions.language],
+      name: captions.language === "hindi" ? "Hindi" : "English",
+    });
+  }
 
   // One Input per asset, shared by the video and audio passes.
   const inputs = new Map<string, Input>();
@@ -164,6 +175,7 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
         }
         // Text, stickers, area tag and deal banner on top of the frame.
         drawOverlaysAt(ctx, overlays, outFrame / FPS, width, height);
+        if (burnCaptions) drawCaptionAt(ctx, captions, outFrame / FPS, width, height);
         await videoSource.add(outFrame / FPS, 1 / FPS);
         outFrame++;
         framesDone++;
@@ -173,110 +185,35 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
     videoSource.close();
   };
 
-  // Timeline start of each clip in the OUTPUT (whole frames), so audio lines up with video exactly.
-  const outStarts: number[] = [];
-  {
-    let f = 0;
-    for (const c of clips) { outStarts.push(f / FPS); f += frameCount(c); }
-  }
-  const totalSeconds = totalFrames / FPS;
-
-  // Background music must be decoded before mixing starts.
-  const musicBuffer = audio.music && audioSource
-    ? await loadTrackBuffer(audio.music.track, new OfflineAudioContext(AUDIO_CHANNELS, 1, SAMPLE_RATE))
-    : null;
-  const envelope = musicEnvelope(audio, totalSeconds);
-  const origGain = originalGain(audio);
-
-  // One audio sink per asset, created on first use.
-  const sinks = new Map<string, AudioBufferSink | null>();
-  const sinkFor = async (asset: MediaAsset) => {
-    if (!sinks.has(asset.id)) {
-      const track = asset.hasAudio ? await inputFor(asset).getPrimaryAudioTrack() : null;
-      sinks.set(asset.id, track ? new AudioBufferSink(track) : null);
-    }
-    return sinks.get(asset.id) ?? null;
-  };
-
-  // Mix the whole timeline in 10 s windows: original clip sound + music + voice-overs.
-  // OfflineAudioContext also resamples (44.1k -> 48k) and up-mixes mono to stereo.
+  // Original sound + music + voice-overs, mixed in 10 s windows (see audio/mixer.ts).
   const audioPass = async () => {
     if (!audioSource) return;
-    const totalSamples = Math.round(totalSeconds * SAMPLE_RATE);
-    const windowSamples = AUDIO_WINDOW_SECONDS * SAMPLE_RATE;
-
-    for (let s0 = 0; s0 < totalSamples; s0 += windowSamples) {
-      checkAbort(signal);
-      const length = Math.min(windowSamples, totalSamples - s0);
-      const T0 = s0 / SAMPLE_RATE;
-      const T1 = T0 + length / SAMPLE_RATE;
-      const offline = new OfflineAudioContext(AUDIO_CHANNELS, length, SAMPLE_RATE);
-
-      // 1) Original sound of each clip that overlaps this window.
-      if (origGain > 0) {
-        const gain = offline.createGain();
-        gain.gain.value = origGain;
-        gain.connect(offline.destination);
-        for (let i = 0; i < clips.length; i++) {
-          const clip = clips[i];
-          const cs = outStarts[i];
-          const ce = cs + frameCount(clip) / FPS;
-          const a = Math.max(T0, cs);
-          const b = Math.min(T1, ce);
-          if (b <= a) continue;
-          const sink = await sinkFor(assets[clip.assetId]);
-          if (!sink) continue;
-          const srcA = clip.inPoint + (a - cs);
-          const srcB = srcA + (b - a);
-          // Start a little early so a buffer that overlaps the edge is included.
-          for await (const wrapped of sink.buffers(Math.max(0, srcA - 0.5), srcB)) {
-            // Play only the part inside this clip and window, so no sound leaks across a cut.
-            const from = Math.max(wrapped.timestamp, srcA);
-            const to = Math.min(wrapped.timestamp + wrapped.duration, srcB);
-            if (to <= from) continue;
-            const node = offline.createBufferSource();
-            node.buffer = wrapped.buffer;
-            node.connect(gain);
-            node.start(cs + (from - clip.inPoint) - T0, from - wrapped.timestamp, to - from);
-          }
-        }
-      }
-
-      // 2) Background music, looped, with fade-out and ducking.
-      if (musicBuffer) {
-        const gain = offline.createGain();
-        applyEnvelope(gain.gain, envelope, 0, T0, T1);
-        gain.connect(offline.destination);
-        const node = offline.createBufferSource();
-        node.buffer = musicBuffer;
-        node.loop = true;
-        node.connect(gain);
-        node.start(0, T0 % musicBuffer.duration);
-      }
-
-      // 3) Voice-overs.
-      for (const v of audio.voiceOvers) {
-        const a = Math.max(T0, v.start);
-        const b = Math.min(T1, voiceOverEnd(v), totalSeconds);
-        if (b <= a) continue;
-        const gain = offline.createGain();
-        gain.gain.value = v.volume;
-        gain.connect(offline.destination);
-        const node = offline.createBufferSource();
-        node.buffer = v.buffer;
-        node.connect(gain);
-        node.start(a - T0, a - v.start, b - a);
-      }
-
-      const rendered = await offline.startRendering();
-      await audioSource.add(rendered);
+    try {
+      await mixTimeline({
+        clips, assets, audio,
+        sampleRate: SAMPLE_RATE,
+        channels: AUDIO_CHANNELS,
+        includeMusic: true,
+        windowSeconds: AUDIO_WINDOW_SECONDS,
+        inputFor,
+        signal,
+        onWindow: (buffer) => audioSource.add(buffer),
+      });
+    } catch (err) {
+      if (err instanceof MixCancelled) throw new ExportCancelled("Export cancelled");
+      throw err;
     }
+    checkAbort(signal);
     audioSource.close();
   };
 
   try {
     await output.start();
     // Run both passes together so the muxer can interleave audio and video.
+    if (subtitleSource) {
+      await subtitleSource.add(toVtt(captions.items));
+      subtitleSource.close();
+    }
     await Promise.all([videoPass(), audioPass()]);
     checkAbort(signal);
     await output.finalize();
@@ -292,6 +229,9 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
   // Friendly name: the upload modal turns it into the default title ("Studio edit 19 Oct 2026").
   const day = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const file = new File([buffer], `Studio edit - ${day}.mp4`, { type: "video/mp4" });
+  const srt = subtitleSource
+    ? new File([toSrt(captions.items)], file.name.replace(/\.mp4$/, ".srt"), { type: "application/x-subrip" })
+    : null;
   onProgress(1);
-  return { file, plan, seconds: (performance.now() - started) / 1000 };
+  return { file, srt, plan, seconds: (performance.now() - started) / 1000 };
 }

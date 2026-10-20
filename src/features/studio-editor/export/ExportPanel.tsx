@@ -5,6 +5,7 @@ import { useUpload } from "../../../context/UploadContext";
 import type { Clip, MediaAsset } from "../model/types";
 import type { Overlay } from "../model/overlays";
 import type { AudioSettings } from "../model/audio";
+import type { CaptionSettings } from "../model/captions";
 import {
   ExportCancelled,
   estimateBytes,
@@ -20,6 +21,7 @@ interface Props {
   clips: Clip[];
   overlays: Overlay[];
   audio: AudioSettings;
+  captions: CaptionSettings;
   assets: Record<string, MediaAsset>;
   onClose: () => void;
 }
@@ -32,21 +34,17 @@ function mb(bytes: number) {
 
 const CODEC_LABEL: Record<string, string> = { avc: "H.264", vp9: "VP9", av1: "AV1", aac: "AAC", opus: "Opus" };
 
-export default function ExportPanel({ clips, overlays, audio, assets, onClose }: Props) {
+export default function ExportPanel({ clips, overlays, audio, captions, assets, onClose }: Props) {
   const [resolution, setResolution] = useState<ExportResolution>("720p");
   const [phase, setPhase] = useState<Phase>({ kind: "setup" });
   const abortRef = useRef<AbortController | null>(null);
-  const downloadUrl = useRef<string | null>(null);
   const { openModalWithFile, uploading } = useUpload();
 
   const first = assets[clips[0]?.assetId];
   const estimate = estimateBytes(clips, resolution);
   const size = outputSize(resolution, first);
 
-  useEffect(() => () => {
-    abortRef.current?.abort();
-    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
-  }, []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const start = async () => {
     const controller = new AbortController();
@@ -63,6 +61,7 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
         clips,
         overlays,
         audio,
+        captions,
         assets,
         resolution,
         signal: controller.signal,
@@ -86,11 +85,13 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
   const cancel = () => abortRef.current?.abort();
 
   const download = (file: File) => {
-    if (!downloadUrl.current) downloadUrl.current = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file);
     const a = document.createElement("a");
-    a.href = downloadUrl.current;
+    a.href = url;
     a.download = file.name;
     a.click();
+    // Give the browser time to start the download before freeing the memory.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const busy = phase.kind === "running";
@@ -184,6 +185,15 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
             >
               Download MP4
             </button>
+            {phase.result.srt && (
+              <button
+                onClick={() => phase.result.srt && download(phase.result.srt)}
+                className="mt-2 w-full rounded-full border border-white/15 py-3 font-semibold text-white"
+                data-testid="download-srt"
+              >
+                Download captions (.srt)
+              </button>
+            )}
           </div>
         )}
 
