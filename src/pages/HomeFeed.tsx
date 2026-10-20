@@ -328,7 +328,7 @@ function useVideoPreview(videoUrl: string | undefined) {
 
       if (videoUrl.endsWith(".m3u8")) {
         // Loaded on-demand — only desktop hover users ever pay this cost.
-        const { default: HlsCtor } = await import("hls.js");
+        const { default: HlsCtor } = await import("hls.js/light"); // same small build the player uses (shared, cached chunk)
 
         if (HlsCtor.isSupported()) {
           const hls = new HlsCtor({

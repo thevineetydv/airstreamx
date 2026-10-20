@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { warmHls } from "../utils/hlsWarmup";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,8 +16,9 @@ import { LoginRequiredModal } from "../components/LoginRequiredModal";
 import CreatorCard from "../components/CreatorCard";
 import { API_URL, LS } from "../utils/constants";
 import { cachedFetch } from "../utils/metadataCache";
-import ReportVideoModal from "../components/ReportVideoModal";
-import ShareSheet from "../components/ShareSheet";
+// Loaded only when opened — keeps them out of the first page load
+const ReportVideoModal = lazy(() => import("../components/ReportVideoModal"));
+const ShareSheet = lazy(() => import("../components/ShareSheet"));
 import { formatVideoTitle } from "../utils/format";
 import { parseStartTime } from "../utils/share";
 import { getTrendingRank } from "../utils/trending";
@@ -2004,6 +2005,7 @@ useEffect(() => {
                     <span>Share</span>
                   </button>
                   {showShare && (
+                    <Suspense fallback={null}>
                     <ShareSheet
                       videoId={current.public_id || current.id}
                       title={current.title}
@@ -2012,6 +2014,7 @@ useEffect(() => {
                       position={sharePosition}
                       onClose={() => setShowShare(false)}
                     />
+                    </Suspense>
                   )}
 
                   <TipButton creatorUpiId={current.upi_id} creatorName={current.channel_name} />
@@ -2073,12 +2076,14 @@ useEffect(() => {
               )}
 
               {showReport && current && (
+                <Suspense fallback={null}>
                 <ReportVideoModal
                   videoId={current.public_id || current.id}
                   videoTitle={current.title}
                   getPosition={() => document.querySelector("video")?.currentTime}
                   onClose={() => setShowReport(false)}
                 />
+                </Suspense>
               )}
 
               <CreatorCard
