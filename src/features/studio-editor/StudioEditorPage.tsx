@@ -243,7 +243,7 @@ export default function StudioEditorPage() {
     dispatch({ type: "setCaptions", patch: { language } });
     const chunks = await captionGen.generate({ clips, assets, audio, model, language });
     if (!chunks) return;
-    const items = chunksToCaptions(chunks, duration);
+    const items = chunksToCaptions(chunks, duration, language);
     dispatch({ type: "setCaptions", patch: { items } });
     if (!items.length) setError("No speech was recognised. Try a different language or the Accurate model.");
   };

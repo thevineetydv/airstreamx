@@ -49,22 +49,66 @@ export interface SpeechChunk {
 
 // Whisper sometimes "hears" these in silence or music.
 const NOISE = /^\s*([[(（].*[\])）]|♪+|\.+|-+)\s*$/;
+const HAS_LETTER = /\p{L}/u;
+const WRONG_SCRIPT: Record<CaptionLanguage, RegExp> = {
+  hindi: /[\u0600-\u06FF\u0400-\u04FF]/g, // Urdu / Cyrillic in Hindi mode
+  // Plain Unicode ranges; the lint rule is about combined emoji, not ranges like this.
+  // eslint-disable-next-line no-misleading-character-class
+  english: /[\u0600-\u06FF\u0400-\u04FF\u0900-\u097F]/g,
+};
+
+/**
+ * True for typical Whisper junk on music / singing:
+ * "ai ai ai ai…", "NANANANA…", "पार तुड पार तुड…", numbers only, wrong script.
+ */
+export function isJunkLine(text: string, language: CaptionLanguage): boolean {
+  if (!HAS_LETTER.test(text)) return true; // "1.000", "..."
+  if (/(.{1,8}?)\1{5,}/u.test(text.replace(/\s+/g, ""))) return true; // same few letters over and over
+  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length >= 6 && new Set(words).size / words.length < 0.4) return true; // few words, repeated
+  if (hasLoop(words)) return true; // "पार तुड पार तुड पार तुड"
+  const letters = text.match(/\p{L}/gu)?.length ?? 1;
+  const wrong = text.match(WRONG_SCRIPT[language])?.length ?? 0;
+  return wrong / letters > 0.3;
+}
+
+/** A run of 1–3 words repeated back-to-back (4+ times for one word, 3+ times for 2–3 words). */
+function hasLoop(words: string[]): boolean {
+  for (let n = 1; n <= 3; n++) {
+    const need = n === 1 ? 4 : 3;
+    for (let i = 0; i + n * need <= words.length; i++) {
+      const gram = words.slice(i, i + n).join(" ");
+      let k = 1;
+      while (words.slice(i + k * n, i + (k + 1) * n).join(" ") === gram) k++;
+      if (k >= need) return true;
+    }
+  }
+  return false;
+}
+
+/** How long a line needs on screen to be read (≈ 14 characters per second). */
+function readingTime(text: string): number {
+  return Math.max(1.2, 0.6 + text.length / 14);
+}
 
 /**
  * Turn recognition chunks into short, readable captions.
  * Long chunks are split by words; time is shared out by text length.
  */
-export function chunksToCaptions(chunks: SpeechChunk[], total: number): Caption[] {
+export function chunksToCaptions(chunks: SpeechChunk[], total: number, language: CaptionLanguage = "hindi"): Caption[] {
   const out: Caption[] = [];
   let lastText = "";
   chunks.forEach((c, i) => {
     const text = c.text.replace(/\s+/g, " ").trim();
-    if (!text || NOISE.test(text)) return;
+    if (!text || NOISE.test(text) || isJunkLine(text, language)) return;
     if (text === lastText) return; // repeated line = typical hallucination
     lastText = text;
     const start = Math.max(0, c.start);
     const next = chunks[i + 1];
-    const end = Math.min(total, c.end ?? next?.start ?? Math.min(total, start + 3));
+    let end = Math.min(total, c.end ?? next?.start ?? Math.min(total, start + 3));
+    // On songs Whisper often stretches one short line over a long music gap.
+    // Show it only as long as it takes to read, so it doesn't hang on screen.
+    end = Math.min(end, start + readingTime(text));
     if (end - start < 0.1) return;
 
     const words = text.split(" ");

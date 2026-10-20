@@ -10,7 +10,10 @@ const TRANSFORMERS_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers
 
 interface AsrChunk { timestamp: [number, number | null]; text: string }
 interface AsrOutput { text: string; chunks?: AsrChunk[] }
-type Transcriber = (audio: Float32Array, options: Record<string, unknown>) => Promise<AsrOutput>;
+type Transcriber = ((audio: Float32Array, options: Record<string, unknown>) => Promise<AsrOutput>) & {
+  tokenizer: { decode(ids: number[], opts?: { skip_special_tokens?: boolean }): string };
+  model: { config: { vocab_size: number }; generation_config: { suppress_tokens?: number[] | null } };
+};
 interface ProgressInfo { status: string; progress?: number; loaded?: number; total?: number }
 interface TransformersLib {
   env: { allowLocalModels: boolean };
@@ -35,6 +38,37 @@ export type WorkerOut =
 // Typed loosely on purpose: the app's tsconfig uses DOM types, not WebWorker types.
 const scope = self as unknown as { postMessage(m: WorkerOut): void; onmessage: ((e: MessageEvent<WorkerIn>) => void) | null };
 const post = (m: WorkerOut) => scope.postMessage(m);
+
+// Scripts we never want in the output. Whisper treats the language as a hint,
+// not a rule: with Hindi songs it often writes Urdu (same spoken language) or
+// stray Cyrillic. Blocking those tokens keeps Hindi in Devanagari and English in Roman.
+const ARABIC = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const DEVANAGARI = /[\u0900-\u097F]/;
+const OTHER_SCRIPTS = /[\u0400-\u04FF\u0590-\u05FF\u0980-\u0DFF\u0E00-\u0FFF\u1100-\u11FF\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
+
+const suppressCache = new Map<string, number[]>();
+
+/** Token ids whose text is in a script we don't want for this language. */
+function blockedTokens(pipe: Transcriber, model: string, language: string): number[] {
+  const key = `${model}|${language}`;
+  const hit = suppressCache.get(key);
+  if (hit) return hit;
+  const ids: number[] = [];
+  try {
+    const n = pipe.model?.config?.vocab_size ?? 0;
+    for (let id = 0; id < n; id++) {
+      const t = pipe.tokenizer.decode([id], { skip_special_tokens: true });
+      if (!t) continue;
+      if (ARABIC.test(t) || OTHER_SCRIPTS.test(t) || (language === "english" && DEVANAGARI.test(t))) ids.push(id);
+    }
+  } catch {
+    // If this library version exposes the tokenizer differently, just skip the
+    // script lock — the caption clean-up step still removes wrong-script lines.
+    return [];
+  }
+  suppressCache.set(key, ids);
+  return ids;
+}
 
 let lib: Promise<TransformersLib> | null = null;
 let current: { model: string; pipe: Promise<Transcriber> } | null = null;
@@ -65,12 +99,17 @@ scope.onmessage = async (e: MessageEvent<WorkerIn>) => {
   try {
     const pipe = await loadPipe(msg.model);
     post({ type: "ready" });
+    const defaults = pipe.model?.generation_config?.suppress_tokens ?? [];
     const out = await pipe(msg.audio, {
       language: msg.language,
       task: "transcribe",
       return_timestamps: true,
       chunk_length_s: 30,
       stride_length_s: 5,
+      // Keep Whisper's own list (music notes, symbols) and add the wrong scripts.
+      suppress_tokens: [...defaults, ...blockedTokens(pipe, msg.model, msg.language)],
+      // Stop "ai ai ai ai…" loops: the same 5-token run may not repeat in a window.
+      no_repeat_ngram_size: 5,
     });
     const chunks = (out.chunks ?? [{ timestamp: [0, null], text: out.text }]).map((c) => ({
       start: c.timestamp[0] ?? 0,

@@ -131,6 +131,10 @@ export default function CaptionsPanel(props: Props) {
             {has && (
               <button onClick={() => setShowSetup(false)} className="w-full text-xs text-gray-400 underline">Cancel</button>
             )}
+            <p className="text-[11px] text-gray-500">
+              Works best for talking (vlogs, reviews, shop videos). Songs and loud music give poor captions.
+              For Hindi, Accurate is clearly better than Fast.
+            </p>
             <p className="text-[11px] text-gray-500">Runs on your device. Your audio is not uploaded anywhere.</p>
           </div>
         ) : null}

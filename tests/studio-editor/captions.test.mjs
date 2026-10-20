@@ -120,6 +120,11 @@ try {
           type: "chunks", jobId: msg.jobId, chunks: [
             { start: 0.5, end: 2.5, text: " नमस्ते लखनऊ, आज हम चलेंगे हज़रतगंज" },
             { start: 2.6, end: 3.0, text: " [Music]" },
+            // Typical junk on songs (from a real test) — must all be dropped:
+            { start: 2.62, end: 2.7, text: " ai ai ai ai ai ai ai ai ai ai ai ai ai ai" },
+            { start: 2.7, end: 2.8, text: " तुज जितन ए प्र तुड पार तुड पार तुड पार तुड" },
+            { start: 2.8, end: 2.9, text: " ایک دن سنم کو اپنا بنانے کے لئے" },
+            { start: 2.9, end: 3.0, text: " 1.000" },
             { start: 3.2, end: null, text: " aaj ka special offer dekhiye sirf hamare yahan Sharma Chaat Corner par" },
           ],
         }), 700);
@@ -144,7 +149,7 @@ try {
   check("Default model + language", calls[0].model === "Xenova/whisper-base" && calls[0].language === "hindi", `${calls[0].model} / ${calls[0].language}`);
 
   const n = await page.getByTestId("caption-item").count();
-  check("3 captions (noise dropped, long line split)", n === 3, `${n} lines`);
+  check("3 captions (noise/loops/Urdu/numbers dropped, long line split)", n === 3, `${n} lines`);
   check("Caption blocks on timeline", (await page.getByTestId("caption-block").count()) === 3);
   const texts = await page.getByTestId("caption-text").evaluateAll((els) => els.map((e) => e.value));
   check("Hindi text kept", texts[0] === "नमस्ते लखनऊ, आज हम चलेंगे हज़रतगंज", texts[0]);
