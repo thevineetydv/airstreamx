@@ -5,6 +5,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { isActive, type Overlay, type OverlayPatch } from "../model/overlays";
 import { drawOverlaysAt, overlayRect } from "../render/drawOverlays";
+import { drawCaptionAt } from "../render/drawCaptions";
+import type { CaptionSettings } from "../model/captions";
 
 interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -12,6 +14,7 @@ interface Props {
   aspect: number;
   time: number;
   overlays: Overlay[];
+  captions: CaptionSettings;
   selectedOverlayId: string | null;
   onSelectOverlay: (id: string | null) => void;
   onMoveOverlay: (id: string, patch: OverlayPatch) => void;
@@ -22,7 +25,7 @@ interface Props {
 const TAP_SLOP = 6; // px of movement before a tap becomes a drag
 
 export default function PreviewStage(props: Props) {
-  const { videoRef, aspect, time, overlays, selectedOverlayId, onSelectOverlay, onMoveOverlay, onTapEmpty, onDragStart } = props;
+  const { videoRef, aspect, time, overlays, captions, selectedOverlayId, onSelectOverlay, onMoveOverlay, onTapEmpty, onDragStart } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -59,6 +62,8 @@ export default function PreviewStage(props: Props) {
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
     drawOverlaysAt(ctx, overlays, time, W, H);
+    // Preview always shows captions (so they can be checked), even if only the subtitle track is exported.
+    drawCaptionAt(ctx, captions, time, W, H);
 
     // Dashed outline around the selected overlay (preview only, never exported).
     const sel = overlays.find((o) => o.id === selectedOverlayId);
@@ -71,7 +76,7 @@ export default function PreviewStage(props: Props) {
       ctx.strokeRect(r.x - 3 * dpr, r.y - 3 * dpr, r.w + 6 * dpr, r.h + 6 * dpr);
       ctx.restore();
     }
-  }, [box, overlays, time, selectedOverlayId]);
+  }, [box, overlays, captions, time, selectedOverlayId]);
 
   // Topmost visible overlay under a point (canvas pixels).
   const hitTest = (px: number, py: number): Overlay | null => {

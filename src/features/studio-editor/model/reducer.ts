@@ -5,6 +5,7 @@ import { clipFromAsset, moveClip, removeClip, splitAt, trimClip } from "./timeli
 import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
+import { initialCaptions, type Caption, type CaptionSettings } from "./captions";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -20,7 +21,11 @@ export type EditorAction =
   | { type: "setAudio"; patch: Partial<AudioSettings> }
   | { type: "addVoiceOver"; voiceOver: VoiceOver }
   | { type: "updateVoiceOver"; id: string; patch: Partial<Pick<VoiceOver, "start" | "volume">> }
-  | { type: "removeVoiceOver"; id: string };
+  | { type: "removeVoiceOver"; id: string }
+  | { type: "setCaptions"; patch: Partial<CaptionSettings> }
+  | { type: "editCaption"; id: string; patch: Partial<Caption> }
+  | { type: "removeCaption"; id: string }
+  | { type: "addCaption"; caption: Caption };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -29,6 +34,7 @@ export const initialEditorState: EditorState = {
   overlays: [],
   selectedOverlayId: null,
   audio: initialAudio,
+  captions: initialCaptions,
 };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -106,6 +112,17 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         audio: { ...state.audio, voiceOvers: state.audio.voiceOvers.filter((v) => v.id !== action.id) },
       };
+    case "setCaptions":
+      return { ...state, captions: { ...state.captions, ...action.patch } };
+    case "editCaption":
+      return {
+        ...state,
+        captions: { ...state.captions, items: state.captions.items.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)) },
+      };
+    case "removeCaption":
+      return { ...state, captions: { ...state.captions, items: state.captions.items.filter((c) => c.id !== action.id) } };
+    case "addCaption":
+      return { ...state, captions: { ...state.captions, items: [...state.captions.items, action.caption] } };
     default:
       return state;
   }

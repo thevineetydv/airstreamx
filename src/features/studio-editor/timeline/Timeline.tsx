@@ -27,12 +27,16 @@ interface TimelineProps {
   /** "music" or a voice-over id. */
   onSelectAudio: (id: string) => void;
   onMoveVoice: (id: string, start: number) => void;
+  captionItems: { id: string; start: number; end: number; text: string }[];
+  activeCaptionId: string | null;
+  onSelectCaption: (id: string) => void;
 }
 
 export default function Timeline(props: TimelineProps) {
   const { clips, assets, selectedId, time, duration, pxPerSec, onSeek, onScrubStart, onSelect, onTrim } = props;
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
   const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
+  const { captionItems, activeCaptionId, onSelectCaption } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
@@ -129,6 +133,26 @@ export default function Timeline(props: TimelineProps) {
               onSelect={onSelectOverlay}
               onTime={onOverlayTime}
             />
+          )}
+
+          {/* Captions track: one small block per caption line */}
+          {captionItems.length > 0 && (
+            <div className="relative mt-1" style={{ width: duration * pxPerSec, height: 16 }} data-testid="captions-row">
+              {captionItems.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={(e) => { e.stopPropagation(); onSelectCaption(c.id); }}
+                  title={c.text}
+                  className={`absolute top-0 h-3.5 overflow-hidden rounded-sm text-[9px] leading-[14px] ${
+                    c.id === activeCaptionId ? "bg-yellow-300 text-black" : "bg-yellow-500/60 text-black/80"
+                  }`}
+                  style={{ left: c.start * pxPerSec, width: Math.max(4, (Math.min(c.end, duration) - c.start) * pxPerSec - 1) }}
+                  data-testid="caption-block"
+                >
+                  <span className="px-0.5">{c.text}</span>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Audio track: background music + voice-overs */}
