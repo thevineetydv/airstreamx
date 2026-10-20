@@ -19,6 +19,11 @@ interface UploadContextValue {
   openModal: () => void;
   closeModal: () => void; // Just hides the UI. Never touches the xhr.
 
+  // A file handed over by another screen (e.g. the Studio Editor export).
+  // UploadModal picks it up once when it opens, as if the user selected it.
+  openModalWithFile: (file: File) => void;
+  takePendingFile: () => File | null;
+
   // Upload progress — survives the modal unmounting.
   uploading: boolean;
   progress: number;
@@ -45,6 +50,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [processingStage, setProcessingStage] = useState("");
   const [fileName, setFileName] = useState("");
   const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const pendingFileRef = useRef<File | null>(null);
 
   const beginUpload = (xhr: XMLHttpRequest, name: string) => {
     xhrRef.current = xhr;
@@ -78,6 +84,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         isModalOpen,
         openModal: () => setIsModalOpen(true),
         closeModal: () => setIsModalOpen(false),
+        openModalWithFile: (file: File) => {
+          pendingFileRef.current = file;
+          setIsModalOpen(true);
+        },
+        takePendingFile: () => {
+          const f = pendingFileRef.current;
+          pendingFileRef.current = null;
+          return f;
+        },
         uploading,
         progress,
         uploadSpeed,
