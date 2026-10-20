@@ -4,6 +4,7 @@
 import { clipFromAsset, moveClip, removeClip, splitAt, trimClip } from "./timeline";
 import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
+import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -15,7 +16,11 @@ export type EditorAction =
   | { type: "addOverlay"; overlay: Overlay }
   | { type: "updateOverlay"; id: string; patch: OverlayPatch }
   | { type: "removeOverlay"; id: string }
-  | { type: "selectOverlay"; id: string | null };
+  | { type: "selectOverlay"; id: string | null }
+  | { type: "setAudio"; patch: Partial<AudioSettings> }
+  | { type: "addVoiceOver"; voiceOver: VoiceOver }
+  | { type: "updateVoiceOver"; id: string; patch: Partial<Pick<VoiceOver, "start" | "volume">> }
+  | { type: "removeVoiceOver"; id: string };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -23,6 +28,7 @@ export const initialEditorState: EditorState = {
   selectedClipId: null,
   overlays: [],
   selectedOverlayId: null,
+  audio: initialAudio,
 };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -83,6 +89,23 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     case "selectOverlay":
       return { ...state, selectedOverlayId: action.id, selectedClipId: action.id ? null : state.selectedClipId };
+    case "setAudio":
+      return { ...state, audio: { ...state.audio, ...action.patch } };
+    case "addVoiceOver":
+      return { ...state, audio: { ...state.audio, voiceOvers: [...state.audio.voiceOvers, action.voiceOver] } };
+    case "updateVoiceOver":
+      return {
+        ...state,
+        audio: {
+          ...state.audio,
+          voiceOvers: state.audio.voiceOvers.map((v) => (v.id === action.id ? { ...v, ...action.patch } : v)),
+        },
+      };
+    case "removeVoiceOver":
+      return {
+        ...state,
+        audio: { ...state.audio, voiceOvers: state.audio.voiceOvers.filter((v) => v.id !== action.id) },
+      };
     default:
       return state;
   }

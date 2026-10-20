@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useUpload } from "../../../context/UploadContext";
 import type { Clip, MediaAsset } from "../model/types";
 import type { Overlay } from "../model/overlays";
+import type { AudioSettings } from "../model/audio";
 import {
   ExportCancelled,
   estimateBytes,
@@ -18,6 +19,7 @@ const UPLOAD_LIMIT = 500 * 1024 * 1024; // same limit as UploadModal
 interface Props {
   clips: Clip[];
   overlays: Overlay[];
+  audio: AudioSettings;
   assets: Record<string, MediaAsset>;
   onClose: () => void;
 }
@@ -30,7 +32,7 @@ function mb(bytes: number) {
 
 const CODEC_LABEL: Record<string, string> = { avc: "H.264", vp9: "VP9", av1: "AV1", aac: "AAC", opus: "Opus" };
 
-export default function ExportPanel({ clips, overlays, assets, onClose }: Props) {
+export default function ExportPanel({ clips, overlays, audio, assets, onClose }: Props) {
   const [resolution, setResolution] = useState<ExportResolution>("720p");
   const [phase, setPhase] = useState<Phase>({ kind: "setup" });
   const abortRef = useRef<AbortController | null>(null);
@@ -60,6 +62,7 @@ export default function ExportPanel({ clips, overlays, assets, onClose }: Props)
       const result = await runExport({
         clips,
         overlays,
+        audio,
         assets,
         resolution,
         signal: controller.signal,

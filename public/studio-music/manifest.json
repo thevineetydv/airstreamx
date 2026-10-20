@@ -1,0 +1,40 @@
+{
+  "tracks": [
+    {
+      "id": "chai-break",
+      "title": "Chai Break",
+      "mood": "Lo-fi · calm",
+      "goodFor": "Cafe, food, vlogs",
+      "url": "/studio-music/chai-break.mp3",
+      "duration": 48.0,
+      "license": "Original — generated for AirStreamX (scripts/studio-music/generate.py). Free to use in any AirStreamX video."
+    },
+    {
+      "id": "bazaar-bounce",
+      "title": "Bazaar Bounce",
+      "mood": "Upbeat · pop",
+      "goodFor": "Shop promos, deals",
+      "url": "/studio-music/bazaar-bounce.mp3",
+      "duration": 34.29,
+      "license": "Original — generated for AirStreamX (scripts/studio-music/generate.py). Free to use in any AirStreamX video."
+    },
+    {
+      "id": "sunrise-ghat",
+      "title": "Sunrise Ghat",
+      "mood": "Calm · ambient",
+      "goodFor": "Travel, temples, mornings",
+      "url": "/studio-music/sunrise-ghat.mp3",
+      "duration": 41.14,
+      "license": "Original — generated for AirStreamX (scripts/studio-music/generate.py). Free to use in any AirStreamX video."
+    },
+    {
+      "id": "festive-dhol",
+      "title": "Festive Dhol",
+      "mood": "Festive · dhol",
+      "goodFor": "Festivals, weddings, sales",
+      "url": "/studio-music/festive-dhol.mp3",
+      "duration": 38.4,
+      "license": "Original — generated for AirStreamX (scripts/studio-music/generate.py). Free to use in any AirStreamX video."
+    }
+  ]
+}

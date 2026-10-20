@@ -2,12 +2,13 @@
 // Phase 1: import clips, trim / split / delete / reorder, preview, export MP4
 // in the browser and hand it to the normal upload flow.
 // Phase 2: text, stickers, 📍 area tag and Local Deal banner overlays.
+// Phase 3: original sound volume/mute, built-in music library, voice-over.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Film, MapPin, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, ChevronLeft, ChevronRight, Film, MapPin, Music, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { editorReducer, initialEditorState } from "./model/reducer";
 import { clipStarts, formatTime, trimClip } from "./model/timeline";
@@ -17,6 +18,10 @@ import Timeline from "./timeline/Timeline";
 import PreviewStage from "./preview/PreviewStage";
 import OverlayPanel from "./overlays/OverlayPanel";
 import { outputSize } from "./export/size";
+import AudioPanel from "./audio/AudioPanel";
+import { usePreviewAudio } from "./audio/usePreviewAudio";
+import { useVoiceRecorder } from "./audio/useVoiceRecorder";
+import { newVoiceOver, type AudioSettings } from "./model/audio";
 import { clampOverlayTimes, createOverlay, rememberOverlay, type OverlayKind, type OverlayPatch } from "./model/overlays";
 import { isWebCodecsSupported } from "./media/support";
 
@@ -28,7 +33,7 @@ const MAX_PPS = 200;
 export default function StudioEditorPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
-  const { assets, clips, selectedClipId, overlays, selectedOverlayId } = state;
+  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio } = state;
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<string | null>(null);
@@ -37,7 +42,13 @@ export default function StudioEditorPage() {
   const [showExport, setShowExport] = useState(false);
   const supported = isWebCodecsSupported();
 
-  const { time, duration, playing, toggle, pause, seek } = usePreviewEngine(videoRef, clips, assets);
+  const { time, duration, playing, toggle, play, pause, seek } = usePreviewEngine(videoRef, clips, assets);
+
+  // ── Audio (Phase 3) ──
+  const recorder = useVoiceRecorder();
+  const [audioOpen, setAudioOpen] = useState(false);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  usePreviewAudio({ videoRef, playing, time, total: duration, audio, recording: recorder.recording });
 
   // Free object URLs when the editor closes.
   const assetsRef = useRef(assets);
@@ -121,6 +132,7 @@ export default function StudioEditorPage() {
 
   const addOverlay = (kind: OverlayKind) => {
     pause();
+    setAudioOpen(false);
     const o = createOverlay(kind, time, duration);
     dispatch({ type: "addOverlay", overlay: o });
     // Make sure the new overlay is visible in the preview.
@@ -142,6 +154,7 @@ export default function StudioEditorPage() {
   overlaysRef.current = overlays;
   const selectOverlayFromTimeline = useCallback((id: string) => {
     pause();
+    setAudioOpen(false);
     dispatch({ type: "selectOverlay", id });
     const o = overlaysRef.current.find((x) => x.id === id);
     if (o && (timeRef.current < o.start || timeRef.current >= o.end)) seek(o.start + 0.01);
@@ -149,6 +162,74 @@ export default function StudioEditorPage() {
 
   const setOverlayTime = useCallback((id: string, start: number, end: number) => {
     dispatch({ type: "updateOverlay", id, patch: { start, end } });
+  }, []);
+
+  // Voice-over: record the mic while the preview plays from the playhead.
+  const recordFrom = useRef(0);
+  const recStartedAt = useRef(0);
+  const playStartedAt = useRef(0);
+  const armed = useRef(false);
+
+  const startRecording = async () => {
+    pause();
+    setError(null);
+    const from = time >= duration - 0.1 ? 0 : time;
+    if (from !== time) seek(from);
+    recordFrom.current = from;
+    armed.current = false;
+    try {
+      await recorder.start();
+    } catch {
+      setError("Microphone not available. Allow mic access in the browser and try again.");
+      return;
+    }
+    recStartedAt.current = performance.now();
+    await play();
+    playStartedAt.current = performance.now();
+  };
+
+  const stopRecording = useCallback(async () => {
+    armed.current = false;
+    pause();
+    try {
+      const raw = await recorder.stop();
+      if (!raw) return;
+      // The mic started a moment before the video; cut that bit so the voice lines up with the picture.
+      const lead = Math.min(1, Math.max(0, (playStartedAt.current - recStartedAt.current) / 1000));
+      const buffer = trimStart(raw, lead);
+      if (buffer.duration < 0.3) return;
+      const vo = newVoiceOver(buffer, recordFrom.current);
+      dispatch({ type: "addVoiceOver", voiceOver: vo });
+      setSelectedVoiceId(vo.id);
+    } catch {
+      setError("Could not save the recording.");
+    }
+  }, [pause, recorder]);
+
+  // Stop recording automatically when the video reaches the end.
+  useEffect(() => {
+    if (!recorder.recording) return;
+    if (playing) armed.current = true;
+    else if (armed.current) void stopRecording();
+  }, [playing, recorder.recording, stopRecording]);
+
+  const openAudio = useCallback((voiceId: string | null = null) => {
+    dispatch({ type: "selectOverlay", id: null });
+    setSelectedVoiceId(voiceId);
+    setAudioOpen(true);
+  }, []);
+
+  const onSelectAudio = useCallback((id: string) => {
+    pause();
+    openAudio(id === "music" ? null : id);
+  }, [openAudio, pause]);
+
+  const onMoveVoice = useCallback((id: string, start: number) => {
+    dispatch({ type: "updateVoiceOver", id, patch: { start } });
+  }, []);
+
+  const setAudio = useCallback((patch: Partial<AudioSettings>) => {
+    dispatch({ type: "setAudio", patch });
   }, []);
 
   const closeOverlayPanel = () => {
@@ -174,7 +255,7 @@ export default function StudioEditorPage() {
         </button>
         <h1 className="flex-1 truncate text-base font-bold">Studio Editor</h1>
         <button
-          disabled={!hasClips || !supported}
+          disabled={!hasClips || !supported || recorder.recording}
           onClick={() => { pause(); setShowExport(true); }}
           className="rounded-full bg-red-600 px-5 py-2 text-sm font-bold disabled:opacity-40"
           data-testid="open-export"
@@ -217,6 +298,11 @@ export default function StudioEditorPage() {
             <span className="font-bold">{importing ?? "Import video"}</span>
             <span className="text-xs text-gray-500">Pick one or more clips from your phone</span>
           </button>
+        )}
+        {recorder.recording && (
+          <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-bold" data-testid="rec-badge">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-white" /> REC
+          </span>
         )}
         {hasClips && importing && (
           <span className="absolute top-2 rounded-full bg-black/70 px-3 py-1 text-xs">{importing}</span>
@@ -268,9 +354,27 @@ export default function StudioEditorPage() {
             selectedOverlayId={selectedOverlayId}
             onSelectOverlay={selectOverlayFromTimeline}
             onOverlayTime={setOverlayTime}
+            musicTitle={audio.music?.track.title ?? null}
+            voiceOvers={audio.voiceOvers.map((v) => ({ id: v.id, start: v.start, duration: v.buffer.duration }))}
+            selectedVoiceId={audioOpen ? selectedVoiceId : null}
+            onSelectAudio={onSelectAudio}
+            onMoveVoice={onMoveVoice}
           />
 
-          {selectedOverlay ? (
+          {audioOpen ? (
+            <AudioPanel
+              audio={audio}
+              time={time}
+              recording={recorder.recording}
+              selectedVoiceId={selectedVoiceId}
+              onChange={setAudio}
+              onVoiceChange={(id, patch) => dispatch({ type: "updateVoiceOver", id, patch })}
+              onVoiceDelete={(id) => dispatch({ type: "removeVoiceOver", id })}
+              onRecord={() => void startRecording()}
+              onStopRecord={() => void stopRecording()}
+              onDone={() => setAudioOpen(false)}
+            />
+          ) : selectedOverlay ? (
             <OverlayPanel
               overlay={selectedOverlay}
               onChange={(patch) => updateOverlay(selectedOverlay.id, patch)}
@@ -288,11 +392,12 @@ export default function StudioEditorPage() {
           ) : (
             <>
               {/* Add overlays: compact chips so all four fit on a phone */}
-              <div className="grid grid-cols-4 gap-1.5 px-2 pt-2 text-[11px] font-semibold">
+              <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[11px] font-semibold">
                 <AddChip icon={<Type size={14} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
                 <AddChip icon={<Smile size={14} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
                 <AddChip icon={<MapPin size={14} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
                 <AddChip icon={<Tag size={14} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
+                <AddChip icon={<Music size={14} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
               </div>
               {/* Clip tools */}
               <div className="grid grid-cols-5 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
@@ -309,7 +414,7 @@ export default function StudioEditorPage() {
 
       {showExport && (
         <Suspense fallback={null}>
-          <ExportPanel clips={clips} overlays={overlays} assets={assets} onClose={() => setShowExport(false)} />
+          <ExportPanel clips={clips} overlays={overlays} audio={audio} assets={assets} onClose={() => setShowExport(false)} />
         </Suspense>
       )}
     </div>
@@ -335,10 +440,25 @@ function AddChip(props: { icon: React.ReactNode; label: string; onClick: () => v
     <button
       onClick={props.onClick}
       data-testid={props.testId}
-      className="flex items-center justify-center gap-1 rounded-full bg-white/10 py-2 text-white active:bg-white/20"
+      className="flex items-center justify-center gap-1 rounded-full bg-white/10 px-1 py-2 text-white active:bg-white/20"
     >
       {props.icon}
       {props.label}
     </button>
   );
+}
+
+/** Copy of an AudioBuffer without its first `seconds`. */
+function trimStart(buffer: AudioBuffer, seconds: number): AudioBuffer {
+  const skip = Math.min(buffer.length - 1, Math.round(seconds * buffer.sampleRate));
+  if (skip <= 0) return buffer;
+  const out = new AudioBuffer({
+    length: buffer.length - skip,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate,
+  });
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    out.copyToChannel(buffer.getChannelData(ch).subarray(skip), ch);
+  }
+  return out;
 }

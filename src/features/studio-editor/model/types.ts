@@ -2,6 +2,7 @@
 // All times are in seconds.
 
 import type { Overlay } from "./overlays";
+import type { AudioSettings } from "./audio";
 
 /** A small preview frame taken from the source file at a given source time. */
 export interface Thumb {
@@ -43,6 +44,8 @@ export interface EditorState {
   /** Text, stickers, area tag, deal banner. Drawn in array order (last = on top). */
   overlays: Overlay[];
   selectedOverlayId: string | null;
+  /** Original sound, background music, voice-overs. */
+  audio: AudioSettings;
 }
 
 /** Shortest clip we allow after a trim or split. */
