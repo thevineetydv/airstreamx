@@ -21,6 +21,8 @@ import { VIDEO_FORMATS } from "../media/formats";
 import { outputSize, type ExportResolution } from "./size";
 import { drawOverlaysAt } from "../render/drawOverlays";
 import type { Overlay } from "../model/overlays";
+import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
+import { loadTrackBuffer } from "../audio/library";
 import { clipDuration } from "../model/timeline";
 import type { Clip, MediaAsset } from "../model/types";
 
@@ -87,6 +89,7 @@ export async function planExport(res: ExportResolution, first?: MediaAsset): Pro
 interface RunOptions {
   clips: Clip[];
   overlays: Overlay[];
+  audio: AudioSettings;
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
   /** 0..1 */
@@ -98,7 +101,7 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, overlays, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, audio, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
   const plan = await planExport(resolution, assets[clips[0].assetId]);
@@ -170,37 +173,103 @@ export async function runExport({ clips, overlays, assets, resolution, onProgres
     videoSource.close();
   };
 
+  // Timeline start of each clip in the OUTPUT (whole frames), so audio lines up with video exactly.
+  const outStarts: number[] = [];
+  {
+    let f = 0;
+    for (const c of clips) { outStarts.push(f / FPS); f += frameCount(c); }
+  }
+  const totalSeconds = totalFrames / FPS;
+
+  // Background music must be decoded before mixing starts.
+  const musicBuffer = audio.music && audioSource
+    ? await loadTrackBuffer(audio.music.track, new OfflineAudioContext(AUDIO_CHANNELS, 1, SAMPLE_RATE))
+    : null;
+  const envelope = musicEnvelope(audio, totalSeconds);
+  const origGain = originalGain(audio);
+
+  // One audio sink per asset, created on first use.
+  const sinks = new Map<string, AudioBufferSink | null>();
+  const sinkFor = async (asset: MediaAsset) => {
+    if (!sinks.has(asset.id)) {
+      const track = asset.hasAudio ? await inputFor(asset).getPrimaryAudioTrack() : null;
+      sinks.set(asset.id, track ? new AudioBufferSink(track) : null);
+    }
+    return sinks.get(asset.id) ?? null;
+  };
+
+  // Mix the whole timeline in 10 s windows: original clip sound + music + voice-overs.
+  // OfflineAudioContext also resamples (44.1k -> 48k) and up-mixes mono to stereo.
   const audioPass = async () => {
     if (!audioSource) return;
-    for (const clip of clips) {
-      const asset = assets[clip.assetId];
-      const clipFrames = Math.round((frameCount(clip) / FPS) * SAMPLE_RATE);
-      const track = asset.hasAudio ? await inputFor(asset).getPrimaryAudioTrack() : null;
-      const sink = track ? new AudioBufferSink(track) : null;
+    const totalSamples = Math.round(totalSeconds * SAMPLE_RATE);
+    const windowSamples = AUDIO_WINDOW_SECONDS * SAMPLE_RATE;
 
-      // Render the clip's audio window by window. OfflineAudioContext does the
-      // resampling (e.g. 44.1k -> 48k) and mono -> stereo mixing for us.
-      for (let startFrame = 0; startFrame < clipFrames; startFrame += AUDIO_WINDOW_SECONDS * SAMPLE_RATE) {
-        checkAbort(signal);
-        const length = Math.min(AUDIO_WINDOW_SECONDS * SAMPLE_RATE, clipFrames - startFrame);
-        const winStart = clip.inPoint + startFrame / SAMPLE_RATE;
-        const winEnd = winStart + length / SAMPLE_RATE;
-        const offline = new OfflineAudioContext(AUDIO_CHANNELS, length, SAMPLE_RATE);
-        if (sink) {
-          // Start a little early so a buffer that overlaps the window edge is included.
-          for await (const wrapped of sink.buffers(Math.max(0, winStart - 0.5), winEnd)) {
+    for (let s0 = 0; s0 < totalSamples; s0 += windowSamples) {
+      checkAbort(signal);
+      const length = Math.min(windowSamples, totalSamples - s0);
+      const T0 = s0 / SAMPLE_RATE;
+      const T1 = T0 + length / SAMPLE_RATE;
+      const offline = new OfflineAudioContext(AUDIO_CHANNELS, length, SAMPLE_RATE);
+
+      // 1) Original sound of each clip that overlaps this window.
+      if (origGain > 0) {
+        const gain = offline.createGain();
+        gain.gain.value = origGain;
+        gain.connect(offline.destination);
+        for (let i = 0; i < clips.length; i++) {
+          const clip = clips[i];
+          const cs = outStarts[i];
+          const ce = cs + frameCount(clip) / FPS;
+          const a = Math.max(T0, cs);
+          const b = Math.min(T1, ce);
+          if (b <= a) continue;
+          const sink = await sinkFor(assets[clip.assetId]);
+          if (!sink) continue;
+          const srcA = clip.inPoint + (a - cs);
+          const srcB = srcA + (b - a);
+          // Start a little early so a buffer that overlaps the edge is included.
+          for await (const wrapped of sink.buffers(Math.max(0, srcA - 0.5), srcB)) {
+            // Play only the part inside this clip and window, so no sound leaks across a cut.
+            const from = Math.max(wrapped.timestamp, srcA);
+            const to = Math.min(wrapped.timestamp + wrapped.duration, srcB);
+            if (to <= from) continue;
             const node = offline.createBufferSource();
             node.buffer = wrapped.buffer;
-            node.connect(offline.destination);
-            const at = wrapped.timestamp - winStart;
-            if (at >= 0) node.start(at);
-            else if (-at < wrapped.duration) node.start(0, -at);
+            node.connect(gain);
+            node.start(cs + (from - clip.inPoint) - T0, from - wrapped.timestamp, to - from);
           }
         }
-        // Without a sink this renders silence, keeping the audio track the same length as video.
-        const rendered = await offline.startRendering();
-        await audioSource.add(rendered);
       }
+
+      // 2) Background music, looped, with fade-out and ducking.
+      if (musicBuffer) {
+        const gain = offline.createGain();
+        applyEnvelope(gain.gain, envelope, 0, T0, T1);
+        gain.connect(offline.destination);
+        const node = offline.createBufferSource();
+        node.buffer = musicBuffer;
+        node.loop = true;
+        node.connect(gain);
+        node.start(0, T0 % musicBuffer.duration);
+      }
+
+      // 3) Voice-overs.
+      for (const v of audio.voiceOvers) {
+        const a = Math.max(T0, v.start);
+        const b = Math.min(T1, voiceOverEnd(v), totalSeconds);
+        if (b <= a) continue;
+        const gain = offline.createGain();
+        gain.gain.value = v.volume;
+        gain.connect(offline.destination);
+        const node = offline.createBufferSource();
+        node.buffer = v.buffer;
+        node.connect(gain);
+        node.start(a - T0, a - v.start, b - a);
+      }
+
+      const rendered = await offline.startRendering();
+      await audioSource.add(rendered);
     }
     audioSource.close();
   };

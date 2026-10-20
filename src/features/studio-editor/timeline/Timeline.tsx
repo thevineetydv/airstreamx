@@ -21,11 +21,18 @@ interface TimelineProps {
   selectedOverlayId: string | null;
   onSelectOverlay: (id: string) => void;
   onOverlayTime: (id: string, start: number, end: number) => void;
+  musicTitle: string | null;
+  voiceOvers: { id: string; start: number; duration: number }[];
+  selectedVoiceId: string | null;
+  /** "music" or a voice-over id. */
+  onSelectAudio: (id: string) => void;
+  onMoveVoice: (id: string, start: number) => void;
 }
 
 export default function Timeline(props: TimelineProps) {
   const { clips, assets, selectedId, time, duration, pxPerSec, onSeek, onScrubStart, onSelect, onTrim } = props;
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
+  const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
@@ -121,6 +128,19 @@ export default function Timeline(props: TimelineProps) {
               duration={duration}
               onSelect={onSelectOverlay}
               onTime={onOverlayTime}
+            />
+          )}
+
+          {/* Audio track: background music + voice-overs */}
+          {(musicTitle || voiceOvers.length > 0) && (
+            <AudioTrack
+              musicTitle={musicTitle}
+              voiceOvers={voiceOvers}
+              selectedId={selectedVoiceId}
+              pxPerSec={pxPerSec}
+              duration={duration}
+              onSelect={onSelectAudio}
+              onMove={onMoveVoice}
             />
           )}
         </div>
@@ -313,3 +333,72 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
     </div>
   );
 });
+
+function AudioTrack(props: {
+  musicTitle: string | null;
+  voiceOvers: { id: string; start: number; duration: number }[];
+  selectedId: string | null;
+  pxPerSec: number;
+  duration: number;
+  onSelect: (id: string) => void;
+  onMove: (id: string, start: number) => void;
+}) {
+  const { musicTitle, voiceOvers, selectedId, pxPerSec, duration, onSelect, onMove } = props;
+  const voiceTop = musicTitle ? LANE_H : 0;
+  const height = (musicTitle ? LANE_H : 0) + (voiceOvers.length ? LANE_H : 0);
+
+  // Drag the selected voice-over sideways to change when it starts.
+  const startDrag = (id: string, start: number, len: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (id !== selectedId) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const move = (ev: PointerEvent) => {
+      const s = Math.min(Math.max(0, start + (ev.clientX - x0) / pxPerSec), Math.max(0, duration - Math.min(len, duration)));
+      onMove(id, s);
+    };
+    const up = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+  };
+
+  return (
+    <div className="relative mt-1" style={{ width: duration * pxPerSec, height }} data-testid="audio-track">
+      {musicTitle && (
+        <div
+          onClick={(e) => { e.stopPropagation(); onSelect("music"); }}
+          className="absolute left-0 flex items-center overflow-hidden rounded-md bg-emerald-700/80 px-1.5 text-[10px] font-semibold text-white"
+          style={{ width: duration * pxPerSec, height: LANE_H - 4, top: 0 }}
+          data-testid="audio-bar-music"
+        >
+          <span className="sticky left-0 truncate">🎵 {musicTitle}</span>
+        </div>
+      )}
+      {voiceOvers.map((v, i) => {
+        const selected = v.id === selectedId;
+        const len = Math.min(v.duration, Math.max(0, duration - v.start));
+        return (
+          <div
+            key={v.id}
+            onClick={(e) => { e.stopPropagation(); onSelect(v.id); }}
+            onPointerDown={startDrag(v.id, v.start, v.duration)}
+            className={`absolute flex items-center overflow-hidden rounded-md bg-violet-600 px-1.5 text-[10px] font-semibold text-white ${
+              selected ? "z-10 ring-2 ring-white touch-none" : "opacity-85"
+            }`}
+            style={{ left: v.start * pxPerSec, width: Math.max(10, len * pxPerSec), height: LANE_H - 4, top: voiceTop }}
+            data-testid="audio-bar-voice"
+          >
+            <span className="truncate">🎙 Voice {i + 1}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

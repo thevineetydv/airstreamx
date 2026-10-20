@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test:editor": "node tests/studio-editor/editor.test.mjs && node tests/studio-editor/overlays.test.mjs"
+    "test:editor": "node tests/studio-editor/editor.test.mjs && node tests/studio-editor/overlays.test.mjs && node tests/studio-editor/audio.test.mjs"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
