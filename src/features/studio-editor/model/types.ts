@@ -1,6 +1,8 @@
 // Core data types for the Studio Editor.
 // All times are in seconds.
 
+import type { Overlay } from "./overlays";
+
 /** A small preview frame taken from the source file at a given source time. */
 export interface Thumb {
   t: number;
@@ -38,6 +40,9 @@ export interface EditorState {
   assets: Record<string, MediaAsset>;
   clips: Clip[];
   selectedClipId: string | null;
+  /** Text, stickers, area tag, deal banner. Drawn in array order (last = on top). */
+  overlays: Overlay[];
+  selectedOverlayId: string | null;
 }
 
 /** Shortest clip we allow after a trim or split. */

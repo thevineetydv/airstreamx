@@ -4,6 +4,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { clipDuration, formatTime } from "../model/timeline";
 import type { Clip, MediaAsset } from "../model/types";
+import { clampOverlayTimes, overlayLabel, type Overlay } from "../model/overlays";
 
 interface TimelineProps {
   clips: Clip[];
@@ -16,10 +17,15 @@ interface TimelineProps {
   onScrubStart: () => void;
   onSelect: (id: string | null) => void;
   onTrim: (id: string, edge: "in" | "out", value: number) => void;
+  overlays: Overlay[];
+  selectedOverlayId: string | null;
+  onSelectOverlay: (id: string) => void;
+  onOverlayTime: (id: string, start: number, end: number) => void;
 }
 
 export default function Timeline(props: TimelineProps) {
   const { clips, assets, selectedId, time, duration, pxPerSec, onSeek, onScrubStart, onSelect, onTrim } = props;
+  const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
@@ -105,8 +111,119 @@ export default function Timeline(props: TimelineProps) {
               />
             ))}
           </div>
+
+          {/* Overlay track: one bar per overlay, stacked in lanes when they overlap */}
+          {overlays.length > 0 && (
+            <OverlayTrack
+              overlays={overlays}
+              selectedId={selectedOverlayId}
+              pxPerSec={pxPerSec}
+              duration={duration}
+              onSelect={onSelectOverlay}
+              onTime={onOverlayTime}
+            />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const KIND_COLOR: Record<Overlay["kind"], string> = {
+  text: "bg-sky-600",
+  sticker: "bg-amber-600",
+  area: "bg-emerald-600",
+  deal: "bg-red-600",
+};
+const LANE_H = 24;
+
+/** Greedy lane assignment: an overlay goes in the first lane where it does not overlap. */
+function assignLanes(overlays: Overlay[]): Map<string, number> {
+  const laneEnds: number[] = [];
+  const lanes = new Map<string, number>();
+  for (const o of [...overlays].sort((a, b) => a.start - b.start)) {
+    let lane = laneEnds.findIndex((end) => end <= o.start + 0.001);
+    if (lane < 0) { lane = laneEnds.length; laneEnds.push(0); }
+    laneEnds[lane] = o.end;
+    lanes.set(o.id, lane);
+  }
+  return lanes;
+}
+
+function OverlayTrack(props: {
+  overlays: Overlay[];
+  selectedId: string | null;
+  pxPerSec: number;
+  duration: number;
+  onSelect: (id: string) => void;
+  onTime: (id: string, start: number, end: number) => void;
+}) {
+  const { overlays, selectedId, pxPerSec, duration, onSelect, onTime } = props;
+  const lanes = assignLanes(overlays);
+  const laneCount = Math.max(1, ...Array.from(lanes.values()).map((l) => l + 1));
+
+  // Drag the whole bar ("move") or one of its edges. Only works on the selected bar,
+  // so swiping across other bars still scrolls the timeline.
+  const startDrag = (o: Overlay, mode: "move" | "start" | "end") => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (o.id !== selectedId) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const { start, end } = o;
+    const move = (ev: PointerEvent) => {
+      const dt = (ev.clientX - x0) / pxPerSec;
+      if (mode === "move") {
+        const len = end - start;
+        const s = Math.min(Math.max(0, start + dt), Math.max(0, duration - len));
+        onTime(o.id, s, s + len);
+      } else if (mode === "start") {
+        const c = clampOverlayTimes(start + dt, end, duration);
+        onTime(o.id, c.start, end);
+      } else {
+        const c = clampOverlayTimes(start, end + dt, duration);
+        onTime(o.id, start, c.end);
+      }
+    };
+    const up = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+  };
+
+  return (
+    <div className="relative mt-1" style={{ width: duration * pxPerSec, height: laneCount * LANE_H }} data-testid="overlay-track">
+      {overlays.map((o) => {
+        const selected = o.id === selectedId;
+        const left = Math.min(o.start, duration) * pxPerSec;
+        const width = Math.max(10, (Math.min(o.end, duration) - Math.min(o.start, duration)) * pxPerSec);
+        return (
+          <div
+            key={o.id}
+            data-testid={`overlay-bar-${o.kind}`}
+            data-selected={selected}
+            onClick={(e) => { e.stopPropagation(); onSelect(o.id); }}
+            onPointerDown={startDrag(o, "move")}
+            className={`absolute flex items-center overflow-hidden rounded-md text-[10px] font-semibold text-white ${KIND_COLOR[o.kind]} ${
+              selected ? "z-10 ring-2 ring-white touch-none" : "opacity-80"
+            }`}
+            style={{ left, width, top: (lanes.get(o.id) ?? 0) * LANE_H, height: LANE_H - 4 }}
+          >
+            <span className={`truncate ${selected ? "px-4" : "px-1.5"}`}>{overlayLabel(o)}</span>
+            {selected && (
+              <>
+                <div onPointerDown={startDrag(o, "start")} className="absolute inset-y-0 left-0 w-3 cursor-ew-resize bg-white/40" data-testid="overlay-handle-start" />
+                <div onPointerDown={startDrag(o, "end")} className="absolute inset-y-0 right-0 w-3 cursor-ew-resize bg-white/40" data-testid="overlay-handle-end" />
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

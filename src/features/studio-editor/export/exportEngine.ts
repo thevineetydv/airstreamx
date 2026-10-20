@@ -18,10 +18,14 @@ import {
   type VideoCodec,
 } from "mediabunny";
 import { VIDEO_FORMATS } from "../media/formats";
+import { outputSize, type ExportResolution } from "./size";
+import { drawOverlaysAt } from "../render/drawOverlays";
+import type { Overlay } from "../model/overlays";
 import { clipDuration } from "../model/timeline";
 import type { Clip, MediaAsset } from "../model/types";
 
-export type ExportResolution = "720p" | "1080p";
+export type { ExportResolution } from "./size";
+export { outputSize } from "./size";
 
 export const FPS = 30;
 const SAMPLE_RATE = 48000;
@@ -50,14 +54,6 @@ export interface ExportResult {
 }
 
 export class ExportCancelled extends Error {}
-
-/** Output size. Orientation follows the first clip (portrait phone videos stay portrait). */
-export function outputSize(res: ExportResolution, first?: MediaAsset): { width: number; height: number } {
-  const long = res === "1080p" ? 1920 : 1280;
-  const short = res === "1080p" ? 1080 : 720;
-  const portrait = !!first && first.height > first.width;
-  return portrait ? { width: short, height: long } : { width: long, height: short };
-}
 
 /** Number of output frames for a clip. Audio uses the same length so A/V never drifts. */
 function frameCount(clip: Clip): number {
@@ -90,6 +86,7 @@ export async function planExport(res: ExportResolution, first?: MediaAsset): Pro
 
 interface RunOptions {
   clips: Clip[];
+  overlays: Overlay[];
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
   /** 0..1 */
@@ -101,7 +98,7 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
   const plan = await planExport(resolution, assets[clips[0].assetId]);
@@ -162,6 +159,8 @@ export async function runExport({ clips, assets, resolution, onProgress, signal 
           sample.drawWithFit(ctx, { fit: "contain" });
           sample.close();
         }
+        // Text, stickers, area tag and deal banner on top of the frame.
+        drawOverlaysAt(ctx, overlays, outFrame / FPS, width, height);
         await videoSource.add(outFrame / FPS, 1 / FPS);
         outFrame++;
         framesDone++;
