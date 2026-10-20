@@ -28,6 +28,10 @@ import { formatVideoTitle } from "../utils/format";
  * CONSTANTS
  * ───────────────────────────────────────────── */
 const MAX_SHORT_DURATION = 60;
+// Phones: the fixed BottomNav (h-16 + safe area) sits over the page. The
+// Shorts screen used to be 100dvh tall (and the player 100vh), so the
+// channel name, title and Subscribe button were hidden behind the nav.
+const MOBILE_SHORTS_HEIGHT = "calc(100dvh - 64px - env(safe-area-inset-bottom, 0px))";
 const HOOK_DURATION_MS = 3000;
 const SWIPE_THRESHOLD = 50;   // px — minimum swipe distance to navigate
 
@@ -576,6 +580,10 @@ function ShortPlayer({
   const [buffered, setBuffered] = useState(0);
   const [loading, setLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
+  // Wide videos (landscape, 4:3, square) are shown whole with a blurred
+  // backdrop, like YouTube Shorts. Cropping them to fill the 9:16 frame cut
+  // off the sides — e.g. news headlines lost their last letters.
+  const [fitWhole, setFitWhole] = useState(false);
   const [showHook, setShowHook] = useState(true);
   const [showFlash, setShowFlash] = useState<"play" | "pause" | null>(null);
   const [showDesc, setShowDesc] = useState(false);
@@ -601,7 +609,7 @@ function ShortPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
-    setLoading(true); setProgress(0); setBuffered(0); setVideoError(false);
+    setLoading(true); setProgress(0); setBuffered(0); setVideoError(false); setFitWhole(false);
 
     if (ambientMode) video.crossOrigin = "anonymous";
     else video.removeAttribute("crossorigin");
@@ -778,23 +786,34 @@ function ShortPlayer({
         />
       )}
 
-      {/* Video — always crop-fill the 9:16 frame (TikTok/Shorts style).
-          Using object-contain here made any clip whose native aspect ratio
-          isn't exactly 9:16 shrink down with black bars once the real frame
-          painted (looked "full screen" while black, then "small" once
-          loaded). object-cover keeps it filling the frame at all times.
-          This is safe for the actual VIDEO because the transcoding
-          pipeline preserves each upload's native aspect ratio — but see
-          the poster overlay just below for why the STILL IMAGE needs
-          different handling. */}
+      {/* Video fit:
+          - Portrait videos (9:16, 4:5…) fill the frame (object-cover); at
+            most a thin strip is trimmed at the top/bottom.
+          - Wide videos (width/height > 0.75: landscape, 4:3, square) are
+            shown whole (object-contain) over a blurred copy of the
+            thumbnail, so nothing important is cut off at the sides.
+          The choice is made once the video's real size is known. */}
+      {fitWhole && short.thumbnail && (
+        <img
+          src={short.thumbnail}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{ zIndex: 5, filter: "blur(28px) brightness(0.5)", transform: "scale(1.15)" }}
+        />
+      )}
 <video
   ref={videoRef}
-  className="w-full h-full relative z-10 object-cover"
+  className={`w-full h-full relative z-10 ${fitWhole ? "object-contain" : "object-cover"}`}
   style={{
     display: "block",
-    backgroundColor: "#000",
+    backgroundColor: fitWhole && short.thumbnail ? "transparent" : "#000",
     backfaceVisibility: "hidden",
   }}
+        onLoadedMetadata={e => {
+          const v = e.currentTarget;
+          if (v.videoWidth && v.videoHeight) setFitWhole(v.videoWidth / v.videoHeight > 0.75);
+        }}
         playsInline
         muted={muted}
         onTimeUpdate={handleTimeUpdate}
@@ -962,7 +981,7 @@ function ShortPlayer({
             right: 10,
             top: "50%",
             transform: "translateY(-50%)",
-            maxHeight: "calc(100dvh - 140px)",
+            maxHeight: "calc(100% - 140px)",
             overflowY: "auto",
             overflowX: "hidden",
             scrollbarWidth: "none",
@@ -993,7 +1012,10 @@ function ShortPlayer({
           // iPhone X or later, since viewport-fit=cover (index.html) lets
           // content extend under it with no automatic inset. BottomNav.tsx
           // already accounts for this; this container didn't.
-          bottom: isMobile ? "calc(20px + env(safe-area-inset-bottom, 0px))" : 32,
+          // Mobile: the player now ends above the bottom nav (which already
+          // handles the iPhone home-indicator inset), so only clear the
+          // progress bar here.
+          bottom: isMobile ? 30 : 32,
           right: isMobile ? 80 : 16,
         }}
       >
@@ -1465,7 +1487,7 @@ export default function ShortsPage({
         <Header theme={theme} setTheme={setTheme} q={q} setQ={setQ} themeCls={themeCls}
           fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
       )}
-      <div style={{ height: isMobile ? "100dvh" : "calc(100vh - 64px)", background: "#0F0F0F" }}><Skeleton isMobile={isMobile} /></div>
+      <div style={{ height: isMobile ? MOBILE_SHORTS_HEIGHT : "calc(100vh - 64px)", background: "#0F0F0F" }}><Skeleton isMobile={isMobile} /></div>
     </>
   );
 
@@ -1477,7 +1499,7 @@ export default function ShortsPage({
           fileInputRef={fileInputRef} handleUploadClick={handleUploadClick} uploading={uploading} />
       )}
       <div className="flex flex-col items-center justify-center gap-3 text-center px-6"
-        style={{ height: isMobile ? "100dvh" : "calc(100vh - 64px)", background: "#0F0F0F" }}>
+        style={{ height: isMobile ? MOBILE_SHORTS_HEIGHT : "calc(100vh - 64px)", background: "#0F0F0F" }}>
         <div className="text-5xl opacity-40">📱</div>
         <p className="text-white text-lg font-semibold">No Shorts yet</p>
         <p className="text-white/30 text-sm">Upload videos under 60 seconds to create Shorts</p>
@@ -1503,7 +1525,7 @@ export default function ShortsPage({
         ref={containerRef}
         className="relative overflow-hidden"
         style={{
-          height: isMobile ? "100dvh" : "calc(100vh - 64px)",
+          height: isMobile ? MOBILE_SHORTS_HEIGHT : "calc(100vh - 64px)",
           background: "#0F0F0F",
           touchAction: "none",
           // touchAction:none stops the browser's own pan/zoom gestures, but
@@ -1676,7 +1698,7 @@ export default function ShortsPage({
             MOBILE LAYOUT — pure TikTok full-screen
         ══════════════════════════════════════════ */}
         {isMobile && (
-          <div className="absolute inset-0 overflow-hidden w-screen h-screen">
+          <div className="absolute inset-0 overflow-hidden">
 
             {/* Full-screen player with drag transform */}
             <motion.div

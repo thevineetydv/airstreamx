@@ -167,9 +167,9 @@ function AppContent() {
 
           <main
             className={`flex flex-1 w-full
-              ${(isFullscreen || isShortsPage) ? "h-screen" : "h-[calc(100vh-64px)]"}
+              ${isShortsPage ? "h-[100dvh]" : isFullscreen ? "h-screen" : "h-[calc(100vh-64px)]"}
               ${isWatchPage || isLivePage || isShortsPage ? "px-0 py-0" : "px-4 md:px-6 py-4"}
-              ${!isWatchPage && !isLivePage ? "pb-20 md:pb-4" : ""}
+              ${!isWatchPage && !isLivePage && !isShortsPage ? "pb-20 md:pb-4" : ""}
               overflow-hidden`}
           >
             <section
