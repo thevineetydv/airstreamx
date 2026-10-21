@@ -98,7 +98,8 @@ try {
   await page.mouse.up();
   check("Trim -> total 6s", Math.abs(totalFromLabel(await label.innerText()) - 6) < 0.15, await label.innerText());
   await page.waitForTimeout(600);
-  const frameReady = await page.getByTestId("preview-video").evaluate((v) => v.readyState >= 2 && Math.abs(v.currentTime - 1.98) < 0.1);
+  // Two preview <video> elements; the visible one is marked data-active.
+  const frameReady = await page.locator('[data-testid^="preview-video-"][data-active="true"]').evaluate((v) => v.readyState >= 2 && Math.abs(v.currentTime - 1.98) < 0.1);
   check("Preview shows the trimmed edge frame", frameReady);
   await page.screenshot({ path: `${SHOTS}/03-trimmed.png` });
 

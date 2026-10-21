@@ -3,7 +3,6 @@
 // Nothing is sent to the server until the user chooses to upload.
 
 import {
-  AudioBufferSink,
   AudioBufferSource,
   BlobSource,
   BufferTarget,
@@ -12,6 +11,7 @@ import {
   Mp4OutputFormat,
   Output,
   VideoSampleSink,
+  type VideoSample,
   getFirstEncodableAudioCodec,
   getFirstEncodableVideoCodec,
   type AudioCodec,
@@ -21,15 +21,18 @@ import { VIDEO_FORMATS } from "../media/formats";
 import { outputSize, type ExportResolution } from "./size";
 import { drawOverlaysAt } from "../render/drawOverlays";
 import type { Overlay } from "../model/overlays";
-import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
-import { loadTrackBuffer } from "../audio/library";
-import { clipDuration } from "../model/timeline";
+import type { AudioSettings } from "../model/audio";
+import { MixCancelled, mixTimeline } from "../audio/mixer";
 import type { Clip, MediaAsset } from "../model/types";
+import { FPS, frameCount, outputTimeline } from "./timing";
+import { frameLayers, type FrameLayers } from "../model/timeline";
+import type { AspectRatio } from "../model/look";
+import { compositeTransition, drawClipFrame } from "../render/drawClip";
 
 export type { ExportResolution } from "./size";
 export { outputSize } from "./size";
 
-export const FPS = 30;
+export { FPS } from "./timing";
 const SAMPLE_RATE = 48000;
 const AUDIO_CHANNELS = 2;
 /** Audio is rendered in windows of this size so RAM use stays small on phones. */
@@ -57,19 +60,16 @@ export interface ExportResult {
 
 export class ExportCancelled extends Error {}
 
-/** Number of output frames for a clip. Audio uses the same length so A/V never drifts. */
-function frameCount(clip: Clip): number {
-  return Math.max(1, Math.round(clipDuration(clip) * FPS));
-}
-
-export function estimateBytes(clips: Clip[], res: ExportResolution): number {
+export function estimateBytes(clips: Clip[], res: ExportResolution, aspect: AspectRatio = "auto"): number {
   const seconds = clips.reduce((s, c) => s + frameCount(c) / FPS, 0);
-  return Math.round(((VIDEO_BITRATE[res] + AUDIO_BITRATE) * seconds) / 8 * 1.03);
+  // Square video has fewer pixels, so it gets a proportionally lower bitrate.
+  const bitrate = aspect === "1:1" ? VIDEO_BITRATE[res] * 0.6 : VIDEO_BITRATE[res];
+  return Math.round(((bitrate + AUDIO_BITRATE) * seconds) / 8 * 1.03);
 }
 
 /** Pick the best codecs this browser can encode. H.264/AAC first (widest playback support). */
-export async function planExport(res: ExportResolution, first?: MediaAsset): Promise<ExportPlan> {
-  const { width, height } = outputSize(res, first);
+export async function planExport(res: ExportResolution, aspect: AspectRatio, first?: MediaAsset): Promise<ExportPlan> {
+  const { width, height } = outputSize(res, aspect, first);
   const videoCodec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], {
     width,
     height,
@@ -92,6 +92,7 @@ interface RunOptions {
   audio: AudioSettings;
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
+  aspect: AspectRatio;
   /** 0..1 */
   onProgress: (p: number) => void;
   signal: AbortSignal;
@@ -101,10 +102,10 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, overlays, audio, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, audio, assets, resolution, aspect, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
-  const plan = await planExport(resolution, assets[clips[0].assetId]);
+  const plan = await planExport(resolution, aspect, assets[clips[0].assetId]);
   const { width, height } = plan;
 
   const canvas = document.createElement("canvas");
@@ -119,7 +120,7 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
   });
   const videoSource = new CanvasSource(canvas, {
     codec: plan.videoCodec,
-    bitrate: VIDEO_BITRATE[resolution],
+    bitrate: aspect === "1:1" ? VIDEO_BITRATE[resolution] * 0.6 : VIDEO_BITRATE[resolution],
     keyFrameInterval: 2,
   });
   output.addVideoTrack(videoSource, { frameRate: FPS });
@@ -143,134 +144,109 @@ export async function runExport({ clips, overlays, audio, assets, resolution, on
   const totalFrames = clips.reduce((s, c) => s + frameCount(c), 0);
   let framesDone = 0;
 
-  const videoPass = async () => {
-    let outFrame = 0;
-    for (const clip of clips) {
-      const asset = assets[clip.assetId];
+  // 1) Plan: for every output frame, which clip(s) and which source time.
+  //    During a transition two clips are drawn and mixed.
+  const { starts } = outputTimeline(clips);
+  const ends = clips.map((c, i) => starts[i] + frameCount(c) / FPS);
+  const plans: FrameLayers[] = [];
+  const wanted: number[][] = clips.map(() => []);
+  const clampSrc = (k: number, src: number) =>
+    // Past the end of the file -> hold the last frame; before the start -> hold the first.
+    Math.min(Math.max(0, src), Math.max(0, assets[clips[k].assetId].duration - 0.5 / FPS));
+  for (let f = 0; f < totalFrames; f++) {
+    const L = frameLayers(clips, f / FPS, starts, ends)!;
+    L.a.source = clampSrc(L.a.index, L.a.source);
+    wanted[L.a.index].push(L.a.source);
+    if (L.b) {
+      L.b.source = clampSrc(L.b.index, L.b.source);
+      wanted[L.b.index].push(L.b.source);
+    }
+    plans.push(L);
+  }
+
+  // 2) One frame stream per clip, opened when first needed and closed when done,
+  //    so at most two decoders run at once (only during a transition).
+  const streams = new Map<number, AsyncGenerator<VideoSample | null, void, unknown>>();
+  const left = wanted.map((w) => w.length);
+  const nextFrame = async (k: number): Promise<VideoSample | null> => {
+    let it = streams.get(k);
+    if (!it) {
+      const asset = assets[clips[k].assetId];
       const track = await inputFor(asset).getPrimaryVideoTrack();
       if (!track) throw new Error(`No video track in ${asset.name}`);
-      const sink = new VideoSampleSink(track);
-      const n = frameCount(clip);
-      // One source timestamp per output frame -> constant 30 fps output,
-      // even for variable frame rate phone recordings.
-      const times = Array.from({ length: n }, (_, k) => clip.inPoint + k / FPS);
-      for await (const sample of sink.samplesAtTimestamps(times)) {
+      // One source timestamp per output frame -> constant 30 fps, even for variable frame rate phone videos.
+      it = new VideoSampleSink(track).samplesAtTimestamps(wanted[k]);
+      streams.set(k, it);
+    }
+    const r = await it.next();
+    if (--left[k] === 0) {
+      await it.return(undefined);
+      streams.delete(k);
+    }
+    return r.done ? null : r.value;
+  };
+
+  // Scratch canvases for the two sides of a transition.
+  const makeLayer = () => {
+    const c = document.createElement("canvas");
+    c.width = width;
+    c.height = height;
+    return { canvas: c, ctx: c.getContext("2d", { alpha: false })! };
+  };
+  let layerA: ReturnType<typeof makeLayer> | null = null;
+  let layerB: ReturnType<typeof makeLayer> | null = null;
+
+  const videoPass = async () => {
+    try {
+      for (let f = 0; f < totalFrames; f++) {
         checkAbort(signal);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, width, height);
-        if (sample) {
-          sample.drawWithFit(ctx, { fit: "contain" });
-          sample.close();
+        const L = plans[f];
+        if (!L.b) {
+          const s = await nextFrame(L.a.index);
+          drawClipFrame(ctx, s, clips[L.a.index], width, height);
+          s?.close();
+        } else {
+          layerA ??= makeLayer();
+          layerB ??= makeLayer();
+          const sa = await nextFrame(L.a.index);
+          const sb = await nextFrame(L.b.index);
+          drawClipFrame(layerA.ctx, sa, clips[L.a.index], width, height);
+          drawClipFrame(layerB.ctx, sb, clips[L.b.index], width, height);
+          sa?.close();
+          sb?.close();
+          compositeTransition(ctx, L.type, L.p, layerA.canvas, layerB.canvas, width, height);
         }
         // Text, stickers, area tag and deal banner on top of the frame.
-        drawOverlaysAt(ctx, overlays, outFrame / FPS, width, height);
-        await videoSource.add(outFrame / FPS, 1 / FPS);
-        outFrame++;
+        drawOverlaysAt(ctx, overlays, f / FPS, width, height);
+        await videoSource.add(f / FPS, 1 / FPS);
         framesDone++;
         onProgress(framesDone / totalFrames);
       }
+    } finally {
+      for (const it of streams.values()) await it.return(undefined).catch(() => undefined);
     }
     videoSource.close();
   };
 
-  // Timeline start of each clip in the OUTPUT (whole frames), so audio lines up with video exactly.
-  const outStarts: number[] = [];
-  {
-    let f = 0;
-    for (const c of clips) { outStarts.push(f / FPS); f += frameCount(c); }
-  }
-  const totalSeconds = totalFrames / FPS;
-
-  // Background music must be decoded before mixing starts.
-  const musicBuffer = audio.music && audioSource
-    ? await loadTrackBuffer(audio.music.track, new OfflineAudioContext(AUDIO_CHANNELS, 1, SAMPLE_RATE))
-    : null;
-  const envelope = musicEnvelope(audio, totalSeconds);
-  const origGain = originalGain(audio);
-
-  // One audio sink per asset, created on first use.
-  const sinks = new Map<string, AudioBufferSink | null>();
-  const sinkFor = async (asset: MediaAsset) => {
-    if (!sinks.has(asset.id)) {
-      const track = asset.hasAudio ? await inputFor(asset).getPrimaryAudioTrack() : null;
-      sinks.set(asset.id, track ? new AudioBufferSink(track) : null);
-    }
-    return sinks.get(asset.id) ?? null;
-  };
-
-  // Mix the whole timeline in 10 s windows: original clip sound + music + voice-overs.
-  // OfflineAudioContext also resamples (44.1k -> 48k) and up-mixes mono to stereo.
+  // Original sound + music + voice-overs, mixed in 10 s windows (see audio/mixer.ts).
   const audioPass = async () => {
     if (!audioSource) return;
-    const totalSamples = Math.round(totalSeconds * SAMPLE_RATE);
-    const windowSamples = AUDIO_WINDOW_SECONDS * SAMPLE_RATE;
-
-    for (let s0 = 0; s0 < totalSamples; s0 += windowSamples) {
-      checkAbort(signal);
-      const length = Math.min(windowSamples, totalSamples - s0);
-      const T0 = s0 / SAMPLE_RATE;
-      const T1 = T0 + length / SAMPLE_RATE;
-      const offline = new OfflineAudioContext(AUDIO_CHANNELS, length, SAMPLE_RATE);
-
-      // 1) Original sound of each clip that overlaps this window.
-      if (origGain > 0) {
-        const gain = offline.createGain();
-        gain.gain.value = origGain;
-        gain.connect(offline.destination);
-        for (let i = 0; i < clips.length; i++) {
-          const clip = clips[i];
-          const cs = outStarts[i];
-          const ce = cs + frameCount(clip) / FPS;
-          const a = Math.max(T0, cs);
-          const b = Math.min(T1, ce);
-          if (b <= a) continue;
-          const sink = await sinkFor(assets[clip.assetId]);
-          if (!sink) continue;
-          const srcA = clip.inPoint + (a - cs);
-          const srcB = srcA + (b - a);
-          // Start a little early so a buffer that overlaps the edge is included.
-          for await (const wrapped of sink.buffers(Math.max(0, srcA - 0.5), srcB)) {
-            // Play only the part inside this clip and window, so no sound leaks across a cut.
-            const from = Math.max(wrapped.timestamp, srcA);
-            const to = Math.min(wrapped.timestamp + wrapped.duration, srcB);
-            if (to <= from) continue;
-            const node = offline.createBufferSource();
-            node.buffer = wrapped.buffer;
-            node.connect(gain);
-            node.start(cs + (from - clip.inPoint) - T0, from - wrapped.timestamp, to - from);
-          }
-        }
-      }
-
-      // 2) Background music, looped, with fade-out and ducking.
-      if (musicBuffer) {
-        const gain = offline.createGain();
-        applyEnvelope(gain.gain, envelope, 0, T0, T1);
-        gain.connect(offline.destination);
-        const node = offline.createBufferSource();
-        node.buffer = musicBuffer;
-        node.loop = true;
-        node.connect(gain);
-        node.start(0, T0 % musicBuffer.duration);
-      }
-
-      // 3) Voice-overs.
-      for (const v of audio.voiceOvers) {
-        const a = Math.max(T0, v.start);
-        const b = Math.min(T1, voiceOverEnd(v), totalSeconds);
-        if (b <= a) continue;
-        const gain = offline.createGain();
-        gain.gain.value = v.volume;
-        gain.connect(offline.destination);
-        const node = offline.createBufferSource();
-        node.buffer = v.buffer;
-        node.connect(gain);
-        node.start(a - T0, a - v.start, b - a);
-      }
-
-      const rendered = await offline.startRendering();
-      await audioSource.add(rendered);
+    try {
+      await mixTimeline({
+        clips, assets, audio,
+        sampleRate: SAMPLE_RATE,
+        channels: AUDIO_CHANNELS,
+        includeMusic: true,
+        windowSeconds: AUDIO_WINDOW_SECONDS,
+        inputFor,
+        signal,
+        onWindow: (buffer) => audioSource.add(buffer),
+      });
+    } catch (err) {
+      if (err instanceof MixCancelled) throw new ExportCancelled("Export cancelled");
+      throw err;
     }
+    checkAbort(signal);
     audioSource.close();
   };
 
