@@ -3,6 +3,7 @@
 // centre as a fraction of the frame (0..1), so it works for any output size.
 
 import { newId } from "./timeline";
+import type { Keyframe } from "./keyframes";
 
 interface OverlayBase {
   id: string;
@@ -13,6 +14,10 @@ interface OverlayBase {
   y: number;
   /** Size multiplier, 1 = default. */
   scale: number;
+  /** 0..1, default 1 (older drafts have none). */
+  opacity?: number;
+  /** Animation over time (Phase 6b). */
+  keyframes?: Keyframe[];
 }
 
 export type TextStyle = "outline" | "box";

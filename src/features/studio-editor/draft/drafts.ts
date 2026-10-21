@@ -12,6 +12,7 @@ import { newId, totalDuration } from "../model/timeline";
 import type { EditorState, MediaAsset } from "../model/types";
 import { askPersistentStorage, db, isQuotaError } from "./db";
 import { audioBufferToWav } from "./wav";
+import { loadImage, type ImageAsset, type Layer } from "../model/layers";
 
 export interface DraftAssetInfo {
   id: string;
@@ -38,6 +39,9 @@ export interface DraftDoc {
   audio: Omit<AudioSettings, "voiceOvers"> & { voiceOvers: { id: string; start: number; volume: number }[] };
   /** False when the browser had no room for the video files. */
   mediaSaved: boolean;
+  /** Phase 6b (older drafts have none). */
+  layers?: Layer[];
+  images?: { id: string; name: string; type: string; lastModified: number }[];
 }
 
 export function draftName(at = new Date()): string {
@@ -52,9 +56,18 @@ export function newDraftMeta() {
 
 const assetKey = (draftId: string, assetId: string) => `${draftId}:${assetId}`;
 const voiceKey = (draftId: string, voId: string) => `${draftId}:vo:${voId}`;
+const imageKey = (draftId: string, imageId: string) => `${draftId}:img:${imageId}`;
+
+/** Assets used by the main clips and by video layers. */
+function usedAssetIds(s: EditorState): Set<string> {
+  const ids = new Set(s.clips.map((c) => c.assetId));
+  for (const l of s.layers) if (l.kind === "video") ids.add(l.assetId);
+  return ids;
+}
 
 function toDoc(meta: { id: string; name: string; createdAt: number }, s: EditorState, mediaSaved: boolean): DraftDoc {
-  const used = new Set(s.clips.map((c) => c.assetId));
+  const used = usedAssetIds(s);
+  const usedImages = new Set(s.layers.flatMap((l) => (l.kind === "image" ? [l.imageId] : [])));
   const assets = Object.values(s.assets)
     .filter((a) => used.has(a.id))
     .map((a) => ({ id: a.id, name: a.name, size: a.file.size, type: a.file.type, lastModified: a.file.lastModified, duration: a.duration }));
@@ -72,6 +85,10 @@ function toDoc(meta: { id: string; name: string; createdAt: number }, s: EditorS
     aspect: s.aspect,
     audio: { ...s.audio, voiceOvers: s.audio.voiceOvers.map((v) => ({ id: v.id, start: v.start, volume: v.volume })) },
     mediaSaved,
+    layers: s.layers,
+    images: Object.values(s.images)
+      .filter((i) => usedImages.has(i.id))
+      .map((i) => ({ id: i.id, name: i.name, type: i.file.type, lastModified: i.file.lastModified })),
   };
 }
 
@@ -88,7 +105,7 @@ export async function saveDraft(
   let ok = mediaOk;
   if (ok) {
     await askPersistentStorage();
-    for (const c of new Set(s.clips.map((x) => x.assetId))) {
+    for (const c of usedAssetIds(s)) {
       const key = assetKey(meta.id, c);
       if (saved.has(key)) continue;
       try {
@@ -101,7 +118,18 @@ export async function saveDraft(
       }
     }
   }
-  // Voice-overs are small; always try to keep them.
+  // Pictures and voice-overs are small; always try to keep them.
+  for (const l of s.layers) {
+    if (l.kind !== "image" || !s.images[l.imageId]) continue;
+    const key = imageKey(meta.id, l.imageId);
+    if (saved.has(key)) continue;
+    try {
+      await db.putMedia(key, s.images[l.imageId].file);
+      saved.add(key);
+    } catch (err) {
+      if (!isQuotaError(err)) throw err;
+    }
+  }
   for (const v of s.audio.voiceOvers) {
     const key = voiceKey(meta.id, v.id);
     if (saved.has(key)) continue;
@@ -138,6 +166,7 @@ export async function deleteDraft(id: string): Promise<void> {
 export interface OpenedDraft {
   doc: DraftDoc;
   assets: Record<string, MediaAsset>;
+  images: Record<string, ImageAsset>;
   voiceOvers: VoiceOver[];
   /** Videos that were not stored (or could not be read) and must be picked again. */
   missing: DraftAssetInfo[];
@@ -167,7 +196,15 @@ export async function openDraft(id: string): Promise<OpenedDraft> {
       voiceOvers.push({ ...v, buffer });
     } catch { /* skip a damaged recording */ }
   }
-  return { doc, assets, voiceOvers, missing };
+  const images: Record<string, ImageAsset> = {};
+  for (const info of doc.images ?? []) {
+    const blob = await db.getMedia(imageKey(id, info.id));
+    if (!blob) continue;
+    try {
+      images[info.id] = await loadImage(new File([blob], info.name, { type: info.type, lastModified: info.lastModified }), info.id);
+    } catch { /* skip a damaged picture */ }
+  }
+  return { doc, assets, images, voiceOvers, missing };
 }
 
 /** Match picked files to missing videos: same name + size first, then same name. */
@@ -190,5 +227,8 @@ export function draftToState(o: OpenedDraft): EditorState {
     overlays: doc.overlays,
     aspect: doc.aspect,
     audio: { ...doc.audio, voiceOvers: o.voiceOvers },
+    // Layers whose video / picture is missing are left out.
+    layers: (doc.layers ?? []).filter((l) => (l.kind === "video" ? assets[l.assetId] : o.images[l.imageId])),
+    images: o.images,
   };
 }

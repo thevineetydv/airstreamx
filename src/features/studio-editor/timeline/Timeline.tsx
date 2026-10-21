@@ -6,6 +6,8 @@ import { clipDuration, formatTime } from "../model/timeline";
 import { filterCss } from "../model/look";
 import type { Clip, MediaAsset } from "../model/types";
 import { clampOverlayTimes, overlayLabel, type Overlay } from "../model/overlays";
+import { layerEnd, MIN_LAYER, type ImageAsset, type Layer, type LayerPatch } from "../model/layers";
+import type { Keyframe } from "../model/keyframes";
 
 interface TimelineProps {
   clips: Clip[];
@@ -31,6 +33,11 @@ interface TimelineProps {
   /** Tap the ◇ between clip i and i+1. */
   onSelectTransition: (index: number) => void;
   selectedTransition: number | null;
+  layers: Layer[];
+  images: Record<string, ImageAsset>;
+  selectedLayerId: string | null;
+  onSelectLayer: (id: string) => void;
+  onLayerPatch: (id: string, patch: LayerPatch) => void;
 }
 
 export default function Timeline(props: TimelineProps) {
@@ -38,6 +45,7 @@ export default function Timeline(props: TimelineProps) {
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
   const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
   const { onSelectTransition, selectedTransition } = props;
+  const { layers, images, selectedLayerId, onSelectLayer, onLayerPatch } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
@@ -154,6 +162,22 @@ export default function Timeline(props: TimelineProps) {
               duration={duration}
               onSelect={onSelectOverlay}
               onTime={onOverlayTime}
+              onSeek={onSeek}
+            />
+          )}
+
+          {/* Layer track: picture-in-picture videos and pictures */}
+          {layers.length > 0 && (
+            <LayerTrack
+              layers={layers}
+              assets={assets}
+              images={images}
+              selectedId={selectedLayerId}
+              pxPerSec={pxPerSec}
+              duration={duration}
+              onSelect={onSelectLayer}
+              onPatch={onLayerPatch}
+              onSeek={onSeek}
             />
           )}
 
@@ -203,8 +227,9 @@ function OverlayTrack(props: {
   duration: number;
   onSelect: (id: string) => void;
   onTime: (id: string, start: number, end: number) => void;
+  onSeek: (t: number) => void;
 }) {
-  const { overlays, selectedId, pxPerSec, duration, onSelect, onTime } = props;
+  const { overlays, selectedId, pxPerSec, duration, onSelect, onTime, onSeek } = props;
   const lanes = assignLanes(overlays);
   const laneCount = Math.max(1, ...Array.from(lanes.values()).map((l) => l + 1));
 
@@ -261,10 +286,118 @@ function OverlayTrack(props: {
             style={{ left, width, top: (lanes.get(o.id) ?? 0) * LANE_H, height: LANE_H - 4 }}
           >
             <span className={`truncate ${selected ? "px-4" : "px-1.5"}`}>{overlayLabel(o)}</span>
+            <Diamonds keyframes={o.keyframes} pxPerSec={pxPerSec} onSeek={(rel) => onSeek(o.start + rel)} />
             {selected && (
               <>
                 <div onPointerDown={startDrag(o, "start")} className="absolute inset-y-0 left-0 w-3 cursor-ew-resize bg-white/40" data-testid="overlay-handle-start" />
                 <div onPointerDown={startDrag(o, "end")} className="absolute inset-y-0 right-0 w-3 cursor-ew-resize bg-white/40" data-testid="overlay-handle-end" />
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Keyframe markers on a bar. Tap one to jump the playhead to it. */
+function Diamonds({ keyframes, pxPerSec, onSeek }: { keyframes?: Keyframe[]; pxPerSec: number; onSeek: (rel: number) => void }) {
+  if (!keyframes?.length) return null;
+  return (
+    <>
+      {keyframes.map((k) => (
+        <button
+          key={k.t}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onSeek(k.t + 0.001); }}
+          className="absolute top-1/2 z-20 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-black/50 bg-yellow-300"
+          style={{ left: k.t * pxPerSec }}
+          aria-label="Keyframe"
+          data-testid="keyframe-marker"
+        />
+      ))}
+    </>
+  );
+}
+
+/** One lane per layer (layers can overlap in time, and order matters for drawing). */
+function LayerTrack(props: {
+  layers: Layer[];
+  assets: Record<string, MediaAsset>;
+  images: Record<string, ImageAsset>;
+  selectedId: string | null;
+  pxPerSec: number;
+  duration: number;
+  onSelect: (id: string) => void;
+  onPatch: (id: string, patch: LayerPatch) => void;
+  onSeek: (t: number) => void;
+}) {
+  const { layers, assets, images, selectedId, pxPerSec, duration, onSelect, onPatch, onSeek } = props;
+
+  // Body = move in time; left/right edge = change where it starts/ends.
+  // For a video layer the edges trim the video itself (like a clip).
+  const startDrag = (l: Layer, mode: "move" | "start" | "end") => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (l.id !== selectedId) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const snap = { ...l } as Layer;
+    const len = layerEnd(snap) - snap.start;
+    const move = (ev: PointerEvent) => {
+      const dt = (ev.clientX - x0) / pxPerSec;
+      if (mode === "move") {
+        const start = Math.min(Math.max(0, snap.start + dt), Math.max(0, duration - len));
+        onPatch(l.id, snap.kind === "image" ? { start, end: start + len } : { start });
+      } else if (snap.kind === "image") {
+        if (mode === "start") onPatch(l.id, { start: Math.min(Math.max(0, snap.start + dt), snap.end - MIN_LAYER) });
+        else onPatch(l.id, { end: Math.max(Math.min(duration, snap.end + dt), snap.start + MIN_LAYER) });
+      } else if (mode === "start") {
+        // Trim the head: start later on the timeline and later in the video, end stays put.
+        const d = Math.min(Math.max(dt, -snap.inPoint, -snap.start), snap.outPoint - snap.inPoint - MIN_LAYER);
+        onPatch(l.id, { start: snap.start + d, inPoint: snap.inPoint + d });
+      } else {
+        const max = Math.min(assets[snap.assetId]?.duration ?? snap.outPoint, snap.inPoint + (duration - snap.start));
+        onPatch(l.id, { outPoint: Math.max(Math.min(max, snap.outPoint + dt), snap.inPoint + MIN_LAYER) });
+      }
+    };
+    const up = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+  };
+
+  return (
+    <div className="relative mt-1" style={{ width: duration * pxPerSec, height: layers.length * LANE_H }} data-testid="layer-track">
+      {layers.map((l, i) => {
+        const selected = l.id === selectedId;
+        const end = Math.min(layerEnd(l), duration);
+        const left = Math.min(l.start, duration) * pxPerSec;
+        const width = Math.max(10, (end - Math.min(l.start, duration)) * pxPerSec);
+        const name = l.kind === "video" ? assets[l.assetId]?.name : images[l.imageId]?.name;
+        return (
+          <div
+            key={l.id}
+            data-testid={`layer-bar-${l.kind}`}
+            data-selected={selected}
+            onClick={(e) => { e.stopPropagation(); onSelect(l.id); }}
+            onPointerDown={startDrag(l, "move")}
+            className={`absolute flex items-center overflow-hidden rounded-md bg-indigo-600 text-[10px] font-semibold text-white ${
+              selected ? "z-10 ring-2 ring-white touch-none" : "opacity-85"
+            }`}
+            style={{ left, width, top: i * LANE_H, height: LANE_H - 4 }}
+          >
+            <span className={`truncate ${selected ? "px-4" : "px-1.5"}`}>{l.kind === "video" ? "🎬" : "🖼"} {name ?? "Layer"}</span>
+            <Diamonds keyframes={l.keyframes} pxPerSec={pxPerSec} onSeek={(rel) => onSeek(l.start + rel)} />
+            {selected && (
+              <>
+                <div onPointerDown={startDrag(l, "start")} className="absolute inset-y-0 left-0 w-3 cursor-ew-resize bg-white/40" data-testid="layer-handle-start" />
+                <div onPointerDown={startDrag(l, "end")} className="absolute inset-y-0 right-0 w-3 cursor-ew-resize bg-white/40" data-testid="layer-handle-end" />
               </>
             )}
           </div>

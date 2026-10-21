@@ -21,6 +21,8 @@ import { VIDEO_FORMATS } from "../media/formats";
 import { outputSize, type ExportResolution } from "./size";
 import { drawOverlaysAt } from "../render/drawOverlays";
 import type { Overlay } from "../model/overlays";
+import { layerActive, type ImageAsset, type Layer } from "../model/layers";
+import { drawLayer } from "../render/drawLayers";
 import type { AudioSettings } from "../model/audio";
 import { MixCancelled, mixTimeline } from "../audio/mixer";
 import type { Clip, MediaAsset } from "../model/types";
@@ -89,6 +91,8 @@ export async function planExport(res: ExportResolution, aspect: AspectRatio, fir
 interface RunOptions {
   clips: Clip[];
   overlays: Overlay[];
+  layers: Layer[];
+  images: Record<string, ImageAsset>;
   audio: AudioSettings;
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
@@ -102,7 +106,7 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, overlays, audio, assets, resolution, aspect, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, layers, images, audio, assets, resolution, aspect, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
   const plan = await planExport(resolution, aspect, assets[clips[0].assetId]);
@@ -186,6 +190,44 @@ export async function runExport({ clips, overlays, audio, assets, resolution, as
     return r.done ? null : r.value;
   };
 
+  // 3) Layers. Pictures are decoded once. Each video layer gets its own frame
+  //    stream with one source time per output frame it is visible in.
+  const bitmaps = new Map<string, ImageBitmap>();
+  for (const l of layers) {
+    if (l.kind === "image" && images[l.imageId] && !bitmaps.has(l.imageId)) {
+      bitmaps.set(l.imageId, await createImageBitmap(images[l.imageId].file));
+    }
+  }
+  const layerWanted = new Map<string, number[]>();
+  for (const l of layers) {
+    if (l.kind !== "video" || !assets[l.assetId]) continue;
+    const times: number[] = [];
+    const maxSrc = Math.max(0, assets[l.assetId].duration - 0.5 / FPS);
+    for (let f = 0; f < totalFrames; f++) {
+      const t = f / FPS;
+      if (layerActive(l, t)) times.push(Math.min(maxSrc, l.inPoint + (t - l.start)));
+    }
+    if (times.length) layerWanted.set(l.id, times);
+  }
+  const layerStreams = new Map<string, AsyncGenerator<VideoSample | null, void, unknown>>();
+  const layerLeft = new Map([...layerWanted].map(([id, w]) => [id, w.length]));
+  const nextLayerFrame = async (l: Layer & { kind: "video" }): Promise<VideoSample | null> => {
+    const wantedTimes = layerWanted.get(l.id);
+    if (!wantedTimes) return null;
+    let it = layerStreams.get(l.id);
+    if (!it) {
+      const track = await inputFor(assets[l.assetId]).getPrimaryVideoTrack();
+      if (!track) return null;
+      it = new VideoSampleSink(track).samplesAtTimestamps(wantedTimes);
+      layerStreams.set(l.id, it);
+    }
+    const r = await it.next();
+    const left = (layerLeft.get(l.id) ?? 1) - 1;
+    layerLeft.set(l.id, left);
+    if (left === 0) { await it.return(undefined); layerStreams.delete(l.id); }
+    return r.done ? null : r.value;
+  };
+
   // Scratch canvases for the two sides of a transition.
   const makeLayer = () => {
     const c = document.createElement("canvas");
@@ -216,6 +258,17 @@ export async function runExport({ clips, overlays, audio, assets, resolution, as
           sb?.close();
           compositeTransition(ctx, L.type, L.p, layerA.canvas, layerB.canvas, width, height);
         }
+        // Layers (picture-in-picture videos, pictures), in order.
+        for (const l of layers) {
+          if (!layerActive(l, f / FPS)) continue;
+          if (l.kind === "video") {
+            const s = await nextLayerFrame(l);
+            drawLayer(ctx, l, assets[l.assetId], s, f / FPS, width, height);
+            s?.close();
+          } else {
+            drawLayer(ctx, l, images[l.imageId], bitmaps.get(l.imageId) ?? null, f / FPS, width, height);
+          }
+        }
         // Text, stickers, area tag and deal banner on top of the frame.
         drawOverlaysAt(ctx, overlays, f / FPS, width, height);
         await videoSource.add(f / FPS, 1 / FPS);
@@ -224,6 +277,8 @@ export async function runExport({ clips, overlays, audio, assets, resolution, as
       }
     } finally {
       for (const it of streams.values()) await it.return(undefined).catch(() => undefined);
+      for (const it of layerStreams.values()) await it.return(undefined).catch(() => undefined);
+      bitmaps.forEach((b) => b.close());
     }
     videoSource.close();
   };
@@ -233,7 +288,7 @@ export async function runExport({ clips, overlays, audio, assets, resolution, as
     if (!audioSource) return;
     try {
       await mixTimeline({
-        clips, assets, audio,
+        clips, assets, audio, layers,
         sampleRate: SAMPLE_RATE,
         channels: AUDIO_CHANNELS,
         includeMusic: true,

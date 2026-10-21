@@ -1,6 +1,8 @@
 // Settings for the selected overlay. Replaces the tool row while an overlay is selected.
 
 import { Trash2 } from "lucide-react";
+import KeyframeControls from "./KeyframeControls";
+import type { AnimProps } from "../model/keyframes";
 import {
   MAX_SCALE, MIN_SCALE, STICKERS, TEXT_COLORS,
   type Overlay, type OverlayPatch,
@@ -14,6 +16,16 @@ interface Props {
   onSetEnd: () => void;
   onDelete: () => void;
   onDone: () => void;
+  /** Animation (Phase 6b): values at the playhead + keyframe actions. */
+  anim: {
+    values: AnimProps;
+    onChange: (change: Partial<AnimProps>) => void;
+    keyCount: number;
+    keyHere: boolean;
+    onToggleKey: () => void;
+    onPrev: (() => void) | null;
+    onNext: (() => void) | null;
+  };
 }
 
 const input =
@@ -26,7 +38,7 @@ const TITLES: Record<Overlay["kind"], string> = {
   deal: "Local Deal banner",
 };
 
-export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEnd, onDelete, onDone }: Props) {
+export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEnd, onDelete, onDone, anim }: Props) {
   return (
     <div className="max-h-[42vh] space-y-3 overflow-y-auto px-3 py-3" data-testid="overlay-panel">
       <div className="flex items-center justify-between">
@@ -105,19 +117,7 @@ export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEn
         </div>
       )}
 
-      <label className="flex items-center gap-3 text-xs text-gray-400">
-        Size
-        <input
-          type="range"
-          min={MIN_SCALE}
-          max={MAX_SCALE}
-          step={0.05}
-          value={o.scale}
-          onChange={(e) => onChange({ scale: Number(e.target.value) })}
-          className="flex-1 accent-red-500"
-          data-testid="overlay-scale"
-        />
-      </label>
+      <KeyframeControls {...anim} scaleMin={MIN_SCALE} scaleMax={MAX_SCALE} />
 
       <div className="flex items-center gap-2 text-xs">
         <span className="tabular-nums text-gray-400">

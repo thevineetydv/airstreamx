@@ -5,7 +5,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { isActive, type Overlay, type OverlayPatch } from "../model/overlays";
-import { drawOverlaysAt, overlayRect } from "../render/drawOverlays";
+import { drawOverlaysAt, overlayAt, overlayRect } from "../render/drawOverlays";
+import { propsAt, type AnimProps } from "../model/keyframes";
+import { layerActive, layerRect, type ImageAsset, type Layer } from "../model/layers";
+import { LAYER_RADIUS } from "../render/drawLayers";
+import type { MediaAsset } from "../model/types";
 import type { Clip } from "../model/types";
 import { clipEnds, clipStarts, frameLayers } from "../model/timeline";
 import { clipVideoCss, transitionCss } from "../render/drawClip";
@@ -20,7 +24,17 @@ interface Props {
   overlays: Overlay[];
   selectedOverlayId: string | null;
   onSelectOverlay: (id: string | null) => void;
+  /** New position as shown at the playhead (the page turns it into base values or a keyframe). */
   onMoveOverlay: (id: string, patch: OverlayPatch) => void;
+  layers: Layer[];
+  assets: Record<string, MediaAsset>;
+  images: Record<string, ImageAsset>;
+  selectedLayerId: string | null;
+  onSelectLayer: (id: string | null) => void;
+  onMoveLayer: (id: string, pos: Pick<AnimProps, "x" | "y">) => void;
+  playing: boolean;
+  /** Silence layer videos (e.g. while recording a voice-over). */
+  muted: boolean;
   onTapEmpty: () => void;
   onDragStart: () => void;
 }
@@ -29,6 +43,7 @@ const TAP_SLOP = 6; // px of movement before a tap becomes a drag
 
 export default function PreviewStage(props: Props) {
   const { videoRefs, clips, aspect, time, overlays, selectedOverlayId, onSelectOverlay, onMoveOverlay, onTapEmpty, onDragStart } = props;
+  const { layers, assets, images, selectedLayerId, onSelectLayer, onMoveLayer, playing, muted } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -69,7 +84,7 @@ export default function PreviewStage(props: Props) {
     // Dashed outline around the selected overlay (preview only, never exported).
     const sel = overlays.find((o) => o.id === selectedOverlayId);
     if (sel && isActive(sel, time)) {
-      const r = overlayRect(ctx, sel, W, H);
+      const r = overlayRect(ctx, sel, W, H, time);
       ctx.save();
       ctx.setLineDash([6 * dpr, 4 * dpr]);
       ctx.lineWidth = 2 * dpr;
@@ -79,6 +94,21 @@ export default function PreviewStage(props: Props) {
     }
   }, [box, overlays, time, selectedOverlayId]);
 
+  const sizeOf = (l: Layer) => (l.kind === "video" ? assets[l.assetId] : images[l.imageId]);
+
+  // Topmost visible layer under a point (canvas pixels). Text/stickers are tested first (drawn above).
+  const hitLayer = (px: number, py: number, W: number, H: number): Layer | null => {
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const l = layers[i];
+      const size = sizeOf(l);
+      if (!size || !layerActive(l, time)) continue;
+      const a = propsAt(l, time - l.start);
+      const r = layerRect(size, a.x, a.y, a.scale, W, H);
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return l;
+    }
+    return null;
+  };
+
   // Topmost visible overlay under a point (canvas pixels).
   const hitTest = (px: number, py: number): Overlay | null => {
     const canvas = canvasRef.current;
@@ -87,7 +117,7 @@ export default function PreviewStage(props: Props) {
     for (let i = overlays.length - 1; i >= 0; i--) {
       const o = overlays[i];
       if (!isActive(o, time)) continue;
-      const r = overlayRect(ctx, o, canvas.width, canvas.height);
+      const r = overlayRect(ctx, o, canvas.width, canvas.height, time);
       const slop = 8;
       if (px >= r.x - slop && px <= r.x + r.w + slop && py >= r.y - slop && py <= r.y + r.h + slop) return o;
     }
@@ -99,32 +129,41 @@ export default function PreviewStage(props: Props) {
     const bounds = canvas.getBoundingClientRect();
     const sx = canvas.width / bounds.width;
     const sy = canvas.height / bounds.height;
-    const hit = hitTest((e.clientX - bounds.left) * sx, (e.clientY - bounds.top) * sy);
+    const px = (e.clientX - bounds.left) * sx;
+    const py = (e.clientY - bounds.top) * sy;
+    const ov = hitTest(px, py);
+    const layer = ov ? null : hitLayer(px, py, canvas.width, canvas.height);
+    // Drag from where it is SHOWN right now (keyframes applied).
+    const from = ov ? overlayAt(ov, time) : layer ? propsAt(layer, time - layer.start) : null;
     const startX = e.clientX;
     const startY = e.clientY;
     let dragging = false;
     canvas.setPointerCapture(e.pointerId);
 
-    if (hit) onSelectOverlay(hit.id);
+    if (ov) onSelectOverlay(ov.id);
+    else if (layer) onSelectLayer(layer.id);
 
     const move = (ev: PointerEvent) => {
-      if (!hit) return;
+      if (!from) return;
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
       if (!dragging && Math.hypot(dx, dy) < TAP_SLOP) return;
       if (!dragging) { dragging = true; onDragStart(); }
-      onMoveOverlay(hit.id, {
-        x: Math.min(1, Math.max(0, hit.x + dx / bounds.width)),
-        y: Math.min(1, Math.max(0, hit.y + dy / bounds.height)),
-      });
+      const pos = {
+        x: Math.min(1, Math.max(0, from.x + dx / bounds.width)),
+        y: Math.min(1, Math.max(0, from.y + dy / bounds.height)),
+      };
+      if (ov) onMoveOverlay(ov.id, pos);
+      else if (layer) onMoveLayer(layer.id, pos);
     };
     const up = () => {
       canvas.removeEventListener("pointermove", move);
       canvas.removeEventListener("pointerup", up);
       canvas.removeEventListener("pointercancel", up);
-      if (!hit) {
+      if (!from) {
         // Tap on empty space: clear selection, play / pause.
         onSelectOverlay(null);
+        onSelectLayer(null);
         onTapEmpty();
       }
     };
@@ -196,6 +235,24 @@ export default function PreviewStage(props: Props) {
             data-active={slot === activeSlot}
           />
         ))}
+        {/* Layers: positioned <img>/<video> between the main video and the text canvas */}
+        {layers.map((l) => {
+          const size = sizeOf(l);
+          if (!size) return null;
+          return (
+            <LayerView
+              key={l.id}
+              layer={l}
+              url={size.url}
+              size={size}
+              time={time}
+              box={box}
+              playing={playing}
+              muted={muted}
+              selected={l.id === selectedLayerId}
+            />
+          );
+        })}
         <canvas
           ref={canvasRef}
           onPointerDown={onPointerDown}
@@ -204,5 +261,60 @@ export default function PreviewStage(props: Props) {
         />
       </div>
     </div>
+  );
+}
+
+/** One layer in the preview. Videos follow the timeline: seek when paused, play along when playing. */
+function LayerView(props: {
+  layer: Layer;
+  url: string;
+  size: { width: number; height: number };
+  time: number;
+  box: { w: number; h: number };
+  playing: boolean;
+  muted: boolean;
+  selected: boolean;
+}) {
+  const { layer, url, size, time, box, playing, muted, selected } = props;
+  const ref = useRef<HTMLVideoElement>(null);
+  const active = layerActive(layer, time);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || layer.kind !== "video") return;
+    v.muted = muted || layer.volume <= 0;
+    v.volume = Math.min(1, Math.max(0, layer.volume));
+    if (!active) { if (!v.paused) v.pause(); return; }
+    const want = layer.inPoint + (time - layer.start);
+    if (playing) {
+      if (Math.abs(v.currentTime - want) > 0.3) v.currentTime = want;
+      if (v.paused) void v.play().catch(() => undefined);
+    } else {
+      if (!v.paused) v.pause();
+      if (Math.abs(v.currentTime - want) > 0.04) v.currentTime = want;
+    }
+  });
+
+  const a = propsAt(layer, time - layer.start);
+  const r = layerRect(size, a.x, a.y, a.scale, box.w, box.h);
+  const style: CSSProperties = {
+    position: "absolute",
+    left: r.x,
+    top: r.y,
+    width: r.w,
+    height: r.h,
+    opacity: active ? Math.min(1, a.opacity) : 0,
+    visibility: active ? "visible" : "hidden",
+    borderRadius: layer.rounded ? Math.min(r.w, r.h) * LAYER_RADIUS : 0,
+    objectFit: "fill",
+    zIndex: 5,
+    pointerEvents: "none",
+    outline: selected && active ? "2px dashed #fff" : undefined,
+    outlineOffset: 3,
+  };
+  return layer.kind === "video" ? (
+    <video ref={ref} src={url} playsInline preload="auto" style={style} data-testid="preview-layer" data-layer-id={layer.id} />
+  ) : (
+    <img src={url} alt="" draggable={false} style={style} data-testid="preview-layer" data-layer-id={layer.id} />
   );
 }

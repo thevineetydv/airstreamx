@@ -7,6 +7,7 @@ import { AudioBufferSink, BlobSource, Input } from "mediabunny";
 import { VIDEO_FORMATS } from "../media/formats";
 import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
 import type { Clip, MediaAsset } from "../model/types";
+import { layerEnd, type Layer } from "../model/layers";
 import { transitionAfter } from "../model/timeline";
 import { FPS, frameCount, outputTimeline } from "../export/timing";
 import { loadTrackBuffer } from "./library";
@@ -15,6 +16,8 @@ export interface MixOptions {
   clips: Clip[];
   assets: Record<string, MediaAsset>;
   audio: AudioSettings;
+  /** Layers: the sound of picture-in-picture videos is mixed in too. */
+  layers?: Layer[];
   sampleRate: number;
   channels: number;
   includeMusic: boolean;
@@ -139,6 +142,30 @@ export async function mixTimeline(o: MixOptions): Promise<void> {
         node.buffer = v.buffer;
         node.connect(gain);
         node.start(a - T0, a - v.start, b - a);
+      }
+
+      // 4) Sound of video layers (normal speed, no transitions).
+      for (const l of o.layers ?? []) {
+        if (l.kind !== "video" || l.volume <= 0 || !assets[l.assetId]) continue;
+        const a = Math.max(T0, l.start);
+        const b = Math.min(T1, layerEnd(l), total);
+        if (b <= a) continue;
+        const sink = await sinkFor(assets[l.assetId]);
+        if (!sink) continue;
+        const gain = ctx.createGain();
+        gain.gain.value = l.volume;
+        gain.connect(ctx.destination);
+        const srcA = l.inPoint + (a - l.start);
+        const srcB = l.inPoint + (b - l.start);
+        for await (const wrapped of sink.buffers(Math.max(0, srcA - 0.5), srcB)) {
+          const from = Math.max(wrapped.timestamp, srcA);
+          const to = Math.min(wrapped.timestamp + wrapped.duration, srcB);
+          if (to <= from) continue;
+          const node = ctx.createBufferSource();
+          node.buffer = wrapped.buffer;
+          node.connect(gain);
+          node.start(l.start + (from - l.inPoint) - T0, from - wrapped.timestamp, to - from);
+        }
       }
 
       await o.onWindow(await ctx.startRendering(), T0);

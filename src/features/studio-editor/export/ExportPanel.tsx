@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useUpload } from "../../../context/UploadContext";
 import type { Clip, MediaAsset } from "../model/types";
 import type { Overlay } from "../model/overlays";
+import type { ImageAsset, Layer } from "../model/layers";
 import type { AudioSettings } from "../model/audio";
 import type { AspectRatio } from "../model/look";
 import { canvasFilterSupported } from "../render/drawClip";
@@ -22,6 +23,8 @@ interface Props {
   aspect: AspectRatio;
   clips: Clip[];
   overlays: Overlay[];
+  layers: Layer[];
+  images: Record<string, ImageAsset>;
   audio: AudioSettings;
   assets: Record<string, MediaAsset>;
   onClose: () => void;
@@ -35,7 +38,7 @@ function mb(bytes: number) {
 
 const CODEC_LABEL: Record<string, string> = { avc: "H.264", vp9: "VP9", av1: "AV1", aac: "AAC", opus: "Opus" };
 
-export default function ExportPanel({ clips, overlays, audio, assets, aspect, onClose }: Props) {
+export default function ExportPanel({ clips, overlays, layers, images, audio, assets, aspect, onClose }: Props) {
   const [resolution, setResolution] = useState<ExportResolution>("720p");
   const [phase, setPhase] = useState<Phase>({ kind: "setup" });
   const abortRef = useRef<AbortController | null>(null);
@@ -63,6 +66,8 @@ export default function ExportPanel({ clips, overlays, audio, assets, aspect, on
       const result = await runExport({
         clips,
         overlays,
+        layers,
+        images,
         audio,
         assets,
         resolution,
