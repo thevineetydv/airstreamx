@@ -4,14 +4,18 @@
 // Phase 2: text, stickers, 📍 area tag and Local Deal banner overlays.
 // Phase 3: original sound volume/mute, built-in music library, voice-over.
 // Phase 5: transitions, filters / colour, speed 0.5×–2×, crop / fit and canvas shape.
+// Phase 6a: undo / redo, drafts saved on the device (auto-save, open, delete).
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, Check, CloudOff, Loader2, Redo2, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
-import { editorReducer, initialEditorState } from "./model/reducer";
+import { historyReducer, initHistory } from "./model/history";
+import { DraftsList, RelinkPanel } from "./draft/DraftsPanel";
+import { draftToState, openDraft, type OpenedDraft } from "./draft/drafts";
+import { useDraftAutosave, type SaveStatus } from "./draft/useDraftAutosave";
 import { AspectPanel, ClipPanel, TransitionPanel, type ClipTab } from "./clip/ClipPanels";
 import { clipDuration } from "./model/timeline";
 import { originalGain as originalGainOf } from "./model/audio";
@@ -36,7 +40,11 @@ const MAX_PPS = 200;
 
 export default function StudioEditorPage() {
   const navigate = useNavigate();
-  const [state, dispatch] = useReducer(editorReducer, initialEditorState);
+  // Editor state lives inside an undo/redo history (model/history.ts).
+  const [history, dispatch] = useReducer(historyReducer, undefined, () => initHistory());
+  const state = history.present;
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
   const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio, aspect } = state;
   // Two preview <video> elements: clip k plays on element k % 2 (see usePreviewEngine).
   const videoRef0 = useRef<HTMLVideoElement>(null);
@@ -48,6 +56,27 @@ export default function StudioEditorPage() {
   const [pxPerSec, setPxPerSec] = useState(40);
   const [showExport, setShowExport] = useState(false);
   const supported = isWebCodecsSupported();
+
+  // ── Drafts + undo/redo (Phase 6a) ──
+  const draft = useDraftAutosave(state);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [relink, setRelink] = useState<OpenedDraft | null>(null);
+
+  const undo = useCallback(() => dispatch({ type: "undo" }), []);
+  const redo = useCallback(() => dispatch({ type: "redo" }), []);
+  // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z or Ctrl+Y = redo (not while typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   // ── Audio (Phase 3) ──
   const recorder = useVoiceRecorder();
@@ -76,13 +105,43 @@ export default function StudioEditorPage() {
     });
   }, []);
 
-  // Warn before closing the tab with unsaved edits (no drafts until Phase 6).
+  // Warn before closing the tab only while a save is still running or has failed.
+  const unsafe = clips.length > 0 && (draft.status === "pending" || draft.status === "saving" || draft.status === "error");
   useEffect(() => {
-    if (clips.length === 0) return;
+    if (!unsafe) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [clips.length]);
+  }, [unsafe]);
+
+  // Open a saved draft. Videos that were not stored are asked for first.
+  const finishOpen = async (o: OpenedDraft, picked: Map<string, File>) => {
+    const assetsNow = { ...o.assets };
+    for (const [id, file] of picked) {
+      try { assetsNow[id] = await probeFile(file, id); } catch { /* leave it out */ }
+    }
+    const stored = [
+      ...Object.keys(o.assets).map((id) => `${o.doc.id}:${id}`),
+      ...o.voiceOvers.map((v) => `${o.doc.id}:vo:${v.id}`),
+    ];
+    dispatch({ type: "load", state: draftToState({ ...o, assets: assetsNow }) });
+    draft.adopt({ id: o.doc.id, name: o.doc.name, createdAt: o.doc.createdAt }, stored, picked.size > 0 || o.missing.length > 0);
+    setRelink(null);
+  };
+
+  const openSavedDraft = async (id: string) => {
+    setError(null);
+    setOpeningId(id);
+    try {
+      const o = await openDraft(id);
+      if (o.missing.length) setRelink(o);
+      else await finishOpen(o, new Map());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open the draft.");
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   const importFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -256,8 +315,9 @@ export default function StudioEditorPage() {
     selectOverlay(null);
   };
 
-  const goBack = () => {
-    if (clips.length && !window.confirm("Leave the editor? Your edits will be lost.")) return;
+  const goBack = async () => {
+    if (draft.status === "error" && !window.confirm("The last changes could not be saved. Leave anyway?")) return;
+    await draft.flush(); // save anything still waiting
     navigate(-1);
   };
 
@@ -286,10 +346,22 @@ export default function StudioEditorPage() {
     <div className="flex h-full min-h-0 flex-col bg-black text-white" data-testid="studio-editor">
       {/* Top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-2 pt-[env(safe-area-inset-top)]">
-        <button onClick={goBack} className="rounded-full p-2 hover:bg-white/10" aria-label="Back">
+        <button onClick={() => void goBack()} className="rounded-full p-2 hover:bg-white/10" aria-label="Back">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="flex-1 truncate text-base font-bold">Studio Editor</h1>
+        {hasClips || canUndo || canRedo ? (
+          <div className="flex flex-1 items-center gap-0.5">
+            <button onClick={undo} disabled={!canUndo} className="rounded-full p-2 hover:bg-white/10 disabled:opacity-30" aria-label="Undo" data-testid="undo">
+              <Undo2 size={18} />
+            </button>
+            <button onClick={redo} disabled={!canRedo} className="rounded-full p-2 hover:bg-white/10 disabled:opacity-30" aria-label="Redo" data-testid="redo">
+              <Redo2 size={18} />
+            </button>
+            <SaveBadge status={draft.status} />
+          </div>
+        ) : (
+          <h1 className="flex-1 truncate text-base font-bold">Studio Editor</h1>
+        )}
         {hasClips && (
           <button
             onClick={() => openEdit({ kind: "aspect" })}
@@ -333,17 +405,27 @@ export default function StudioEditorPage() {
             onTapEmpty={toggle}
             onDragStart={pause}
           />
+        ) : relink ? (
+          <RelinkPanel
+            missing={relink.missing}
+            onFiles={(found) => void finishOpen(relink, found)}
+            onSkip={() => void finishOpen(relink, new Map())}
+            onCancel={() => setRelink(null)}
+          />
         ) : (
-          <button
-            disabled={!supported || !!importing}
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/15 px-10 py-12 text-gray-300 disabled:opacity-50"
-            data-testid="import-empty"
-          >
-            <Film size={40} className="text-red-500" />
-            <span className="font-bold">{importing ?? "Import video"}</span>
-            <span className="text-xs text-gray-500">Pick one or more clips from your phone</span>
-          </button>
+          <div className="flex max-h-full w-full flex-col items-center gap-6 overflow-y-auto py-6">
+            <button
+              disabled={!supported || !!importing || !!openingId}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/15 px-10 py-12 text-gray-300 disabled:opacity-50"
+              data-testid="import-empty"
+            >
+              <Film size={40} className="text-red-500" />
+              <span className="font-bold">{importing ?? (openingId ? "Opening draft…" : "Import video")}</span>
+              <span className="text-xs text-gray-500">Pick one or more clips from your phone</span>
+            </button>
+            {supported && <DraftsList onOpen={(id) => void openSavedDraft(id)} busyId={openingId} />}
+          </div>
         )}
         {recorder.recording && (
           <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-bold" data-testid="rec-badge">
@@ -418,7 +500,7 @@ export default function StudioEditorPage() {
               onChange={(t) => dispatch({ type: "updateClip", id: clips[transitionIndex].id, patch: { transitionOut: t } })}
               onApplyToAll={() => {
                 const t = clips[transitionIndex].transitionOut;
-                clips.slice(0, -1).forEach((c) => dispatch({ type: "updateClip", id: c.id, patch: { transitionOut: t } }));
+                dispatch({ type: "batch", actions: clips.slice(0, -1).map((c) => ({ type: "updateClip", id: c.id, patch: { transitionOut: t } }) as const) });
               }}
               onDone={() => setEdit(null)}
             />
@@ -429,7 +511,7 @@ export default function StudioEditorPage() {
               tab={edit.tab}
               onTab={(tab) => setEdit({ kind: "clip", id: editClip.id, tab })}
               onChange={(patch) => dispatch({ type: "updateClip", id: editClip.id, patch })}
-              onApplyLookToAll={() => clips.forEach((c) => dispatch({ type: "updateClip", id: c.id, patch: { look: editClip.look } }))}
+              onApplyLookToAll={() => dispatch({ type: "batch", actions: clips.map((c) => ({ type: "updateClip", id: c.id, patch: { look: editClip.look } }) as const) })}
               onDone={() => setEdit(null)}
             />
                     ) : audioOpen ? (
@@ -542,4 +624,25 @@ function trimStart(buffer: AudioBuffer, seconds: number): AudioBuffer {
     out.copyToChannel(buffer.getChannelData(ch).subarray(skip), ch);
   }
   return out;
+}
+
+/** Small "Saved" / "Saving…" label in the header. */
+function SaveBadge({ status }: { status: SaveStatus }) {
+  const map: Record<SaveStatus, { text: string; cls: string } | null> = {
+    idle: null,
+    pending: { text: "Editing…", cls: "text-gray-500" },
+    saving: { text: "Saving…", cls: "text-gray-400" },
+    saved: { text: "Saved", cls: "text-gray-400" },
+    "no-media": { text: "Saved (no videos)", cls: "text-yellow-400" },
+    error: { text: "Not saved", cls: "text-red-400" },
+  };
+  const m = map[status];
+  if (!m) return null;
+  return (
+    <span className={`ml-1 flex items-center gap-1 truncate text-[11px] ${m.cls}`} data-testid="save-status" data-status={status}>
+      {status === "saving" && <Loader2 size={11} className="animate-spin" />}
+      {(status === "error" || status === "no-media") && <CloudOff size={11} />}
+      {m.text}
+    </span>
+  );
 }

@@ -17,7 +17,8 @@ async function canvasToUrl(canvas: HTMLCanvasElement | OffscreenCanvas): Promise
   return URL.createObjectURL(blob);
 }
 
-export async function probeFile(file: File): Promise<MediaAsset> {
+/** `id` is passed when re-opening a draft, so clips keep pointing at the same asset. */
+export async function probeFile(file: File, id?: string): Promise<MediaAsset> {
   const input = new Input({ source: new BlobSource(file), formats: VIDEO_FORMATS });
   try {
     const video = await input.getPrimaryVideoTrack().catch(() => null);
@@ -50,7 +51,7 @@ export async function probeFile(file: File): Promise<MediaAsset> {
     }
 
     return {
-      id: newId("asset"),
+      id: id ?? newId("asset"),
       file,
       url: URL.createObjectURL(file),
       name: file.name,
