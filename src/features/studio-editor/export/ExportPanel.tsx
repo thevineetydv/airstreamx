@@ -5,6 +5,8 @@ import { useUpload } from "../../../context/UploadContext";
 import type { Clip, MediaAsset } from "../model/types";
 import type { Overlay } from "../model/overlays";
 import type { AudioSettings } from "../model/audio";
+import type { AspectRatio } from "../model/look";
+import { canvasFilterSupported } from "../render/drawClip";
 import {
   ExportCancelled,
   estimateBytes,
@@ -17,6 +19,7 @@ import {
 const UPLOAD_LIMIT = 500 * 1024 * 1024; // same limit as UploadModal
 
 interface Props {
+  aspect: AspectRatio;
   clips: Clip[];
   overlays: Overlay[];
   audio: AudioSettings;
@@ -32,21 +35,19 @@ function mb(bytes: number) {
 
 const CODEC_LABEL: Record<string, string> = { avc: "H.264", vp9: "VP9", av1: "AV1", aac: "AAC", opus: "Opus" };
 
-export default function ExportPanel({ clips, overlays, audio, assets, onClose }: Props) {
+export default function ExportPanel({ clips, overlays, audio, assets, aspect, onClose }: Props) {
   const [resolution, setResolution] = useState<ExportResolution>("720p");
   const [phase, setPhase] = useState<Phase>({ kind: "setup" });
   const abortRef = useRef<AbortController | null>(null);
-  const downloadUrl = useRef<string | null>(null);
   const { openModalWithFile, uploading } = useUpload();
 
   const first = assets[clips[0]?.assetId];
-  const estimate = estimateBytes(clips, resolution);
-  const size = outputSize(resolution, first);
+  const estimate = estimateBytes(clips, resolution, aspect);
+  const size = outputSize(resolution, aspect, first);
+  // Older Safari can't apply filters on a canvas: the export would come out without them.
+  const filtersLost = !canvasFilterSupported() && clips.some((c) => c.fit === "blur" || c.look.preset !== "none" || c.look.brightness || c.look.contrast || c.look.saturation);
 
-  useEffect(() => () => {
-    abortRef.current?.abort();
-    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
-  }, []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const start = async () => {
     const controller = new AbortController();
@@ -65,6 +66,7 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
         audio,
         assets,
         resolution,
+        aspect,
         signal: controller.signal,
         onProgress: (p) => {
           // Limit re-renders to ~1% steps.
@@ -86,11 +88,13 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
   const cancel = () => abortRef.current?.abort();
 
   const download = (file: File) => {
-    if (!downloadUrl.current) downloadUrl.current = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file);
     const a = document.createElement("a");
-    a.href = downloadUrl.current;
+    a.href = url;
     a.download = file.name;
     a.click();
+    // Give the browser time to start the download before freeing the memory.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const busy = phase.kind === "running";
@@ -133,6 +137,9 @@ export default function ExportPanel({ clips, overlays, audio, assets, onClose }:
               <p className="mt-2 text-xs text-yellow-400">
                 This is above the 500 MB upload limit. Pick 720p or shorten the video.
               </p>
+            )}
+            {filtersLost && (
+              <p className="mt-2 text-xs text-yellow-400">This browser can't apply filters / blur in the export. Use Chrome for those.</p>
             )}
             <p className="mt-2 text-xs text-gray-500">Keep this screen open while exporting.</p>
             <button

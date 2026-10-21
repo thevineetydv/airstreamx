@@ -5,6 +5,8 @@ import { clipFromAsset, moveClip, removeClip, splitAt, trimClip } from "./timeli
 import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
+import type { AspectRatio } from "./look";
+import type { Clip } from "./types";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -20,7 +22,9 @@ export type EditorAction =
   | { type: "setAudio"; patch: Partial<AudioSettings> }
   | { type: "addVoiceOver"; voiceOver: VoiceOver }
   | { type: "updateVoiceOver"; id: string; patch: Partial<Pick<VoiceOver, "start" | "volume">> }
-  | { type: "removeVoiceOver"; id: string };
+  | { type: "removeVoiceOver"; id: string }
+  | { type: "updateClip"; id: string; patch: Partial<Pick<Clip, "speed" | "look" | "fit" | "panX" | "panY" | "transitionOut">> }
+  | { type: "setAspect"; aspect: AspectRatio };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -29,6 +33,7 @@ export const initialEditorState: EditorState = {
   overlays: [],
   selectedOverlayId: null,
   audio: initialAudio,
+  aspect: "auto",
 };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -43,7 +48,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         assets,
         clips: [...state.clips, ...newClips],
-        selectedClipId: newClips[0]?.id ?? state.selectedClipId,
+        // Nothing selected after import, so the "add text / sticker / audio…" row is visible.
+        // Tapping a clip shows that clip's tools.
+        selectedClipId: null,
         selectedOverlayId: null,
       };
     }
@@ -106,6 +113,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         audio: { ...state.audio, voiceOvers: state.audio.voiceOvers.filter((v) => v.id !== action.id) },
       };
+    case "updateClip":
+      return { ...state, clips: state.clips.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)) };
+    case "setAspect":
+      return { ...state, aspect: action.aspect };
     default:
       return state;
   }

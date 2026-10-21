@@ -3,6 +3,7 @@
 
 import type { Overlay } from "./overlays";
 import type { AudioSettings } from "./audio";
+import type { AspectRatio, ClipLook, FitMode, Transition } from "./look";
 
 /** A small preview frame taken from the source file at a given source time. */
 export interface Thumb {
@@ -35,6 +36,15 @@ export interface Clip {
   assetId: string;
   inPoint: number;
   outPoint: number;
+  /** Playback speed, 0.5–2. Timeline length = (outPoint - inPoint) / speed. */
+  speed: number;
+  look: ClipLook;
+  fit: FitMode;
+  /** Crop position for "fill", 0..1 (0.5 = centre). */
+  panX: number;
+  panY: number;
+  /** Transition from this clip into the next one. */
+  transitionOut: Transition | null;
 }
 
 export interface EditorState {
@@ -46,6 +56,8 @@ export interface EditorState {
   selectedOverlayId: string | null;
   /** Original sound, background music, voice-overs. */
   audio: AudioSettings;
+  /** Shape of the exported video. "auto" follows the first clip. */
+  aspect: AspectRatio;
 }
 
 /** Shortest clip we allow after a trim or split. */

@@ -2,6 +2,7 @@
 // later for undo/redo (each operation returns a new array).
 
 import { MIN_CLIP_DURATION, type Clip, type MediaAsset } from "./types";
+import { DEFAULT_LOOK, MIN_TRANSITION, type TransitionType } from "./look";
 
 let idCounter = 0;
 export function newId(prefix: string): string {
@@ -9,8 +10,14 @@ export function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${idCounter}`;
 }
 
+/** Length of the clip ON THE TIMELINE (speed applied). */
 export function clipDuration(clip: Clip): number {
-  return clip.outPoint - clip.inPoint;
+  return (clip.outPoint - clip.inPoint) / clip.speed;
+}
+
+/** Source time inside the asset for an offset (timeline seconds) from the clip start. */
+export function sourceAt(clip: Clip, offset: number): number {
+  return clip.inPoint + offset * clip.speed;
 }
 
 export function totalDuration(clips: Clip[]): number {
@@ -50,7 +57,7 @@ export function locate(clips: Clip[], t: number): Located | null {
     const d = clipDuration(c);
     if (t < start + d || i === clips.length - 1) {
       const offset = Math.min(Math.max(t - start, 0), d);
-      return { index: i, clip: c, clipStart: start, sourceTime: c.inPoint + offset };
+      return { index: i, clip: c, clipStart: start, sourceTime: sourceAt(c, offset) };
     }
     start += d;
   }
@@ -58,7 +65,18 @@ export function locate(clips: Clip[], t: number): Located | null {
 }
 
 export function clipFromAsset(asset: MediaAsset): Clip {
-  return { id: newId("clip"), assetId: asset.id, inPoint: 0, outPoint: asset.duration };
+  return {
+    id: newId("clip"),
+    assetId: asset.id,
+    inPoint: 0,
+    outPoint: asset.duration,
+    speed: 1,
+    look: DEFAULT_LOOK,
+    fit: "fit",
+    panX: 0.5,
+    panY: 0.5,
+    transitionOut: null,
+  };
 }
 
 /**
@@ -72,7 +90,8 @@ export function splitAt(clips: Clip[], t: number): { clips: Clip[]; rightId: str
   if (sourceTime - clip.inPoint < MIN_CLIP_DURATION || clip.outPoint - sourceTime < MIN_CLIP_DURATION) {
     return { clips, rightId: null };
   }
-  const left: Clip = { ...clip, outPoint: sourceTime };
+  // The left half keeps no transition (it now ends at a plain cut); the right half keeps the old one.
+  const left: Clip = { ...clip, outPoint: sourceTime, transitionOut: null };
   const right: Clip = { ...clip, id: newId("clip"), inPoint: sourceTime };
   const next = clips.slice();
   next.splice(index, 1, left, right);
@@ -121,4 +140,54 @@ export function formatTime(seconds: number): string {
   const sec = Math.floor(s % 60);
   const tenth = Math.floor((s * 10) % 10);
   return `${m}:${sec.toString().padStart(2, "0")}.${tenth}`;
+}
+
+/**
+ * Effective transition length after clip i (0 if none). Never longer than
+ * either neighbouring clip, so two transitions on one clip can't overlap.
+ */
+export function transitionAfter(clips: Clip[], i: number): number {
+  const t = clips[i]?.transitionOut;
+  const next = clips[i + 1];
+  if (!t || t.type === "none" || !next) return 0;
+  const d = Math.min(t.duration, clipDuration(clips[i]), clipDuration(next));
+  return d >= MIN_TRANSITION ? d : 0;
+}
+
+export interface FrameLayers {
+  /** Clip shown (underneath during a transition). */
+  a: { index: number; source: number };
+  /** Incoming clip during a transition. */
+  b: { index: number; source: number } | null;
+  /** Transition progress 0..1 (only with b). */
+  p: number;
+  type: TransitionType;
+}
+
+/**
+ * What to draw at timeline time t: one clip, or two clips mixing during a
+ * transition (centred on the cut). `starts`/`ends` let the export use its
+ * frame-aligned times; the preview uses plain clip times.
+ */
+export function clipEnds(clips: Clip[], starts: number[]): number[] {
+  return clips.map((c, i) => starts[i] + clipDuration(c));
+}
+
+export function frameLayers(clips: Clip[], t: number, starts: number[], ends: number[]): FrameLayers | null {
+  if (!clips.length) return null;
+  let i = ends.findIndex((end) => t < end);
+  if (i < 0) i = clips.length - 1;
+  const src = (k: number) => Math.max(0, sourceAt(clips[k], t - starts[k]));
+
+  // Into the next clip?
+  const dOut = transitionAfter(clips, i);
+  if (dOut && t >= ends[i] - dOut / 2) {
+    return { a: { index: i, source: src(i) }, b: { index: i + 1, source: src(i + 1) }, p: (t - (ends[i] - dOut / 2)) / dOut, type: clips[i].transitionOut!.type };
+  }
+  // Still coming in from the previous clip?
+  const dIn = i > 0 ? transitionAfter(clips, i - 1) : 0;
+  if (dIn && t < starts[i] + dIn / 2) {
+    return { a: { index: i - 1, source: src(i - 1) }, b: { index: i, source: src(i) }, p: (t - (starts[i] - dIn / 2)) / dIn, type: clips[i - 1].transitionOut!.type };
+  }
+  return { a: { index: i, source: src(i) }, b: null, p: 0, type: "none" };
 }

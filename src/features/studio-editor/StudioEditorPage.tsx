@@ -3,14 +3,18 @@
 // in the browser and hand it to the normal upload flow.
 // Phase 2: text, stickers, 📍 area tag and Local Deal banner overlays.
 // Phase 3: original sound volume/mute, built-in music library, voice-over.
+// Phase 5: transitions, filters / colour, speed 0.5×–2×, crop / fit and canvas shape.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Film, MapPin, Music, Pause, Play, Plus, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, Check, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { editorReducer, initialEditorState } from "./model/reducer";
+import { AspectPanel, ClipPanel, TransitionPanel, type ClipTab } from "./clip/ClipPanels";
+import { clipDuration } from "./model/timeline";
+import { originalGain as originalGainOf } from "./model/audio";
 import { clipStarts, formatTime, trimClip } from "./model/timeline";
 import { probeFile } from "./media/probe";
 import { usePreviewEngine } from "./preview/usePreviewEngine";
@@ -33,8 +37,11 @@ const MAX_PPS = 200;
 export default function StudioEditorPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
-  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio } = state;
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio, aspect } = state;
+  // Two preview <video> elements: clip k plays on element k % 2 (see usePreviewEngine).
+  const videoRef0 = useRef<HTMLVideoElement>(null);
+  const videoRef1 = useRef<HTMLVideoElement>(null);
+  const videoRefs = useRef([videoRef0, videoRef1] as const).current;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +49,22 @@ export default function StudioEditorPage() {
   const [showExport, setShowExport] = useState(false);
   const supported = isWebCodecsSupported();
 
-  const { time, duration, playing, toggle, play, pause, seek } = usePreviewEngine(videoRef, clips, assets);
-
   // ── Audio (Phase 3) ──
   const recorder = useVoiceRecorder();
+  const { time, duration, playing, toggle, play, pause, seek } = usePreviewEngine({
+    videoRefs,
+    clips,
+    assets,
+    // Silent while recording a voice-over, so the mic doesn't pick up the preview.
+    originalGain: recorder.recording ? 0 : originalGainOf(audio),
+  });
   const [audioOpen, setAudioOpen] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
-  usePreviewAudio({ videoRef, playing, time, total: duration, audio, recording: recorder.recording });
+  usePreviewAudio({ playing, time, total: duration, audio, recording: recorder.recording });
+
+  // ── Clip look, speed, crop, transitions, canvas (Phase 5) ──
+  type EditPanel = { kind: "clip"; id: string; tab: ClipTab } | { kind: "transition"; index: number } | { kind: "aspect" } | null;
+  const [edit, setEdit] = useState<EditPanel>(null);
 
   // Free object URLs when the editor closes.
   const assetsRef = useRef(assets);
@@ -103,7 +119,7 @@ export default function StudioEditorPage() {
     dispatch({ type: "trim", id, edge, value });
     const start = clipStarts(next)[index];
     const c = next[index];
-    seek(edge === "in" ? start : start + (c.outPoint - c.inPoint) - 0.02);
+    seek(edge === "in" ? start : start + clipDuration(c) - 0.02);
   }, [seek]);
 
   const onSelect = useCallback((id: string | null) => dispatch({ type: "select", id }), []);
@@ -133,6 +149,7 @@ export default function StudioEditorPage() {
   const addOverlay = (kind: OverlayKind) => {
     pause();
     setAudioOpen(false);
+    setEdit(null);
     const o = createOverlay(kind, time, duration);
     dispatch({ type: "addOverlay", overlay: o });
     // Make sure the new overlay is visible in the preview.
@@ -155,6 +172,7 @@ export default function StudioEditorPage() {
   const selectOverlayFromTimeline = useCallback((id: string) => {
     pause();
     setAudioOpen(false);
+    setEdit(null);
     dispatch({ type: "selectOverlay", id });
     const o = overlaysRef.current.find((x) => x.id === id);
     if (o && (timeRef.current < o.start || timeRef.current >= o.end)) seek(o.start + 0.01);
@@ -216,6 +234,7 @@ export default function StudioEditorPage() {
   const openAudio = useCallback((voiceId: string | null = null) => {
     dispatch({ type: "selectOverlay", id: null });
     setSelectedVoiceId(voiceId);
+    setEdit(null);
     setAudioOpen(true);
   }, []);
 
@@ -244,7 +263,24 @@ export default function StudioEditorPage() {
 
   const hasClips = clips.length > 0;
   // Preview uses the export frame shape, so overlay positions match the final video.
-  const stage = outputSize("720p", assets[clips[0]?.assetId]);
+  const stage = outputSize("720p", aspect, assets[clips[0]?.assetId]);
+
+  const openEdit = (panel: Exclude<EditPanel, null>) => {
+    pause();
+    setAudioOpen(false);
+    if (panel.kind !== "clip") dispatch({ type: "selectOverlay", id: null });
+    setEdit(panel);
+  };
+  const selectedClip = clips.find((c) => c.id === selectedClipId) ?? null;
+  const editClip = edit?.kind === "clip" ? clips.find((c) => c.id === edit.id) ?? null : null;
+  const transitionIndex = edit?.kind === "transition" && edit.index < clips.length - 1 ? edit.index : null;
+
+  const selectTransition = (i: number) => {
+    openEdit({ kind: "transition", index: i });
+    // Park the playhead on the cut, so the preview shows the transition.
+    const starts = clipStarts(clips);
+    seek(starts[i + 1]);
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black text-white" data-testid="studio-editor">
@@ -254,6 +290,15 @@ export default function StudioEditorPage() {
           <ArrowLeft size={20} />
         </button>
         <h1 className="flex-1 truncate text-base font-bold">Studio Editor</h1>
+        {hasClips && (
+          <button
+            onClick={() => openEdit({ kind: "aspect" })}
+            className="flex items-center gap-1 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold"
+            data-testid="open-aspect"
+          >
+            <RectangleHorizontal size={14} /> {aspect === "auto" ? `Auto (${stage.width > stage.height ? "16:9" : "9:16"})` : aspect}
+          </button>
+        )}
         <button
           disabled={!hasClips || !supported || recorder.recording}
           onClick={() => { pause(); setShowExport(true); }}
@@ -277,7 +322,8 @@ export default function StudioEditorPage() {
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
         {hasClips ? (
           <PreviewStage
-            videoRef={videoRef}
+            videoRefs={videoRefs}
+            clips={clips}
             aspect={stage.width / stage.height}
             time={time}
             overlays={overlays}
@@ -359,9 +405,34 @@ export default function StudioEditorPage() {
             selectedVoiceId={audioOpen ? selectedVoiceId : null}
             onSelectAudio={onSelectAudio}
             onMoveVoice={onMoveVoice}
+            onSelectTransition={selectTransition}
+            selectedTransition={transitionIndex}
           />
 
-          {audioOpen ? (
+          {edit?.kind === "aspect" ? (
+            <AspectPanel aspect={aspect} onChange={(a) => dispatch({ type: "setAspect", aspect: a })} onDone={() => setEdit(null)} />
+          ) : transitionIndex !== null ? (
+            <TransitionPanel
+              transition={clips[transitionIndex].transitionOut}
+              maxDuration={Math.min(clipDuration(clips[transitionIndex]), clipDuration(clips[transitionIndex + 1]))}
+              onChange={(t) => dispatch({ type: "updateClip", id: clips[transitionIndex].id, patch: { transitionOut: t } })}
+              onApplyToAll={() => {
+                const t = clips[transitionIndex].transitionOut;
+                clips.slice(0, -1).forEach((c) => dispatch({ type: "updateClip", id: c.id, patch: { transitionOut: t } }));
+              }}
+              onDone={() => setEdit(null)}
+            />
+          ) : editClip && edit?.kind === "clip" ? (
+            <ClipPanel
+              clip={editClip}
+              asset={assets[editClip.assetId]}
+              tab={edit.tab}
+              onTab={(tab) => setEdit({ kind: "clip", id: editClip.id, tab })}
+              onChange={(patch) => dispatch({ type: "updateClip", id: editClip.id, patch })}
+              onApplyLookToAll={() => clips.forEach((c) => dispatch({ type: "updateClip", id: c.id, patch: { look: editClip.look } }))}
+              onDone={() => setEdit(null)}
+            />
+                    ) : audioOpen ? (
             <AudioPanel
               audio={audio}
               time={time}
@@ -391,14 +462,24 @@ export default function StudioEditorPage() {
             />
           ) : (
             <>
-              {/* Add overlays: compact chips so all four fit on a phone */}
-              <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[11px] font-semibold">
-                <AddChip icon={<Type size={14} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
-                <AddChip icon={<Smile size={14} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
-                <AddChip icon={<MapPin size={14} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
-                <AddChip icon={<Tag size={14} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
-                <AddChip icon={<Music size={14} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
+              {/* With a clip selected: edit that clip. Otherwise: add things on top. */}
+              {selectedClip ? (
+                <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[10px] font-semibold" data-testid="selected-clip-tools">
+                  <AddChip icon={<Gauge size={16} />} label={selectedClip.speed === 1 ? "Speed" : `${selectedClip.speed}×`} onClick={() => openEdit({ kind: "clip", id: selectedClip.id, tab: "speed" })} testId="tool-speed" />
+                  <AddChip icon={<Palette size={16} />} label="Filters" onClick={() => openEdit({ kind: "clip", id: selectedClip.id, tab: "filters" })} testId="tool-filters" />
+                  <AddChip icon={<Crop size={16} />} label="Crop / Fit" onClick={() => openEdit({ kind: "clip", id: selectedClip.id, tab: "crop" })} testId="tool-crop" />
+                  <AddChip icon={<RectangleHorizontal size={16} />} label="Canvas" onClick={() => openEdit({ kind: "aspect" })} testId="tool-aspect" />
+                  <AddChip icon={<Check size={16} />} label="Done" onClick={() => dispatch({ type: "select", id: null })} testId="tool-deselect" />
+                </div>
+              ) : (
+              <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[10px] font-semibold">
+                <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
+                <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
+                <AddChip icon={<MapPin size={16} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
+                <AddChip icon={<Tag size={16} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
+                <AddChip icon={<Music size={16} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
               </div>
+              )}
               {/* Clip tools */}
               <div className="grid grid-cols-5 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
                 <ToolButton icon={<Scissors size={20} />} label="Split" onClick={splitHere} testId="tool-split" />
@@ -414,7 +495,7 @@ export default function StudioEditorPage() {
 
       {showExport && (
         <Suspense fallback={null}>
-          <ExportPanel clips={clips} overlays={overlays} audio={audio} assets={assets} onClose={() => setShowExport(false)} />
+          <ExportPanel clips={clips} overlays={overlays} audio={audio} assets={assets} aspect={aspect} onClose={() => setShowExport(false)} />
         </Suspense>
       )}
     </div>
@@ -440,7 +521,7 @@ function AddChip(props: { icon: React.ReactNode; label: string; onClick: () => v
     <button
       onClick={props.onClick}
       data-testid={props.testId}
-      className="flex items-center justify-center gap-1 rounded-full bg-white/10 px-1 py-2 text-white active:bg-white/20"
+      className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/10 py-1.5 text-white active:bg-white/20"
     >
       {props.icon}
       {props.label}

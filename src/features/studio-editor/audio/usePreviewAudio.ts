@@ -1,15 +1,15 @@
-// Plays music + voice-overs in sync with the preview, and sets the video's own volume.
+// Plays music + voice-overs in sync with the preview.
+// (The clips' own sound is played by the preview's <video> elements.)
 // Uses the same envelope (fade-out, ducking) as the export.
 // Trade-off: music can drift by ~0.1 s from the picture in preview (separate clocks).
 // The exported file is mixed sample-accurately and has no drift.
 
-import { useEffect, useRef, type RefObject } from "react";
-import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
+import { useEffect, useRef } from "react";
+import { applyEnvelope, musicEnvelope, voiceOverEnd, type AudioSettings } from "../model/audio";
 import { getAudioContext } from "./context";
 import { loadTrackBuffer } from "./library";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement | null>;
   playing: boolean;
   time: number;
   total: number;
@@ -18,18 +18,9 @@ interface Options {
   recording: boolean;
 }
 
-export function usePreviewAudio({ videoRef, playing, time, total, audio, recording }: Options) {
+export function usePreviewAudio({ playing, time, total, audio, recording }: Options) {
   const timeRef = useRef(time);
   timeRef.current = time;
-
-  // Original sound: the <video> element's own volume.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const g = recording ? 0 : originalGain(audio);
-    v.muted = g === 0;
-    v.volume = Math.min(1, Math.max(0, g));
-  });
 
   // Music + voice-overs: (re)start whenever playback starts or the settings change.
   useEffect(() => {
