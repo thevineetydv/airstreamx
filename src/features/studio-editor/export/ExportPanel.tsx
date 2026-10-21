@@ -6,6 +6,8 @@ import type { Clip, MediaAsset } from "../model/types";
 import type { Overlay } from "../model/overlays";
 import type { AudioSettings } from "../model/audio";
 import type { CaptionSettings } from "../model/captions";
+import type { AspectRatio } from "../model/look";
+import { canvasFilterSupported } from "../render/drawClip";
 import {
   ExportCancelled,
   estimateBytes,
@@ -18,6 +20,7 @@ import {
 const UPLOAD_LIMIT = 500 * 1024 * 1024; // same limit as UploadModal
 
 interface Props {
+  aspect: AspectRatio;
   clips: Clip[];
   overlays: Overlay[];
   audio: AudioSettings;
@@ -34,15 +37,17 @@ function mb(bytes: number) {
 
 const CODEC_LABEL: Record<string, string> = { avc: "H.264", vp9: "VP9", av1: "AV1", aac: "AAC", opus: "Opus" };
 
-export default function ExportPanel({ clips, overlays, audio, captions, assets, onClose }: Props) {
+export default function ExportPanel({ clips, overlays, audio, captions, assets, aspect, onClose }: Props) {
   const [resolution, setResolution] = useState<ExportResolution>("720p");
   const [phase, setPhase] = useState<Phase>({ kind: "setup" });
   const abortRef = useRef<AbortController | null>(null);
   const { openModalWithFile, uploading } = useUpload();
 
   const first = assets[clips[0]?.assetId];
-  const estimate = estimateBytes(clips, resolution);
-  const size = outputSize(resolution, first);
+  const estimate = estimateBytes(clips, resolution, aspect);
+  const size = outputSize(resolution, aspect, first);
+  // Older Safari can't apply filters on a canvas: the export would come out without them.
+  const filtersLost = !canvasFilterSupported() && clips.some((c) => c.fit === "blur" || c.look.preset !== "none" || c.look.brightness || c.look.contrast || c.look.saturation);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -64,6 +69,7 @@ export default function ExportPanel({ clips, overlays, audio, captions, assets, 
         captions,
         assets,
         resolution,
+        aspect,
         signal: controller.signal,
         onProgress: (p) => {
           // Limit re-renders to ~1% steps.
@@ -134,6 +140,9 @@ export default function ExportPanel({ clips, overlays, audio, captions, assets, 
               <p className="mt-2 text-xs text-yellow-400">
                 This is above the 500 MB upload limit. Pick 720p or shorten the video.
               </p>
+            )}
+            {filtersLost && (
+              <p className="mt-2 text-xs text-yellow-400">This browser can't apply filters / blur in the export. Use Chrome for those.</p>
             )}
             <p className="mt-2 text-xs text-gray-500">Keep this screen open while exporting.</p>
             <button

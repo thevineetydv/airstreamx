@@ -1,8 +1,9 @@
 // Mobile-first timeline: the playhead stays fixed in the centre and the
 // clips scroll under it (CapCut style). Scrolling = scrubbing.
 
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { clipDuration, formatTime } from "../model/timeline";
+import { filterCss } from "../model/look";
 import type { Clip, MediaAsset } from "../model/types";
 import { clampOverlayTimes, overlayLabel, type Overlay } from "../model/overlays";
 
@@ -30,6 +31,9 @@ interface TimelineProps {
   captionItems: { id: string; start: number; end: number; text: string }[];
   activeCaptionId: string | null;
   onSelectCaption: (id: string) => void;
+  /** Tap the ◇ between clip i and i+1. */
+  onSelectTransition: (index: number) => void;
+  selectedTransition: number | null;
 }
 
 export default function Timeline(props: TimelineProps) {
@@ -37,6 +41,7 @@ export default function Timeline(props: TimelineProps) {
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
   const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
   const { captionItems, activeCaptionId, onSelectCaption } = props;
+  const { onSelectTransition, selectedTransition } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
@@ -110,16 +115,37 @@ export default function Timeline(props: TimelineProps) {
           {/* Clips */}
           <div className="flex h-16 items-stretch gap-0.5" onClick={() => onSelect(null)}>
             {clips.map((clip, i) => (
-              <ClipBlock
-                key={clip.id}
-                clip={clip}
-                index={i}
-                asset={assets[clip.assetId]}
-                selected={clip.id === selectedId}
-                pxPerSec={pxPerSec}
-                onSelect={onSelect}
-                onTrim={onTrim}
-              />
+              <Fragment key={clip.id}>
+                <ClipBlock
+                  clip={clip}
+                  index={i}
+                  asset={assets[clip.assetId]}
+                  selected={clip.id === selectedId}
+                  pxPerSec={pxPerSec}
+                  onSelect={onSelect}
+                  onTrim={onTrim}
+                />
+                {/* Transition button on each cut. Hidden next to the selected clip,
+                    where it would sit on top of the trim handles. */}
+                {i < clips.length - 1 && clip.id !== selectedId && clips[i + 1].id !== selectedId && (
+                  <div className="relative z-20 w-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelectTransition(i); }}
+                      className={`absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border text-[11px] font-bold shadow ${
+                        selectedTransition === i
+                          ? "border-white bg-red-600 text-white"
+                          : clip.transitionOut && clip.transitionOut.type !== "none"
+                            ? "border-white/70 bg-white text-black"
+                            : "border-white/40 bg-black/80 text-white"
+                      }`}
+                      aria-label={`Transition after clip ${i + 1}`}
+                      data-testid={`transition-btn-${i}`}
+                    >
+                      {clip.transitionOut && clip.transitionOut.type !== "none" ? "⧓" : "+"}
+                    </button>
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
 
@@ -285,12 +311,13 @@ interface ClipBlockProps {
 const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerSec, onSelect, onTrim }: ClipBlockProps) {
   const width = Math.max(8, clipDuration(clip) * pxPerSec);
   const thumbs = asset?.thumbs ?? [];
+  const thumbFilter = filterCss(clip.look) || undefined;
 
   // Pick the nearest thumbnail for each slot along the clip.
   const slots = Math.max(1, Math.round(width / 44));
   const images = thumbs.length
     ? Array.from({ length: slots }, (_, k) => {
-        const t = clip.inPoint + ((k + 0.5) / slots) * clipDuration(clip);
+        const t = clip.inPoint + ((k + 0.5) / slots) * (clip.outPoint - clip.inPoint);
         return thumbs.reduce((best, th) => (Math.abs(th.t - t) < Math.abs(best.t - t) ? th : best), thumbs[0]).url;
       })
     : [];
@@ -303,7 +330,8 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
     target.setPointerCapture(e.pointerId);
     const startX = e.clientX;
     const startValue = edge === "in" ? clip.inPoint : clip.outPoint;
-    const move = (ev: PointerEvent) => onTrim(clip.id, edge, startValue + (ev.clientX - startX) / pxPerSec);
+    // Timeline pixels -> source seconds (a 2× clip moves 2 s of video per timeline second).
+    const move = (ev: PointerEvent) => onTrim(clip.id, edge, startValue + ((ev.clientX - startX) / pxPerSec) * clip.speed);
     const up = () => {
       target.removeEventListener("pointermove", move);
       target.removeEventListener("pointerup", up);
@@ -325,7 +353,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
       style={{ width }}
     >
       {images.map((src, k) => (
-        <img key={k} src={src} alt="" draggable={false} className="h-full min-w-0 flex-1 object-cover opacity-90" />
+        <img key={k} src={src} alt="" draggable={false} className="h-full min-w-0 flex-1 object-cover opacity-90" style={{ filter: thumbFilter }} />
       ))}
       {!images.length && (
         <span className="m-auto truncate px-2 text-[10px] text-gray-400">{asset?.name}</span>
@@ -335,6 +363,11 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
       >
         {formatTime(clipDuration(clip))}
       </span>
+      {clip.speed !== 1 && (
+        <span className="absolute right-1.5 top-0.5 rounded bg-black/70 px-1 text-[10px] font-bold text-yellow-300" data-testid={`clip-speed-${index}`}>
+          {clip.speed}×
+        </span>
+      )}
 
       {selected && (
         <>

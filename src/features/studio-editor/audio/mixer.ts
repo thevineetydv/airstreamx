@@ -7,6 +7,7 @@ import { AudioBufferSink, BlobSource, Input } from "mediabunny";
 import { VIDEO_FORMATS } from "../media/formats";
 import { applyEnvelope, musicEnvelope, originalGain, voiceOverEnd, type AudioSettings } from "../model/audio";
 import type { Clip, MediaAsset } from "../model/types";
+import { transitionAfter } from "../model/timeline";
 import { FPS, frameCount, outputTimeline } from "../export/timing";
 import { loadTrackBuffer } from "./library";
 
@@ -69,31 +70,47 @@ export async function mixTimeline(o: MixOptions): Promise<void> {
       const ctx = new OfflineAudioContext(channels, length, sampleRate);
 
       // 1) Original sound of each clip that overlaps this window.
+      //    Speed changes play the sound faster/slower (pitch moves with it).
+      //    At a transition the two clips' sound cross-fades over the same window as the picture.
       if (origGain > 0) {
-        const gain = ctx.createGain();
-        gain.gain.value = origGain;
-        gain.connect(ctx.destination);
         for (let i = 0; i < clips.length; i++) {
           const clip = clips[i];
           const cs = starts[i];
           const ce = cs + frameCount(clip) / FPS;
-          const a = Math.max(T0, cs);
-          const b = Math.min(T1, ce);
+          const dIn = i > 0 ? transitionAfter(clips, i - 1) : 0;
+          const dOut = transitionAfter(clips, i);
+          const from0 = cs - dIn / 2;
+          const to0 = ce + dOut / 2;
+          const a = Math.max(T0, from0);
+          const b = Math.min(T1, to0);
           if (b <= a) continue;
           const sink = await sinkFor(assets[clip.assetId]);
           if (!sink) continue;
-          const srcA = clip.inPoint + (a - cs);
-          const srcB = srcA + (b - a);
+
+          const gain = ctx.createGain();
+          const env = [
+            { t: from0, g: dIn ? 0 : origGain },
+            { t: cs + dIn / 2, g: origGain },
+            { t: ce - dOut / 2, g: origGain },
+            { t: to0, g: dOut ? 0 : origGain },
+          ];
+          applyEnvelope(gain.gain, env, 0, T0, T1);
+          gain.connect(ctx.destination);
+
+          const srcA = clip.inPoint + (a - cs) * clip.speed;
+          const srcB = clip.inPoint + (b - cs) * clip.speed;
           // Start a little early so a buffer that overlaps the edge is included.
           for await (const wrapped of sink.buffers(Math.max(0, srcA - 0.5), srcB)) {
-            // Play only the part inside this clip and window, so no sound leaks across a cut.
-            const from = Math.max(wrapped.timestamp, srcA);
+            // Play only the part inside this clip's range, so no sound leaks across a cut.
+            const from = Math.max(wrapped.timestamp, srcA, 0);
             const to = Math.min(wrapped.timestamp + wrapped.duration, srcB);
             if (to <= from) continue;
             const node = ctx.createBufferSource();
             node.buffer = wrapped.buffer;
+            node.playbackRate.value = clip.speed;
             node.connect(gain);
-            node.start(cs + (from - clip.inPoint) - T0, from - wrapped.timestamp, to - from);
+            // `duration` is in source (buffer) seconds; the timeline position divides by speed.
+            node.start(cs + (from - clip.inPoint) / clip.speed - T0, from - wrapped.timestamp, to - from);
           }
         }
       }

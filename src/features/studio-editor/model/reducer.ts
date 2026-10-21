@@ -6,6 +6,8 @@ import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
 import { initialCaptions, type Caption, type CaptionSettings } from "./captions";
+import type { AspectRatio } from "./look";
+import type { Clip } from "./types";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -25,7 +27,9 @@ export type EditorAction =
   | { type: "setCaptions"; patch: Partial<CaptionSettings> }
   | { type: "editCaption"; id: string; patch: Partial<Caption> }
   | { type: "removeCaption"; id: string }
-  | { type: "addCaption"; caption: Caption };
+  | { type: "addCaption"; caption: Caption }
+  | { type: "updateClip"; id: string; patch: Partial<Pick<Clip, "speed" | "look" | "fit" | "panX" | "panY" | "transitionOut">> }
+  | { type: "setAspect"; aspect: AspectRatio };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -35,6 +39,7 @@ export const initialEditorState: EditorState = {
   selectedOverlayId: null,
   audio: initialAudio,
   captions: initialCaptions,
+  aspect: "auto",
 };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -49,7 +54,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         assets,
         clips: [...state.clips, ...newClips],
-        selectedClipId: newClips[0]?.id ?? state.selectedClipId,
+        // Nothing selected after import, so the "add text / sticker / audio…" row is visible.
+        // Tapping a clip shows that clip's tools.
+        selectedClipId: null,
         selectedOverlayId: null,
       };
     }
@@ -123,6 +130,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return { ...state, captions: { ...state.captions, items: state.captions.items.filter((c) => c.id !== action.id) } };
     case "addCaption":
       return { ...state, captions: { ...state.captions, items: [...state.captions.items, action.caption] } };
+    case "updateClip":
+      return { ...state, clips: state.clips.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)) };
+    case "setAspect":
+      return { ...state, aspect: action.aspect };
     default:
       return state;
   }

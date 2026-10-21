@@ -12,6 +12,7 @@ import {
   Output,
   TextSubtitleSource,
   VideoSampleSink,
+  type VideoSample,
   getFirstEncodableAudioCodec,
   getFirstEncodableVideoCodec,
   type AudioCodec,
@@ -26,7 +27,10 @@ import { LANGUAGE_CODE, toSrt, toVtt, type CaptionSettings } from "../model/capt
 import { drawCaptionAt } from "../render/drawCaptions";
 import { MixCancelled, mixTimeline } from "../audio/mixer";
 import type { Clip, MediaAsset } from "../model/types";
-import { FPS, frameCount } from "./timing";
+import { FPS, frameCount, outputTimeline } from "./timing";
+import { frameLayers, type FrameLayers } from "../model/timeline";
+import type { AspectRatio } from "../model/look";
+import { compositeTransition, drawClipFrame } from "../render/drawClip";
 
 export type { ExportResolution } from "./size";
 export { outputSize } from "./size";
@@ -61,14 +65,16 @@ export interface ExportResult {
 
 export class ExportCancelled extends Error {}
 
-export function estimateBytes(clips: Clip[], res: ExportResolution): number {
+export function estimateBytes(clips: Clip[], res: ExportResolution, aspect: AspectRatio = "auto"): number {
   const seconds = clips.reduce((s, c) => s + frameCount(c) / FPS, 0);
-  return Math.round(((VIDEO_BITRATE[res] + AUDIO_BITRATE) * seconds) / 8 * 1.03);
+  // Square video has fewer pixels, so it gets a proportionally lower bitrate.
+  const bitrate = aspect === "1:1" ? VIDEO_BITRATE[res] * 0.6 : VIDEO_BITRATE[res];
+  return Math.round(((bitrate + AUDIO_BITRATE) * seconds) / 8 * 1.03);
 }
 
 /** Pick the best codecs this browser can encode. H.264/AAC first (widest playback support). */
-export async function planExport(res: ExportResolution, first?: MediaAsset): Promise<ExportPlan> {
-  const { width, height } = outputSize(res, first);
+export async function planExport(res: ExportResolution, aspect: AspectRatio, first?: MediaAsset): Promise<ExportPlan> {
+  const { width, height } = outputSize(res, aspect, first);
   const videoCodec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], {
     width,
     height,
@@ -92,6 +98,7 @@ interface RunOptions {
   captions: CaptionSettings;
   assets: Record<string, MediaAsset>;
   resolution: ExportResolution;
+  aspect: AspectRatio;
   /** 0..1 */
   onProgress: (p: number) => void;
   signal: AbortSignal;
@@ -101,10 +108,10 @@ function checkAbort(signal: AbortSignal) {
   if (signal.aborted) throw new ExportCancelled("Export cancelled");
 }
 
-export async function runExport({ clips, overlays, audio, captions, assets, resolution, onProgress, signal }: RunOptions): Promise<ExportResult> {
+export async function runExport({ clips, overlays, audio, captions, assets, resolution, aspect, onProgress, signal }: RunOptions): Promise<ExportResult> {
   if (clips.length === 0) throw new Error("Timeline is empty.");
   const started = performance.now();
-  const plan = await planExport(resolution, assets[clips[0].assetId]);
+  const plan = await planExport(resolution, aspect, assets[clips[0].assetId]);
   const { width, height } = plan;
 
   const canvas = document.createElement("canvas");
@@ -119,7 +126,7 @@ export async function runExport({ clips, overlays, audio, captions, assets, reso
   });
   const videoSource = new CanvasSource(canvas, {
     codec: plan.videoCodec,
-    bitrate: VIDEO_BITRATE[resolution],
+    bitrate: aspect === "1:1" ? VIDEO_BITRATE[resolution] * 0.6 : VIDEO_BITRATE[resolution],
     keyFrameInterval: 2,
   });
   output.addVideoTrack(videoSource, { frameRate: FPS });
@@ -154,33 +161,87 @@ export async function runExport({ clips, overlays, audio, captions, assets, reso
   const totalFrames = clips.reduce((s, c) => s + frameCount(c), 0);
   let framesDone = 0;
 
-  const videoPass = async () => {
-    let outFrame = 0;
-    for (const clip of clips) {
-      const asset = assets[clip.assetId];
+  // 1) Plan: for every output frame, which clip(s) and which source time.
+  //    During a transition two clips are drawn and mixed.
+  const { starts } = outputTimeline(clips);
+  const ends = clips.map((c, i) => starts[i] + frameCount(c) / FPS);
+  const plans: FrameLayers[] = [];
+  const wanted: number[][] = clips.map(() => []);
+  const clampSrc = (k: number, src: number) =>
+    // Past the end of the file -> hold the last frame; before the start -> hold the first.
+    Math.min(Math.max(0, src), Math.max(0, assets[clips[k].assetId].duration - 0.5 / FPS));
+  for (let f = 0; f < totalFrames; f++) {
+    const L = frameLayers(clips, f / FPS, starts, ends)!;
+    L.a.source = clampSrc(L.a.index, L.a.source);
+    wanted[L.a.index].push(L.a.source);
+    if (L.b) {
+      L.b.source = clampSrc(L.b.index, L.b.source);
+      wanted[L.b.index].push(L.b.source);
+    }
+    plans.push(L);
+  }
+
+  // 2) One frame stream per clip, opened when first needed and closed when done,
+  //    so at most two decoders run at once (only during a transition).
+  const streams = new Map<number, AsyncGenerator<VideoSample | null, void, unknown>>();
+  const left = wanted.map((w) => w.length);
+  const nextFrame = async (k: number): Promise<VideoSample | null> => {
+    let it = streams.get(k);
+    if (!it) {
+      const asset = assets[clips[k].assetId];
       const track = await inputFor(asset).getPrimaryVideoTrack();
       if (!track) throw new Error(`No video track in ${asset.name}`);
-      const sink = new VideoSampleSink(track);
-      const n = frameCount(clip);
-      // One source timestamp per output frame -> constant 30 fps output,
-      // even for variable frame rate phone recordings.
-      const times = Array.from({ length: n }, (_, k) => clip.inPoint + k / FPS);
-      for await (const sample of sink.samplesAtTimestamps(times)) {
+      // One source timestamp per output frame -> constant 30 fps, even for variable frame rate phone videos.
+      it = new VideoSampleSink(track).samplesAtTimestamps(wanted[k]);
+      streams.set(k, it);
+    }
+    const r = await it.next();
+    if (--left[k] === 0) {
+      await it.return(undefined);
+      streams.delete(k);
+    }
+    return r.done ? null : r.value;
+  };
+
+  // Scratch canvases for the two sides of a transition.
+  const makeLayer = () => {
+    const c = document.createElement("canvas");
+    c.width = width;
+    c.height = height;
+    return { canvas: c, ctx: c.getContext("2d", { alpha: false })! };
+  };
+  let layerA: ReturnType<typeof makeLayer> | null = null;
+  let layerB: ReturnType<typeof makeLayer> | null = null;
+
+  const videoPass = async () => {
+    try {
+      for (let f = 0; f < totalFrames; f++) {
         checkAbort(signal);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, width, height);
-        if (sample) {
-          sample.drawWithFit(ctx, { fit: "contain" });
-          sample.close();
+        const L = plans[f];
+        if (!L.b) {
+          const s = await nextFrame(L.a.index);
+          drawClipFrame(ctx, s, clips[L.a.index], width, height);
+          s?.close();
+        } else {
+          layerA ??= makeLayer();
+          layerB ??= makeLayer();
+          const sa = await nextFrame(L.a.index);
+          const sb = await nextFrame(L.b.index);
+          drawClipFrame(layerA.ctx, sa, clips[L.a.index], width, height);
+          drawClipFrame(layerB.ctx, sb, clips[L.b.index], width, height);
+          sa?.close();
+          sb?.close();
+          compositeTransition(ctx, L.type, L.p, layerA.canvas, layerB.canvas, width, height);
         }
         // Text, stickers, area tag and deal banner on top of the frame.
-        drawOverlaysAt(ctx, overlays, outFrame / FPS, width, height);
-        if (burnCaptions) drawCaptionAt(ctx, captions, outFrame / FPS, width, height);
-        await videoSource.add(outFrame / FPS, 1 / FPS);
-        outFrame++;
+        drawOverlaysAt(ctx, overlays, f / FPS, width, height);
+        if (burnCaptions) drawCaptionAt(ctx, captions, f / FPS, width, height);
+        await videoSource.add(f / FPS, 1 / FPS);
         framesDone++;
         onProgress(framesDone / totalFrames);
       }
+    } finally {
+      for (const it of streams.values()) await it.return(undefined).catch(() => undefined);
     }
     videoSource.close();
   };
