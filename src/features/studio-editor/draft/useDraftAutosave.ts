@@ -37,7 +37,7 @@ export function useDraftAutosave(state: EditorState) {
   }, []);
 
   // Only real content changes start a save (not selection or playback).
-  const { clips, overlays, audio, aspect } = state;
+  const { clips, overlays, audio, aspect, layers } = state;
   const skipNext = useRef(false);
   useEffect(() => {
     if (!clips.length) return;
@@ -45,7 +45,7 @@ export function useDraftAutosave(state: EditorState) {
     setStatus("pending");
     if (timer.current) clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void flush(), DELAY_MS);
-  }, [clips, overlays, audio, aspect, flush]);
+  }, [clips, overlays, audio, aspect, layers, flush]);
 
   // Leaving the editor: save right away instead of waiting.
   useEffect(() => () => { if (timer.current) void flush(); }, [flush]);

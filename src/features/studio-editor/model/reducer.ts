@@ -7,6 +7,8 @@ import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
 import type { AspectRatio } from "./look";
 import type { Clip } from "./types";
+import { clampKeyframes } from "./keyframes";
+import { layerEnd, type ImageAsset, type Layer, type LayerPatch } from "./layers";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -24,7 +26,12 @@ export type EditorAction =
   | { type: "updateVoiceOver"; id: string; patch: Partial<Pick<VoiceOver, "start" | "volume">> }
   | { type: "removeVoiceOver"; id: string }
   | { type: "updateClip"; id: string; patch: Partial<Pick<Clip, "speed" | "look" | "fit" | "panX" | "panY" | "transitionOut">> }
-  | { type: "setAspect"; aspect: AspectRatio };
+  | { type: "setAspect"; aspect: AspectRatio }
+  | { type: "addLayer"; layer: Layer; asset?: MediaAsset; image?: ImageAsset }
+  | { type: "updateLayer"; id: string; patch: LayerPatch }
+  | { type: "removeLayer"; id: string }
+  | { type: "selectLayer"; id: string | null }
+  | { type: "orderLayer"; id: string; dir: -1 | 1 };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -34,6 +41,9 @@ export const initialEditorState: EditorState = {
   selectedOverlayId: null,
   audio: initialAudio,
   aspect: "auto",
+  layers: [],
+  selectedLayerId: null,
+  images: {},
 };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -56,7 +66,12 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     }
     // Only one thing is selected at a time: a clip OR an overlay.
     case "select":
-      return { ...state, selectedClipId: action.id, selectedOverlayId: action.id ? null : state.selectedOverlayId };
+      return {
+        ...state,
+        selectedClipId: action.id,
+        selectedOverlayId: action.id ? null : state.selectedOverlayId,
+        selectedLayerId: action.id ? null : state.selectedLayerId,
+      };
     case "split": {
       const { clips, rightId } = splitAt(state.clips, action.at);
       if (!rightId) return state;
@@ -82,11 +97,15 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     }
     case "addOverlay":
-      return { ...state, overlays: [...state.overlays, action.overlay], selectedOverlayId: action.overlay.id, selectedClipId: null };
+      return { ...state, overlays: [...state.overlays, action.overlay], selectedOverlayId: action.overlay.id, selectedClipId: null, selectedLayerId: null };
     case "updateOverlay":
       return {
         ...state,
-        overlays: state.overlays.map((o) => (o.id === action.id ? ({ ...o, ...action.patch } as Overlay) : o)),
+        overlays: state.overlays.map((o) => {
+          if (o.id !== action.id) return o;
+          const next = { ...o, ...action.patch } as Overlay;
+          return { ...next, keyframes: clampKeyframes(next.keyframes, next.end - next.start) };
+        }),
       };
     case "removeOverlay":
       return {
@@ -95,7 +114,12 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         selectedOverlayId: state.selectedOverlayId === action.id ? null : state.selectedOverlayId,
       };
     case "selectOverlay":
-      return { ...state, selectedOverlayId: action.id, selectedClipId: action.id ? null : state.selectedClipId };
+      return {
+        ...state,
+        selectedOverlayId: action.id,
+        selectedClipId: action.id ? null : state.selectedClipId,
+        selectedLayerId: action.id ? null : state.selectedLayerId,
+      };
     case "setAudio":
       return { ...state, audio: { ...state.audio, ...action.patch } };
     case "addVoiceOver":
@@ -117,6 +141,47 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return { ...state, clips: state.clips.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c)) };
     case "setAspect":
       return { ...state, aspect: action.aspect };
+    case "addLayer":
+      return {
+        ...state,
+        assets: action.asset ? { ...state.assets, [action.asset.id]: action.asset } : state.assets,
+        images: action.image ? { ...state.images, [action.image.id]: action.image } : state.images,
+        layers: [...state.layers, action.layer],
+        selectedLayerId: action.layer.id,
+        selectedClipId: null,
+        selectedOverlayId: null,
+      };
+    case "updateLayer":
+      return {
+        ...state,
+        layers: state.layers.map((l) => {
+          if (l.id !== action.id) return l;
+          const next = { ...l, ...action.patch } as Layer;
+          // Keyframes past a shortened layer are dropped.
+          return { ...next, keyframes: clampKeyframes(next.keyframes, layerEnd(next) - next.start) };
+        }),
+      };
+    case "removeLayer":
+      return {
+        ...state,
+        layers: state.layers.filter((l) => l.id !== action.id),
+        selectedLayerId: state.selectedLayerId === action.id ? null : state.selectedLayerId,
+      };
+    case "selectLayer":
+      return {
+        ...state,
+        selectedLayerId: action.id,
+        selectedClipId: action.id ? null : state.selectedClipId,
+        selectedOverlayId: action.id ? null : state.selectedOverlayId,
+      };
+    case "orderLayer": {
+      const i = state.layers.findIndex((l) => l.id === action.id);
+      const j = i + action.dir;
+      if (i < 0 || j < 0 || j >= state.layers.length) return state;
+      const layers = state.layers.slice();
+      [layers[i], layers[j]] = [layers[j], layers[i]];
+      return { ...state, layers };
+    }
     default:
       return state;
   }

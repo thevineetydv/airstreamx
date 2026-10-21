@@ -4,6 +4,7 @@
 import type { Overlay } from "./overlays";
 import type { AudioSettings } from "./audio";
 import type { AspectRatio, ClipLook, FitMode, Transition } from "./look";
+import type { ImageAsset, Layer } from "./layers";
 
 /** A small preview frame taken from the source file at a given source time. */
 export interface Thumb {
@@ -58,6 +59,11 @@ export interface EditorState {
   audio: AudioSettings;
   /** Shape of the exported video. "auto" follows the first clip. */
   aspect: AspectRatio;
+  /** Videos / pictures on top of the main video (Phase 6b). */
+  layers: Layer[];
+  selectedLayerId: string | null;
+  /** Pictures used by image layers. */
+  images: Record<string, ImageAsset>;
 }
 
 /** Shortest clip we allow after a trim or split. */

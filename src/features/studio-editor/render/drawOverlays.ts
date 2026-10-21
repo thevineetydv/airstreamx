@@ -4,6 +4,7 @@
 // the same at 720p, 1080p, portrait or landscape.
 
 import { isActive, type Overlay } from "../model/overlays";
+import { propsAt } from "../model/keyframes";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -201,20 +202,28 @@ function layout(ctx: Ctx, o: Overlay, W: number, H: number): Layout {
   }
 }
 
+/** The overlay as it looks at time t (keyframes applied). */
+export function overlayAt(o: Overlay, t: number): Overlay & { opacity: number } {
+  return { ...o, ...propsAt(o, t - o.start) };
+}
+
 /** Draw every overlay visible at timeline time `t`, in order (later = on top). */
 export function drawOverlaysAt(ctx: Ctx, overlays: Overlay[], t: number, W: number, H: number) {
   for (const o of overlays) {
     if (!isActive(o, t)) continue;
+    const a = overlayAt(o, t);
+    if (a.opacity <= 0) continue;
     ctx.save();
-    layout(ctx, o, W, H).draw();
+    ctx.globalAlpha = Math.min(1, a.opacity);
+    layout(ctx, a, W, H).draw();
     ctx.restore();
   }
 }
 
-/** Bounding box of an overlay, for tap / drag hit-testing in the preview. */
-export function overlayRect(ctx: Ctx, o: Overlay, W: number, H: number): Rect {
+/** Bounding box of an overlay at time t, for tap / drag hit-testing in the preview. */
+export function overlayRect(ctx: Ctx, o: Overlay, W: number, H: number, t: number): Rect {
   ctx.save();
-  const r = layout(ctx, o, W, H).rect;
+  const r = layout(ctx, overlayAt(o, t), W, H).rect;
   ctx.restore();
   return r;
 }

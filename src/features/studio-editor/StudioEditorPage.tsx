@@ -5,12 +5,13 @@
 // Phase 3: original sound volume/mute, built-in music library, voice-over.
 // Phase 5: transitions, filters / colour, speed 0.5×–2×, crop / fit and canvas shape.
 // Phase 6a: undo / redo, drafts saved on the device (auto-save, open, delete).
+// Phase 6b: layers (picture-in-picture video / picture) and keyframe animation.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, CloudOff, Loader2, Redo2, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { historyReducer, initHistory } from "./model/history";
 import { DraftsList, RelinkPanel } from "./draft/DraftsPanel";
@@ -30,8 +31,11 @@ import AudioPanel from "./audio/AudioPanel";
 import { usePreviewAudio } from "./audio/usePreviewAudio";
 import { useVoiceRecorder } from "./audio/useVoiceRecorder";
 import { newVoiceOver, type AudioSettings } from "./model/audio";
-import { clampOverlayTimes, createOverlay, rememberOverlay, type OverlayKind, type OverlayPatch } from "./model/overlays";
+import { clampOverlayTimes, createOverlay, rememberOverlay, type Overlay, type OverlayKind, type OverlayPatch } from "./model/overlays";
 import { isWebCodecsSupported } from "./media/support";
+import LayerPanel from "./layers/LayerPanel";
+import { animatedEdit, keyframeAt, neighbourKey, propsAt, toggleKeyframe, type Animatable, type AnimProps } from "./model/keyframes";
+import { layerEnd, loadImage, MAX_VIDEO_LAYERS, newImageLayer, newVideoLayer, type Layer, type LayerPatch } from "./model/layers";
 
 const ExportPanel = lazy(() => import("./export/ExportPanel"));
 
@@ -45,12 +49,13 @@ export default function StudioEditorPage() {
   const state = history.present;
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
-  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio, aspect } = state;
+  const { assets, clips, selectedClipId, overlays, selectedOverlayId, audio, aspect, layers, selectedLayerId, images } = state;
   // Two preview <video> elements: clip k plays on element k % 2 (see usePreviewEngine).
   const videoRef0 = useRef<HTMLVideoElement>(null);
   const videoRef1 = useRef<HTMLVideoElement>(null);
   const videoRefs = useRef([videoRef0, videoRef1] as const).current;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const layerInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pxPerSec, setPxPerSec] = useState(40);
@@ -123,6 +128,7 @@ export default function StudioEditorPage() {
     const stored = [
       ...Object.keys(o.assets).map((id) => `${o.doc.id}:${id}`),
       ...o.voiceOvers.map((v) => `${o.doc.id}:vo:${v.id}`),
+      ...Object.keys(o.images).map((id) => `${o.doc.id}:img:${id}`),
     ];
     dispatch({ type: "load", state: draftToState({ ...o, assets: assetsNow }) });
     draft.adopt({ id: o.doc.id, name: o.doc.name, createdAt: o.doc.createdAt }, stored, picked.size > 0 || o.missing.length > 0);
@@ -315,6 +321,87 @@ export default function StudioEditorPage() {
     selectOverlay(null);
   };
 
+  // ── Layers + keyframes (Phase 6b) ──
+  const selectedLayer = layers.find((l) => l.id === selectedLayerId) ?? null;
+
+  const addLayerFiles = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (layerInputRef.current) layerInputRef.current.value = "";
+    if (!file) return;
+    pause();
+    setError(null);
+    setAudioOpen(false);
+    setEdit(null);
+    try {
+      if (file.type.startsWith("image/")) {
+        const image = await loadImage(file);
+        dispatch({ type: "addLayer", layer: newImageLayer(image.id, time, duration), image });
+      } else {
+        if (layers.filter((l) => l.kind === "video").length >= MAX_VIDEO_LAYERS) {
+          setError(`At most ${MAX_VIDEO_LAYERS} video layers (each one is extra work for the phone). Pictures are unlimited.`);
+          return;
+        }
+        setImporting("Reading layer…");
+        const asset = await probeFile(file);
+        dispatch({ type: "addLayer", layer: newVideoLayer(asset.id, asset.duration, time, duration), asset });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add this file.");
+    } finally {
+      setImporting(null);
+    }
+  };
+
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+  const selectLayer = useCallback((id: string | null) => {
+    dispatch({ type: "selectLayer", id });
+  }, []);
+  const selectLayerFromTimeline = useCallback((id: string) => {
+    pause();
+    setAudioOpen(false);
+    setEdit(null);
+    dispatch({ type: "selectLayer", id });
+    const l = layersRef.current.find((x) => x.id === id);
+    if (l && (timeRef.current < l.start || timeRef.current >= layerEnd(l))) seek(l.start + 0.01);
+  }, [pause, seek]);
+  const patchLayer = useCallback((id: string, patch: LayerPatch) => dispatch({ type: "updateLayer", id, patch }), []);
+
+
+  /** Changing position / size / opacity: base values, or a keyframe at the playhead if animated. */
+  const moveOverlay = useCallback((id: string, change: Partial<AnimProps>) => {
+    const o = overlaysRef.current.find((x) => x.id === id);
+    if (!o) return;
+    const rel = Math.min(Math.max(0, timeRef.current - o.start), o.end - o.start);
+    dispatch({ type: "updateOverlay", id, patch: animatedEdit(o, rel, change) });
+  }, []);
+  const moveLayer = useCallback((id: string, change: Partial<AnimProps>) => {
+    const l = layersRef.current.find((x) => x.id === id);
+    if (!l) return;
+    const rel = Math.min(Math.max(0, timeRef.current - l.start), layerEnd(l) - l.start);
+    dispatch({ type: "updateLayer", id, patch: animatedEdit(l, rel, change) });
+  }, []);
+
+  /** Props for KeyframeControls for an overlay or layer. */
+  const animControls = (item: Overlay | Layer, isLayer: boolean) => {
+    const len = (isLayer ? layerEnd(item as Layer) : (item as Overlay).end) - item.start;
+    // Keyframe time = playhead position inside the item.
+    const rel = Math.min(Math.max(0, time - item.start), len);
+    const prev = neighbourKey(item, rel, -1);
+    const next = neighbourKey(item, rel, 1);
+    const send = (patch: Partial<AnimProps> & { keyframes?: Animatable["keyframes"] }) =>
+      isLayer ? dispatch({ type: "updateLayer", id: item.id, patch }) : dispatch({ type: "updateOverlay", id: item.id, patch });
+    return {
+      values: propsAt(item, rel),
+      onChange: (change: Partial<AnimProps>) => (isLayer ? moveLayer(item.id, change) : moveOverlay(item.id, change)),
+      keyCount: item.keyframes?.length ?? 0,
+      keyHere: !!keyframeAt(item, rel),
+      onToggleKey: () => { pause(); send(toggleKeyframe(item, rel)); },
+      onPrev: prev ? () => { pause(); seek(item.start + prev.t + 0.001); } : null,
+      onNext: next ? () => { pause(); seek(item.start + next.t + 0.001); } : null,
+    };
+  };
+
   const goBack = async () => {
     if (draft.status === "error" && !window.confirm("The last changes could not be saved. Leave anyway?")) return;
     await draft.flush(); // save anything still waiting
@@ -401,7 +488,15 @@ export default function StudioEditorPage() {
             overlays={overlays}
             selectedOverlayId={selectedOverlayId}
             onSelectOverlay={selectOverlay}
-            onMoveOverlay={updateOverlay}
+            onMoveOverlay={moveOverlay}
+            layers={layers}
+            assets={assets}
+            images={images}
+            selectedLayerId={selectedLayerId}
+            onSelectLayer={selectLayer}
+            onMoveLayer={moveLayer}
+            playing={playing}
+            muted={recorder.recording}
             onTapEmpty={toggle}
             onDragStart={pause}
           />
@@ -446,6 +541,14 @@ export default function StudioEditorPage() {
         onChange={(e) => void importFiles(e.target.files)}
         data-testid="file-input"
       />
+      <input
+        ref={layerInputRef}
+        type="file"
+        accept="video/*,image/*"
+        hidden
+        onChange={(e) => void addLayerFiles(e.target.files)}
+        data-testid="layer-input"
+      />
 
       {hasClips && (
         <div className="shrink-0 border-t border-white/10 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]">
@@ -489,6 +592,11 @@ export default function StudioEditorPage() {
             onMoveVoice={onMoveVoice}
             onSelectTransition={selectTransition}
             selectedTransition={transitionIndex}
+            layers={layers}
+            images={images}
+            selectedLayerId={selectedLayerId}
+            onSelectLayer={selectLayerFromTimeline}
+            onLayerPatch={patchLayer}
           />
 
           {edit?.kind === "aspect" ? (
@@ -527,8 +635,21 @@ export default function StudioEditorPage() {
               onStopRecord={() => void stopRecording()}
               onDone={() => setAudioOpen(false)}
             />
+          ) : selectedLayer ? (
+            <LayerPanel
+              layer={selectedLayer}
+              name={(selectedLayer.kind === "video" ? assets[selectedLayer.assetId]?.name : images[selectedLayer.imageId]?.name) ?? "Layer"}
+              index={layers.indexOf(selectedLayer)}
+              count={layers.length}
+              onChange={(patch) => patchLayer(selectedLayer.id, patch)}
+              onOrder={(dir) => dispatch({ type: "orderLayer", id: selectedLayer.id, dir })}
+              onDelete={() => dispatch({ type: "removeLayer", id: selectedLayer.id })}
+              onDone={() => selectLayer(null)}
+              anim={animControls(selectedLayer, true)}
+            />
           ) : selectedOverlay ? (
             <OverlayPanel
+              anim={animControls(selectedOverlay, false)}
               overlay={selectedOverlay}
               onChange={(patch) => updateOverlay(selectedOverlay.id, patch)}
               onSetStart={() => {
@@ -554,12 +675,13 @@ export default function StudioEditorPage() {
                   <AddChip icon={<Check size={16} />} label="Done" onClick={() => dispatch({ type: "select", id: null })} testId="tool-deselect" />
                 </div>
               ) : (
-              <div className="grid grid-cols-5 gap-1 px-2 pt-2 text-[10px] font-semibold">
+              <div className="grid grid-cols-6 gap-1 px-2 pt-2 text-[10px] font-semibold">
                 <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
                 <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
                 <AddChip icon={<MapPin size={16} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
                 <AddChip icon={<Tag size={16} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
                 <AddChip icon={<Music size={16} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
+                <AddChip icon={<LayersIcon size={16} />} label="Layer" onClick={() => layerInputRef.current?.click()} testId="tool-layer" />
               </div>
               )}
               {/* Clip tools */}
@@ -577,7 +699,7 @@ export default function StudioEditorPage() {
 
       {showExport && (
         <Suspense fallback={null}>
-          <ExportPanel clips={clips} overlays={overlays} audio={audio} assets={assets} aspect={aspect} onClose={() => setShowExport(false)} />
+          <ExportPanel clips={clips} overlays={overlays} layers={layers} images={images} audio={audio} assets={assets} aspect={aspect} onClose={() => setShowExport(false)} />
         </Suspense>
       )}
     </div>

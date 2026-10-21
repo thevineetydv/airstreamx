@@ -29,7 +29,7 @@ export type HistoryAction =
   | { type: "load"; state: EditorState };
 
 /** Selection changes are not edits: they never create an undo step. */
-const NOT_UNDOABLE = new Set<EditorAction["type"]>(["select", "selectOverlay"]);
+const NOT_UNDOABLE = new Set<EditorAction["type"]>(["select", "selectOverlay", "selectLayer"]);
 
 const keysOf = (o: object) => Object.keys(o).sort().join(",");
 
@@ -41,6 +41,7 @@ function mergeKey(a: EditorAction): string | null {
     case "updateVoiceOver": return `vo:${a.id}:${keysOf(a.patch)}`;
     case "updateClip": return `clip:${a.id}:${keysOf(a.patch)}`;
     case "setAudio": return `audio:${keysOf(a.patch)}`;
+    case "updateLayer": return `layer:${a.id}:${keysOf(a.patch)}`;
     default: return null;
   }
 }
@@ -53,7 +54,13 @@ export function initHistory(state: EditorState = initialEditorState): History {
 function keepValidSelection(next: EditorState, current: EditorState): EditorState {
   const clipOk = current.selectedClipId && next.clips.some((c) => c.id === current.selectedClipId);
   const ovOk = current.selectedOverlayId && next.overlays.some((o) => o.id === current.selectedOverlayId);
-  return { ...next, selectedClipId: clipOk ? current.selectedClipId : null, selectedOverlayId: ovOk ? current.selectedOverlayId : null };
+  const layerOk = current.selectedLayerId && next.layers.some((l) => l.id === current.selectedLayerId);
+  return {
+    ...next,
+    selectedClipId: clipOk ? current.selectedClipId : null,
+    selectedOverlayId: ovOk ? current.selectedOverlayId : null,
+    selectedLayerId: layerOk ? current.selectedLayerId : null,
+  };
 }
 
 export function historyReducer(h: History, action: HistoryAction): History {
