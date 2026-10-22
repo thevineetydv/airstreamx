@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test:editor": "node tests/studio-editor/editor.test.mjs && node tests/studio-editor/overlays.test.mjs && node tests/studio-editor/audio.test.mjs && node tests/studio-editor/effects.test.mjs && node tests/studio-editor/drafts.test.mjs && node tests/studio-editor/layers.test.mjs && node tests/studio-editor/animations.test.mjs && node tests/studio-editor/templates.test.mjs && node tests/studio-editor/polish.test.mjs"
+    "test:editor": "node tests/studio-editor/editor.test.mjs && node tests/studio-editor/overlays.test.mjs && node tests/studio-editor/audio.test.mjs && node tests/studio-editor/effects.test.mjs && node tests/studio-editor/drafts.test.mjs && node tests/studio-editor/layers.test.mjs && node tests/studio-editor/animations.test.mjs && node tests/studio-editor/templates.test.mjs && node tests/studio-editor/polish.test.mjs && node tests/studio-editor/beatsync.test.mjs"
   },
   "dependencies": {
     "@fontsource/anton": "^5.3.0",
