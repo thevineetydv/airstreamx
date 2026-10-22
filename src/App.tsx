@@ -316,7 +316,9 @@ function AppContent() {
             <BottomNav onUploadClick={() => openModal()} />
           )}
 
-          {toast && (
+          {/* The editor doesn't use the video feed, so a feed loading error there
+              would only look like the editor is broken. */}
+          {toast && !(isEditorPage && toast.message === "Failed to load videos") && (
             <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
           )}
 

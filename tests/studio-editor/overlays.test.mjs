@@ -79,6 +79,10 @@ try {
   await page.waitForTimeout(1500);
   await page.getByTestId("file-input").setInputFiles([FIXTURE]);
   await page.getByTestId("clip-0").waitFor({ timeout: 30000 });
+  // New projects start 9:16 (Phase 9). This test checks the landscape (Auto) canvas.
+  await page.getByTestId("open-aspect").click();
+  await page.getByTestId("aspect-auto").click();
+  await page.getByTestId("aspect-done").click();
 
   const stage = await page.getByTestId("preview-stage").boundingBox();
   check("Preview stage uses export shape (16:9)", Math.abs(stage.width / stage.height - 16 / 9) < 0.02, `${stage.width}×${stage.height}`);

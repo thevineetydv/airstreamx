@@ -15,6 +15,7 @@ import type { Clip } from "../model/types";
 import { clipEnds, clipStarts, frameLayers } from "../model/timeline";
 import { clipVideoCss, transitionCss } from "../render/drawClip";
 import type { CSSProperties } from "react";
+import { ensureFonts, usedFonts } from "../render/fonts";
 
 interface Props {
   videoRefs: readonly [RefObject<HTMLVideoElement | null>, RefObject<HTMLVideoElement | null>];
@@ -66,7 +67,17 @@ export default function PreviewStage(props: Props) {
     return () => ro.disconnect();
   }, [aspect]);
 
-  // Redraw overlays whenever time, overlays, selection or size change.
+  // Web fonts (Hindi Bold, Impact, Hand): redraw once they have downloaded.
+  const [fontTick, setFontTick] = useState(0);
+  const fontKey = usedFonts(overlays).join(",");
+  useEffect(() => {
+    let alive = true;
+    const fonts = fontKey ? (fontKey.split(",") as Parameters<typeof ensureFonts>[0]) : [];
+    void ensureFonts(fonts).then(() => { if (alive) setFontTick((n) => n + 1); });
+    return () => { alive = false; };
+  }, [fontKey]);
+
+  // Redraw overlays whenever time, overlays, selection, size or fonts change.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !box.w) return;
@@ -93,7 +104,7 @@ export default function PreviewStage(props: Props) {
       ctx.strokeRect(r.x - 3 * dpr, r.y - 3 * dpr, r.w + 6 * dpr, r.h + 6 * dpr);
       ctx.restore();
     }
-  }, [box, overlays, time, selectedOverlayId]);
+  }, [box, overlays, time, selectedOverlayId, fontTick]);
 
   const sizeOf = (l: Layer) => (l.kind === "video" ? assets[l.assetId] : images[l.imageId]);
 
@@ -191,7 +202,10 @@ export default function PreviewStage(props: Props) {
   }
   // "Blur" fit: a tiny copy of the visible video, stretched and blurred by CSS (cheap on phones).
   const blurClip = L ? clips[activeSlot === L.a.index % 2 ? L.a.index : L.b!.index] : undefined;
-  const wantBlur = blurClip?.fit === "blur";
+  const blurAsset = blurClip ? assets[blurClip.assetId] : undefined;
+  // Same shape as the canvas: the video covers everything, so skip the blur work.
+  const sameShape = !!blurAsset && box.h > 0 && Math.abs(blurAsset.width / blurAsset.height / (box.w / box.h) - 1) < 0.02;
+  const wantBlur = blurClip?.fit === "blur" && !sameShape;
   const bgRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!wantBlur) return;

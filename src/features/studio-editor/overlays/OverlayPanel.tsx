@@ -9,6 +9,10 @@ import {
   type Overlay, type OverlayPatch,
 } from "../model/overlays";
 import { formatTime } from "../model/timeline";
+import { cssFamily, FONT_LABELS, FONT_SAMPLE, type TextFont } from "../render/fonts";
+import { DEFAULT_TEXT } from "../model/overlays";
+
+const FONTS: TextFont[] = ["default", "hindi", "impact", "hand"];
 
 interface Props {
   overlay: Overlay;
@@ -52,6 +56,9 @@ export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEn
         <>
           <textarea
             value={o.text}
+            // New text: focus it and select "Your text", so typing replaces it.
+            autoFocus={o.text === DEFAULT_TEXT}
+            onFocus={(e) => { if (o.text === DEFAULT_TEXT) e.currentTarget.select(); }}
             onChange={(e) => onChange({ text: e.target.value.slice(0, 120) })}
             rows={2}
             placeholder="Type here… (Hindi bhi chalega)"
@@ -75,6 +82,23 @@ export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEn
             >
               {o.style === "box" ? "Box ✓" : "Box"}
             </button>
+          </div>
+          <div className="flex gap-1.5" role="radiogroup" aria-label="Font">
+            {FONTS.map((f) => {
+              const on = (o.font ?? "default") === f;
+              return (
+                <button
+                  key={f}
+                  onClick={() => onChange({ font: f })}
+                  className={`flex-1 rounded-xl border px-1 py-1.5 text-center ${on ? "border-red-500 bg-red-500/10" : "border-white/10 bg-white/5"}`}
+                  aria-pressed={on}
+                  data-testid={`font-${f}`}
+                >
+                  <div className="text-base leading-tight text-white" style={{ fontFamily: cssFamily(f), fontWeight: f === "default" ? 800 : undefined }}>{FONT_SAMPLE[f]}</div>
+                  <div className="text-[10px] text-gray-400">{FONT_LABELS[f]}</div>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
