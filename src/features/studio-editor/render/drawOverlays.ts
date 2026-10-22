@@ -4,7 +4,7 @@
 // the same at 720p, 1080p, portrait or landscape.
 
 import { isActive, type Overlay } from "../model/overlays";
-import { propsAt } from "../model/keyframes";
+import { animatedAt } from "../model/presets";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -51,7 +51,7 @@ function placeBox(cx: number, cy: number, w: number, h: number, W: number, H: nu
 
 interface Layout { rect: Rect; draw: () => void }
 
-function layout(ctx: Ctx, o: Overlay, W: number, H: number): Layout {
+function layout(ctx: Ctx, o: Overlay & { reveal?: number }, W: number, H: number): Layout {
   const u = (Math.min(W, H) / 100) * o.scale;
   const cx = o.x * W;
   const cy = o.y * H;
@@ -77,16 +77,26 @@ function layout(ctx: Ctx, o: Overlay, W: number, H: number): Layout {
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.lineJoin = "round";
+          // Typewriter: show only the first part of the text. Each line keeps its
+          // final place, so letters appear without the text jumping around.
+          const total = lines.reduce((n, l) => n + l.length, 0);
+          let left = o.reveal === undefined || o.reveal >= 1 ? total : Math.floor(total * o.reveal);
           lines.forEach((line, i) => {
+            if (left <= 0) return;
+            const shown = line.slice(0, left);
+            left -= line.length;
             const ly = rect.y + pad + lh * (i + 0.5);
             const lx = rect.x + rect.w / 2;
+            const partial = shown.length < line.length;
+            const sx = partial ? lx - ctx.measureText(line).width / 2 : lx;
+            ctx.textAlign = partial ? "left" : "center";
             if (o.style === "outline") {
               ctx.lineWidth = fs * 0.14;
               ctx.strokeStyle = o.color === "#000000" ? "#ffffff" : "rgba(0,0,0,0.85)";
-              ctx.strokeText(line, lx, ly);
+              ctx.strokeText(shown, sx, ly);
             }
             ctx.fillStyle = o.color;
-            ctx.fillText(line, lx, ly);
+            ctx.fillText(shown, sx, ly);
           });
         },
       };
@@ -203,8 +213,8 @@ function layout(ctx: Ctx, o: Overlay, W: number, H: number): Layout {
 }
 
 /** The overlay as it looks at time t (keyframes applied). */
-export function overlayAt(o: Overlay, t: number): Overlay & { opacity: number } {
-  return { ...o, ...propsAt(o, t - o.start) };
+export function overlayAt(o: Overlay, t: number): Overlay & { opacity: number; reveal: number } {
+  return { ...o, ...animatedAt(o, t, o.end, o.kind === "text") };
 }
 
 /** Draw every overlay visible at timeline time `t`, in order (later = on top). */

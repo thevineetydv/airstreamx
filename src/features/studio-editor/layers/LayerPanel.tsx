@@ -1,8 +1,9 @@
 // Settings for the selected layer (picture-in-picture video or picture).
 
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
-import KeyframeControls from "../overlays/KeyframeControls";
-import type { AnimProps } from "../model/keyframes";
+import KeyframeControls, { type KeyframeProps } from "../overlays/KeyframeControls";
+import AnimationPicker from "../overlays/AnimationPicker";
+import type { Animations } from "../model/presets";
 import { layerEnd, MAX_LAYER_SCALE, MIN_LAYER_SCALE, type Layer, type LayerPatch } from "../model/layers";
 import { formatTime } from "../model/timeline";
 
@@ -15,18 +16,12 @@ interface Props {
   onOrder: (dir: -1 | 1) => void;
   onDelete: () => void;
   onDone: () => void;
-  anim: {
-    values: AnimProps;
-    onChange: (change: Partial<AnimProps>) => void;
-    keyCount: number;
-    keyHere: boolean;
-    onToggleKey: () => void;
-    onPrev: (() => void) | null;
-    onNext: (() => void) | null;
-  };
+  anim: Omit<KeyframeProps, "scaleMin" | "scaleMax">;
+  /** Ready-made animations (Phase 7). */
+  presets: { anim: Animations | undefined; onChange: (a: Animations) => void; onPreview: (tab: "in" | "out" | "loop") => void };
 }
 
-export default function LayerPanel({ layer: l, name, index, count, onChange, onOrder, onDelete, onDone, anim }: Props) {
+export default function LayerPanel({ layer: l, name, index, count, onChange, onOrder, onDelete, onDone, anim, presets }: Props) {
   return (
     <div className="max-h-[44vh] space-y-3 overflow-y-auto px-3 py-3 text-sm" data-testid="layer-panel">
       <div className="flex items-center justify-between gap-2">
@@ -39,6 +34,7 @@ export default function LayerPanel({ layer: l, name, index, count, onChange, onO
         </div>
       </div>
 
+      <AnimationPicker anim={presets.anim} isText={false} onChange={presets.onChange} onPreview={presets.onPreview} />
       <KeyframeControls {...anim} scaleMin={MIN_LAYER_SCALE} scaleMax={MAX_LAYER_SCALE} />
 
       <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -6,6 +6,7 @@
 // Phase 5: transitions, filters / colour, speed 0.5×–2×, crop / fit and canvas shape.
 // Phase 6a: undo / redo, drafts saved on the device (auto-save, open, delete).
 // Phase 6b: layers (picture-in-picture video / picture) and keyframe animation.
+// Phase 7: ready-made animations (in / out / loop), auto-keyframe switch, clear keyframes.
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
@@ -34,7 +35,8 @@ import { newVoiceOver, type AudioSettings } from "./model/audio";
 import { clampOverlayTimes, createOverlay, rememberOverlay, type Overlay, type OverlayKind, type OverlayPatch } from "./model/overlays";
 import { isWebCodecsSupported } from "./media/support";
 import LayerPanel from "./layers/LayerPanel";
-import { animatedEdit, keyframeAt, neighbourKey, propsAt, toggleKeyframe, type Animatable, type AnimProps } from "./model/keyframes";
+import { animatedEdit, clearKeyframes, keyframeAt, neighbourKey, propsAt, toggleKeyframe, type Animatable, type AnimProps } from "./model/keyframes";
+import type { Animations } from "./model/presets";
 import { layerEnd, loadImage, MAX_VIDEO_LAYERS, newImageLayer, newVideoLayer, type Layer, type LayerPatch } from "./model/layers";
 
 const ExportPanel = lazy(() => import("./export/ExportPanel"));
@@ -368,18 +370,30 @@ export default function StudioEditorPage() {
   const patchLayer = useCallback((id: string, patch: LayerPatch) => dispatch({ type: "updateLayer", id, patch }), []);
 
 
-  /** Changing position / size / opacity: base values, or a keyframe at the playhead if animated. */
+  // Auto keyframe (off by default): when ON, moving / resizing between keyframes adds one there.
+  // Remembered on this device.
+  const [autoKey, setAutoKeyState] = useState(() => {
+    try { return localStorage.getItem("studio-editor:auto-key") === "1"; } catch { return false; }
+  });
+  const autoKeyRef = useRef(autoKey);
+  autoKeyRef.current = autoKey;
+  const setAutoKey = (on: boolean) => {
+    setAutoKeyState(on);
+    try { localStorage.setItem("studio-editor:auto-key", on ? "1" : "0"); } catch { /* ignore */ }
+  };
+
+  /** Changing position / size / opacity: base values, or keyframes if animated. */
   const moveOverlay = useCallback((id: string, change: Partial<AnimProps>) => {
     const o = overlaysRef.current.find((x) => x.id === id);
     if (!o) return;
     const rel = Math.min(Math.max(0, timeRef.current - o.start), o.end - o.start);
-    dispatch({ type: "updateOverlay", id, patch: animatedEdit(o, rel, change) });
+    dispatch({ type: "updateOverlay", id, patch: animatedEdit(o, rel, change, autoKeyRef.current) });
   }, []);
   const moveLayer = useCallback((id: string, change: Partial<AnimProps>) => {
     const l = layersRef.current.find((x) => x.id === id);
     if (!l) return;
     const rel = Math.min(Math.max(0, timeRef.current - l.start), layerEnd(l) - l.start);
-    dispatch({ type: "updateLayer", id, patch: animatedEdit(l, rel, change) });
+    dispatch({ type: "updateLayer", id, patch: animatedEdit(l, rel, change, autoKeyRef.current) });
   }, []);
 
   /** Props for KeyframeControls for an overlay or layer. */
@@ -399,6 +413,31 @@ export default function StudioEditorPage() {
       onToggleKey: () => { pause(); send(toggleKeyframe(item, rel)); },
       onPrev: prev ? () => { pause(); seek(item.start + prev.t + 0.001); } : null,
       onNext: next ? () => { pause(); seek(item.start + next.t + 0.001); } : null,
+      onClear: () => { pause(); send(clearKeyframes(item, rel)); },
+      autoKey,
+      onAutoKey: setAutoKey,
+    };
+  };
+
+  // Ready-made animations: set them and play the part where they show.
+  const previewTimer = useRef<number | null>(null);
+  const presetControls = (item: Overlay | Layer, isLayer: boolean) => {
+    const end = isLayer ? layerEnd(item as Layer) : (item as Overlay).end;
+    return {
+      anim: item.anim,
+      onChange: (a: Animations) =>
+        isLayer ? dispatch({ type: "updateLayer", id: item.id, patch: { anim: a } }) : dispatch({ type: "updateOverlay", id: item.id, patch: { anim: a } }),
+      onPreview: (tab: "in" | "out" | "loop") => {
+        const a = item.anim;
+        const outLen = Math.min(a?.outDuration ?? 0.5, (end - item.start) / 2);
+        const from = tab === "out" ? Math.max(item.start, end - outLen - 0.4) : item.start + 0.001;
+        const length = tab === "loop" ? 2.5 : (tab === "in" ? (a?.inDuration ?? 0.5) : outLen) + 0.6;
+        pause();
+        seek(from);
+        void play();
+        if (previewTimer.current) clearTimeout(previewTimer.current);
+        previewTimer.current = window.setTimeout(() => pause(), length * 1000);
+      },
     };
   };
 
@@ -599,6 +638,8 @@ export default function StudioEditorPage() {
             onLayerPatch={patchLayer}
           />
 
+          {/* Panels: full width on phones, a centred column on desktop */}
+          <div className="mx-auto w-full max-w-2xl" data-testid="panel-column">
           {edit?.kind === "aspect" ? (
             <AspectPanel aspect={aspect} onChange={(a) => dispatch({ type: "setAspect", aspect: a })} onDone={() => setEdit(null)} />
           ) : transitionIndex !== null ? (
@@ -646,10 +687,12 @@ export default function StudioEditorPage() {
               onDelete={() => dispatch({ type: "removeLayer", id: selectedLayer.id })}
               onDone={() => selectLayer(null)}
               anim={animControls(selectedLayer, true)}
+              presets={presetControls(selectedLayer, true)}
             />
           ) : selectedOverlay ? (
             <OverlayPanel
               anim={animControls(selectedOverlay, false)}
+              presets={presetControls(selectedOverlay, false)}
               overlay={selectedOverlay}
               onChange={(patch) => updateOverlay(selectedOverlay.id, patch)}
               onSetStart={() => {
@@ -694,6 +737,7 @@ export default function StudioEditorPage() {
               </div>
             </>
           )}
+          </div>
         </div>
       )}
 
