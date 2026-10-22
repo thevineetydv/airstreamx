@@ -2,8 +2,8 @@
 // same layers as positioned <img>/<video> elements, using the same rectangle maths.
 
 import type { VideoSample } from "mediabunny";
-import { propsAt } from "../model/keyframes";
-import { layerRect, type Layer, type MediaSize } from "../model/layers";
+import { animatedAt } from "../model/presets";
+import { layerEnd, layerRect, type Layer, type MediaSize } from "../model/layers";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -20,7 +20,7 @@ export function drawLayer(
   H: number,
 ) {
   if (!source) return;
-  const a = propsAt(layer, t - layer.start);
+  const a = animatedAt(layer, t, layerEnd(layer));
   if (a.opacity <= 0) return;
   const r = layerRect(size, a.x, a.y, a.scale, W, H);
   ctx.save();

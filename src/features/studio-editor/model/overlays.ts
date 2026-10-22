@@ -4,6 +4,7 @@
 
 import { newId } from "./timeline";
 import type { Keyframe } from "./keyframes";
+import type { Animations } from "./presets";
 
 interface OverlayBase {
   id: string;
@@ -18,6 +19,8 @@ interface OverlayBase {
   opacity?: number;
   /** Animation over time (Phase 6b). */
   keyframes?: Keyframe[];
+  /** Ready-made in / out / loop animations (Phase 7). */
+  anim?: Animations;
 }
 
 export type TextStyle = "outline" | "box";

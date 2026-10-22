@@ -2,10 +2,12 @@
 // A keyframe stores all four values at a moment (seconds from the item's start).
 // Between two keyframes the values move smoothly (ease in-out).
 //
-// Editing works like CapCut:
+// Editing:
 //  - no keyframes: changing a value changes the item everywhere (as before)
-//  - with keyframes: changing a value at the playhead updates the keyframe there,
-//    or adds a new keyframe there if none exists yet.
+//  - on a keyframe: changing a value updates that keyframe
+//  - between keyframes, "Auto keyframe" ON: a new keyframe is added there (CapCut style)
+//  - between keyframes, "Auto keyframe" OFF (default): the whole animation is
+//    shifted / resized together, so moving text never creates keyframes by accident
 
 export interface AnimProps {
   x: number;
@@ -63,12 +65,33 @@ const sorted = (ks: Keyframe[]) => [...ks].sort((a, b) => a.t - b.t);
  * The patch to send when the user changes animated values at `rel`.
  * Returns base values when there are no keyframes, else updated keyframes.
  */
-export function animatedEdit(item: Animatable, rel: number, change: Partial<AnimProps>): Partial<AnimProps> & { keyframes?: Keyframe[] } {
+export function animatedEdit(
+  item: Animatable,
+  rel: number,
+  change: Partial<AnimProps>,
+  autoKey = false,
+): Partial<AnimProps> & { keyframes?: Keyframe[] } {
   const ks = item.keyframes ?? [];
   if (!ks.length) return change;
   const hit = keyframeAt(item, rel);
   if (hit) return { keyframes: ks.map((k) => (k === hit ? { ...k, ...change } : k)) };
-  return { keyframes: sorted([...ks, { t: rel, ...propsAt(item, rel), ...change }]) };
+  if (autoKey) return { keyframes: sorted([...ks, { t: rel, ...propsAt(item, rel), ...change }]) };
+  return { keyframes: shiftAll(ks, propsAt(item, rel), change) };
+}
+
+/** Move / resize / fade every keyframe by the same amount (the path keeps its shape). */
+function shiftAll(ks: Keyframe[], now: AnimProps, change: Partial<AnimProps>): Keyframe[] {
+  const dx = change.x !== undefined ? change.x - now.x : 0;
+  const dy = change.y !== undefined ? change.y - now.y : 0;
+  const ratio = change.scale !== undefined && now.scale > 0 ? change.scale / now.scale : 1;
+  const dOp = change.opacity !== undefined ? change.opacity - now.opacity : 0;
+  const c01 = (v: number) => Math.min(1, Math.max(0, v));
+  return ks.map((k) => ({ ...k, x: c01(k.x + dx), y: c01(k.y + dy), scale: k.scale * ratio, opacity: c01(k.opacity + dOp) }));
+}
+
+/** Remove all keyframes; the item stays as it looks at the playhead. */
+export function clearKeyframes(item: Animatable, rel: number): { keyframes: Keyframe[] } & AnimProps {
+  return { keyframes: [], ...propsAt(item, rel) };
 }
 
 /** Add a keyframe at `rel` with the current values, or remove the one that is there. */

@@ -105,6 +105,7 @@ try {
   await drag(0.5, 0.5, 0, canvas.height * 0.25); // to y = 0.75, no keyframes yet -> base value
   await page.getByTestId("key-toggle").click(); // keyframe at 0 s
   check("Keyframe added at 0 s", (await page.getByTestId("key-count").innerText()).startsWith("1"));
+  await page.getByTestId("key-auto").click(); // Auto keyframe ON (off by default since Phase 7)
   await scrollTo(2);
   await page.getByTestId("overlay-bar-text").click();
   await drag(0.5, 0.75, canvas.width * 0.3, 0); // at 2 s: drag right -> auto keyframe

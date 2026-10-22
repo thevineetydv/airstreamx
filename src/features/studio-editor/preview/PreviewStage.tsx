@@ -5,9 +5,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { isActive, type Overlay, type OverlayPatch } from "../model/overlays";
-import { drawOverlaysAt, overlayAt, overlayRect } from "../render/drawOverlays";
+import { drawOverlaysAt, overlayRect } from "../render/drawOverlays";
 import { propsAt, type AnimProps } from "../model/keyframes";
-import { layerActive, layerRect, type ImageAsset, type Layer } from "../model/layers";
+import { animatedAt } from "../model/presets";
+import { layerActive, layerEnd, layerRect, type ImageAsset, type Layer } from "../model/layers";
 import { LAYER_RADIUS } from "../render/drawLayers";
 import type { MediaAsset } from "../model/types";
 import type { Clip } from "../model/types";
@@ -102,7 +103,7 @@ export default function PreviewStage(props: Props) {
       const l = layers[i];
       const size = sizeOf(l);
       if (!size || !layerActive(l, time)) continue;
-      const a = propsAt(l, time - l.start);
+      const a = animatedAt(l, time, layerEnd(l));
       const r = layerRect(size, a.x, a.y, a.scale, W, H);
       if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return l;
     }
@@ -134,7 +135,8 @@ export default function PreviewStage(props: Props) {
     const ov = hitTest(px, py);
     const layer = ov ? null : hitLayer(px, py, canvas.width, canvas.height);
     // Drag from where it is SHOWN right now (keyframes applied).
-    const from = ov ? overlayAt(ov, time) : layer ? propsAt(layer, time - layer.start) : null;
+    // (keyframe values only: ready-made animations are not something you drag)
+    const from = ov ? propsAt(ov, time - ov.start) : layer ? propsAt(layer, time - layer.start) : null;
     const startX = e.clientX;
     const startY = e.clientY;
     let dragging = false;
@@ -295,7 +297,7 @@ function LayerView(props: {
     }
   });
 
-  const a = propsAt(layer, time - layer.start);
+  const a = animatedAt(layer, time, layerEnd(layer));
   const r = layerRect(size, a.x, a.y, a.scale, box.w, box.h);
   const style: CSSProperties = {
     position: "absolute",

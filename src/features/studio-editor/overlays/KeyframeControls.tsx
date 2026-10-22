@@ -5,7 +5,7 @@
 import { ChevronLeft, ChevronRight, Diamond } from "lucide-react";
 import type { AnimProps } from "../model/keyframes";
 
-interface Props {
+export interface KeyframeProps {
   values: AnimProps;
   onChange: (change: Partial<AnimProps>) => void;
   keyCount: number;
@@ -13,12 +13,16 @@ interface Props {
   onToggleKey: () => void;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
+  onClear: () => void;
+  /** Auto keyframe: changing a value between keyframes adds a new one there. */
+  autoKey: boolean;
+  onAutoKey: (on: boolean) => void;
   /** Size slider range (overlays use a multiplier, layers a width fraction). */
   scaleMin: number;
   scaleMax: number;
 }
 
-export default function KeyframeControls(p: Props) {
+export default function KeyframeControls(p: KeyframeProps) {
   return (
     <div className="space-y-2" data-testid="keyframe-controls">
       <label className="flex items-center gap-3 text-xs text-gray-400">
@@ -61,10 +65,27 @@ export default function KeyframeControls(p: Props) {
         </button>
         <span className="ml-auto text-gray-500" data-testid="key-count">{p.keyCount} ◆</span>
       </div>
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          onClick={() => p.onAutoKey(!p.autoKey)}
+          className={`rounded-full px-3 py-1 ${p.autoKey ? "bg-yellow-400 text-black" : "bg-white/10 text-gray-300"}`}
+          data-testid="key-auto"
+          data-on={p.autoKey}
+        >
+          Auto keyframe: {p.autoKey ? "ON" : "OFF"}
+        </button>
+        {p.keyCount > 0 && (
+          <button onClick={p.onClear} className="rounded-full px-3 py-1 text-red-300 hover:bg-white/10" data-testid="key-clear">
+            Clear all ◆
+          </button>
+        )}
+      </div>
       <p className="text-[11px] text-gray-500">
-        {p.keyCount
-          ? "Move the playhead, then drag / resize: a keyframe is added there and it animates between them."
-          : "Add a keyframe, move the playhead, then move or resize it to animate."}
+        {!p.keyCount
+          ? "To animate: Add keyframe, move the playhead, Add keyframe again, then move / resize it."
+          : p.autoKey
+            ? "Auto ON: moving or resizing anywhere adds a keyframe there."
+            : "Auto OFF: on a ◆ you edit that keyframe; elsewhere the whole animation moves together."}
       </p>
     </div>
   );

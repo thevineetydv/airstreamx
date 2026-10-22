@@ -4,6 +4,7 @@
 // Draw order: main clips → layers (in list order) → text / stickers.
 
 import type { Keyframe } from "./keyframes";
+import type { Animations } from "./presets";
 import { newId } from "./timeline";
 
 export interface ImageAsset {
@@ -29,6 +30,8 @@ interface LayerBase {
   /** Rounded corners (nice for picture-in-picture). */
   rounded: boolean;
   keyframes?: Keyframe[];
+  /** Ready-made in / out / loop animations (Phase 7). */
+  anim?: Animations;
 }
 
 export interface VideoLayer extends LayerBase {
