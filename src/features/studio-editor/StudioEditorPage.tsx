@@ -590,27 +590,34 @@ export default function StudioEditorPage() {
             {importing && <p className="pb-3 text-center text-xs text-gray-400">{importing}</p>}
           </div>
         ) : (
-          <div className="flex max-h-full w-full flex-col items-center gap-6 overflow-y-auto py-6">
-            <button
-              disabled={!supported || !!importing || !!openingId}
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/15 px-10 py-12 text-gray-300 disabled:opacity-50"
-              data-testid="import-empty"
-            >
-              <Film size={40} className="text-red-500" />
-              <span className="font-bold">{importing ?? (openingId ? "Opening draft…" : "Import video")}</span>
-              <span className="text-xs text-gray-500">Pick one or more clips from your phone</span>
-            </button>
+          <div className="flex max-h-full w-full flex-col items-center gap-4 overflow-y-auto px-4 py-6">
+            {/* Templates first: the fastest way for a new creator to get a good video. */}
             {supported && (
               <button
                 onClick={() => setTemplateOpen("start")}
                 disabled={!!importing || !!openingId}
-                className="-mt-3 flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                className="w-full max-w-sm rounded-3xl bg-gradient-to-br from-red-600 via-red-500 to-orange-500 p-5 text-left text-white shadow-lg shadow-red-900/30 active:scale-[0.99] disabled:opacity-50"
                 data-testid="start-template"
               >
-                <Sparkles size={16} /> Start with a template
+                <div className="text-2xl leading-none tracking-widest" aria-hidden>🍜🛍️☕🎉💪</div>
+                <div className="mt-3 flex items-center gap-2 text-lg font-extrabold">
+                  <Sparkles size={20} /> Start with a template
+                </div>
+                <div className="mt-1 text-sm text-white/85">Ready in 1 minute: text, music and look are done for you.</div>
               </button>
             )}
+            <button
+              disabled={!supported || !!importing || !!openingId}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex w-full max-w-sm items-center gap-4 rounded-3xl border-2 border-dashed border-white/15 px-5 py-5 text-left text-gray-300 disabled:opacity-50"
+              data-testid="import-empty"
+            >
+              <Film size={32} className="shrink-0 text-red-500" />
+              <span>
+                <span className="block font-bold">{importing ?? (openingId ? "Opening draft…" : "Import video")}</span>
+                <span className="block text-xs text-gray-500">Start from scratch with clips from your phone</span>
+              </span>
+            </button>
             {supported && <DraftsList onOpen={(id) => void openSavedDraft(id)} busyId={openingId} />}
           </div>
         )}
@@ -673,6 +680,7 @@ export default function StudioEditorPage() {
             onScrubStart={pause}
             onSelect={onSelect}
             onTrim={handleTrim}
+            onReorder={(id, index) => { pause(); dispatch({ type: "moveTo", id, index }); }}
             overlays={overlays}
             selectedOverlayId={selectedOverlayId}
             onSelectOverlay={selectOverlayFromTimeline}

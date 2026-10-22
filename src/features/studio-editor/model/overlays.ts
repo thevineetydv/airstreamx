@@ -2,6 +2,7 @@
 // Times are TIMELINE seconds (not tied to a clip). Position is the overlay
 // centre as a fraction of the frame (0..1), so it works for any output size.
 
+import type { TextFont } from "../render/fonts";
 import { newId } from "./timeline";
 import type { Keyframe } from "./keyframes";
 import type { Animations } from "./presets";
@@ -27,11 +28,16 @@ interface OverlayBase {
 
 export type TextStyle = "outline" | "box";
 
+/** Text a new text item starts with (selected on focus, so typing replaces it). */
+export const DEFAULT_TEXT = "Your text";
+
 export interface TextOverlay extends OverlayBase {
   kind: "text";
   text: string;
   color: string;
   style: TextStyle;
+  /** Missing = "default" (older drafts). */
+  font?: TextFont;
 }
 
 export interface StickerOverlay extends OverlayBase {
@@ -111,7 +117,7 @@ export function createOverlay(kind: OverlayKind, playhead: number, total: number
   const base = { id: newId("ov"), start, end, scale: 1 };
   switch (kind) {
     case "text":
-      return { ...base, kind, x: 0.5, y: 0.5, text: "Your text", color: "#ffffff", style: "outline" };
+      return { ...base, kind, x: 0.5, y: 0.5, text: DEFAULT_TEXT, color: "#ffffff", style: "outline" };
     case "sticker":
       return { ...base, kind, x: 0.75, y: 0.3, emoji: "🔥" };
     case "area":

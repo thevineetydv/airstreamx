@@ -79,6 +79,10 @@ try {
   await page.waitForTimeout(1500);
   await page.getByTestId("file-input").setInputFiles([RED, GREEN]);
   await page.getByTestId("clip-1").waitFor({ timeout: 30000 });
+  // New projects start 9:16 (Phase 9). This test checks the landscape (Auto) canvas.
+  await page.getByTestId("open-aspect").click();
+  await page.getByTestId("aspect-auto").click();
+  await page.getByTestId("aspect-done").click();
   const label = page.getByTestId("time-label");
 
   // ── Speed 2× on the red clip ──

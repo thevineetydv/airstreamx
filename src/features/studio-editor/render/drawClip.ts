@@ -9,6 +9,14 @@ import type { Clip } from "../model/types";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
+let small: OffscreenCanvas | HTMLCanvasElement | null = null;
+/** One reused small canvas for the blur background. */
+function smallCanvas(w: number, h: number) {
+  small ??= typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h) : document.createElement("canvas");
+  if (small.width !== w || small.height !== h) { small.width = w; small.height = h; }
+  return small;
+}
+
 /** Source rectangle that fills a W×H frame, positioned by pan (0..1). */
 export function coverCrop(sw: number, sh: number, W: number, H: number, panX: number, panY: number) {
   const target = W / H;
@@ -28,8 +36,20 @@ export function drawClipFrame(ctx: Ctx, sample: VideoSample | null, clip: Clip, 
   if (sample) {
     const filter = filterCss(clip.look);
     if (clip.fit === "blur") {
-      ctx.filter = `blur(${Math.round(Math.min(W, H) * 0.035)}px) brightness(0.6) ${filter}`.trim();
-      sample.drawWithFit(ctx, { fit: "cover" });
+      // Background only when the shapes differ (else the video covers it all).
+      if (Math.abs(sample.displayWidth / sample.displayHeight / (W / H) - 1) > 0.02) {
+        // Blur a 1/10-size copy, then stretch it: ~100× less work than blurring
+        // the full frame, which matters on cheap phones. Looks the same (soft).
+        const small = smallCanvas(Math.max(8, Math.round(W / 10)), Math.max(8, Math.round(H / 10)));
+        const sctx = small.getContext("2d") as Ctx | null;
+        if (sctx) {
+          sctx.filter = `blur(${Math.max(1, Math.round(Math.min(small.width, small.height) * 0.035))}px)`;
+          sample.drawWithFit(sctx, { fit: "cover" });
+          ctx.filter = `brightness(0.6) ${filter}`.trim();
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(small, 0, 0, W, H);
+        }
+      }
       ctx.filter = filter || "none";
       sample.drawWithFit(ctx, { fit: "contain" });
     } else if (clip.fit === "fill") {

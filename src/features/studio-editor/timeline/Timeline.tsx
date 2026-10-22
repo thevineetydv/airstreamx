@@ -20,6 +20,8 @@ interface TimelineProps {
   onScrubStart: () => void;
   onSelect: (id: string | null) => void;
   onTrim: (id: string, edge: "in" | "out", value: number) => void;
+  /** Long-press a clip and drag it to a new place. */
+  onReorder: (id: string, index: number) => void;
   overlays: Overlay[];
   selectedOverlayId: string | null;
   onSelectOverlay: (id: string) => void;
@@ -45,8 +47,69 @@ export default function Timeline(props: TimelineProps) {
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
   const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
   const { onSelectTransition, selectedTransition } = props;
-  const { layers, images, selectedLayerId, onSelectLayer, onLayerPatch } = props;
+  const { layers, images, selectedLayerId, onSelectLayer, onLayerPatch, onReorder } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // ── Drag to reorder (long-press a clip, then move) ──
+  // A quick swipe still scrolls the timeline; holding still for a moment picks
+  // the clip up. While dragging, the clips show in the new order.
+  const [reorder, setReorder] = useState<{ from: number; to: number } | null>(null);
+  const startReorder = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if (clips.length < 2 || e.button > 0) return;
+    const row = rowRef.current;
+    if (!row) return;
+    const sx = e.clientX, sy = e.clientY;
+    let active = false;
+    let to = index;
+    // Middles of the clips in their original places (screen x at pick-up).
+    let mids: number[] = [];
+    const stopScroll = (ev: TouchEvent) => { if (active) ev.preventDefault(); };
+    const begin = () => {
+      active = true;
+      mids = [...row.querySelectorAll<HTMLElement>("[data-clip-block]")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2;
+      });
+      navigator.vibrate?.(15);
+      setReorder({ from: index, to: index });
+    };
+    const timer = window.setTimeout(begin, 380);
+    const move = (ev: PointerEvent) => {
+      if (!active) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) done(); // it's a scroll, not a drag
+        return;
+      }
+      ev.preventDefault();
+      // New index = how many other clips' middles are left of the finger.
+      to = mids.filter((m, k) => k !== index && m < ev.clientX).length;
+      setReorder((r) => (r && r.to !== to ? { ...r, to } : r));
+    };
+    const done = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("touchmove", stopScroll);
+    };
+    const up = () => {
+      done();
+      if (!active) return;
+      setReorder(null);
+      if (to !== index) onReorder(clips[index].id, to);
+    };
+    const cancel = () => { done(); if (active) setReorder(null); };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("touchmove", stopScroll, { passive: false });
+  };
+  // Clips in the order shown (live preview of the drop place while dragging).
+  const shown = clips.map((clip, i) => ({ clip, i }));
+  if (reorder && reorder.to !== reorder.from) {
+    const [m] = shown.splice(reorder.from, 1);
+    shown.splice(reorder.to, 0, m);
+  }
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
 
@@ -117,8 +180,8 @@ export default function Timeline(props: TimelineProps) {
           </div>
 
           {/* Clips */}
-          <div className="flex h-16 items-stretch gap-0.5" onClick={() => onSelect(null)}>
-            {clips.map((clip, i) => (
+          <div ref={rowRef} className="flex h-16 items-stretch gap-0.5" onClick={() => onSelect(null)}>
+            {shown.map(({ clip, i }, pos) => (
               <Fragment key={clip.id}>
                 <ClipBlock
                   clip={clip}
@@ -128,10 +191,12 @@ export default function Timeline(props: TimelineProps) {
                   pxPerSec={pxPerSec}
                   onSelect={onSelect}
                   onTrim={onTrim}
+                  dragging={reorder?.from === i}
+                  onReorderStart={startReorder}
                 />
                 {/* Transition button on each cut. Hidden next to the selected clip,
-                    where it would sit on top of the trim handles. */}
-                {i < clips.length - 1 && clip.id !== selectedId && clips[i + 1].id !== selectedId && (
+                    where it would sit on top of the trim handles, and while dragging. */}
+                {!reorder && pos < clips.length - 1 && clip.id !== selectedId && clips[i + 1].id !== selectedId && (
                   <div className="relative z-20 w-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); onSelectTransition(i); }}
@@ -415,9 +480,11 @@ interface ClipBlockProps {
   pxPerSec: number;
   onSelect: (id: string | null) => void;
   onTrim: (id: string, edge: "in" | "out", value: number) => void;
+  dragging: boolean;
+  onReorderStart: (index: number, e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerSec, onSelect, onTrim }: ClipBlockProps) {
+const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerSec, onSelect, onTrim, dragging, onReorderStart }: ClipBlockProps) {
   const width = Math.max(8, clipDuration(clip) * pxPerSec);
   const thumbs = asset?.thumbs ?? [];
   const thumbFilter = filterCss(clip.look) || undefined;
@@ -454,10 +521,14 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
   return (
     <div
       data-testid={`clip-${index}`}
+      data-clip-block
       data-selected={selected}
+      data-dragging={dragging}
       onClick={(e) => { e.stopPropagation(); onSelect(clip.id); }}
-      className={`relative flex shrink-0 overflow-hidden rounded-md bg-zinc-800 ${
-        selected ? "ring-2 ring-red-500 z-10" : "ring-1 ring-white/10"
+      onPointerDown={(e) => onReorderStart(index, e)}
+      onContextMenu={(e) => e.preventDefault()} // long-press must not open the phone menu
+      className={`relative flex shrink-0 overflow-hidden rounded-md bg-zinc-800 transition-transform ${
+        dragging ? "z-30 -translate-y-1 scale-[1.04] opacity-80 ring-2 ring-yellow-400 shadow-xl" : selected ? "ring-2 ring-red-500 z-10" : "ring-1 ring-white/10"
       }`}
       style={{ width }}
     >

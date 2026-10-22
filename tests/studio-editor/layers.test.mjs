@@ -82,6 +82,10 @@ try {
   await page.waitForTimeout(1500);
   await page.getByTestId("file-input").setInputFiles([RED]);
   await page.getByTestId("clip-0").waitFor({ timeout: 30000 });
+  // New projects start 9:16 (Phase 9). This test checks the landscape (Auto) canvas.
+  await page.getByTestId("open-aspect").click();
+  await page.getByTestId("aspect-auto").click();
+  await page.getByTestId("aspect-done").click();
 
   // ── Video layer ──
   await page.getByTestId("layer-input").setInputFiles([GREEN]);

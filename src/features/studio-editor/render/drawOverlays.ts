@@ -3,6 +3,7 @@
 // All sizes use a unit `u` = 1% of the frame's shorter side, so the look is
 // the same at 720p, 1080p, portrait or landscape.
 
+import { BASE_FONT, textFont } from "./fonts";
 import { isActive, type Overlay } from "../model/overlays";
 import { animatedAt } from "../model/presets";
 
@@ -11,7 +12,7 @@ type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export interface Rect { x: number; y: number; w: number; h: number }
 
 // System fonts: Roboto / Noto on Android include Devanagari, so Hindi text works.
-const FONT = `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif`;
+const FONT = BASE_FONT;
 const font = (weight: number, px: number) => `${weight} ${Math.round(px)}px ${FONT}`;
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
@@ -58,8 +59,9 @@ function layout(ctx: Ctx, o: Overlay & { reveal?: number }, W: number, H: number
 
   switch (o.kind) {
     case "text": {
-      const fs = 6.5 * u;
-      ctx.font = font(800, fs);
+      // Anton is a tall, narrow font: make it a bit bigger so it reads the same size.
+      const fs = (o.font === "impact" ? 7.5 : 6.5) * u;
+      ctx.font = textFont(o.font, 800, fs);
       const lines = wrap(ctx, o.text || " ", W * 0.86);
       const lh = fs * 1.22;
       const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
@@ -73,7 +75,7 @@ function layout(ctx: Ctx, o: Overlay & { reveal?: number }, W: number, H: number
             roundRect(ctx, rect.x, rect.y, rect.w, rect.h, fs * 0.35);
             ctx.fill();
           }
-          ctx.font = font(800, fs);
+          ctx.font = textFont(o.font, 800, fs);
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.lineJoin = "round";

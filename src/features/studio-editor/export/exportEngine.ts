@@ -30,6 +30,7 @@ import { FPS, frameCount, outputTimeline } from "./timing";
 import { frameLayers, type FrameLayers } from "../model/timeline";
 import type { AspectRatio } from "../model/look";
 import { compositeTransition, drawClipFrame } from "../render/drawClip";
+import { ensureFonts, usedFonts } from "../render/fonts";
 
 export type { ExportResolution } from "./size";
 export { outputSize } from "./size";
@@ -111,6 +112,7 @@ export async function runExport({ clips, overlays, layers, images, audio, assets
   const started = performance.now();
   const plan = await planExport(resolution, aspect, assets[clips[0].assetId]);
   const { width, height } = plan;
+  await ensureFonts(usedFonts(overlays)); // text must not start in the fallback font
 
   const canvas = document.createElement("canvas");
   canvas.width = width;

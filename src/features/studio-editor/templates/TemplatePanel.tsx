@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Sparkles, Star } from "lucide-react";
 import { drawOverlaysAt } from "../render/drawOverlays";
+import { ensureFonts, usedFonts } from "../render/fonts";
 import { readMemo } from "../model/overlays";
 import { sampleValues, TEMPLATES, type Template } from "../model/templates";
 
@@ -126,21 +127,29 @@ function TemplateThumb({ t }: { t: Template }) {
     const c = ref.current;
     const ctx = c?.getContext("2d");
     if (!c || !ctx) return;
-    const W = c.width, H = c.height;
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, t.colors[0]);
-    g.addColorStop(1, t.colors[1]);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    // Show each item as it looks once it has appeared (items that come later
-    // are drawn at their own time); skip the closing call-to-action.
+    let alive = true;
     const total = 10;
     const r = t.build(sampleValues(t), total);
-    for (const o of r.overlays) {
-      if (o.start >= total - 3) continue;
-      const at = o.start <= 2.6 && o.end > 2.6 ? 2.6 : o.start + 1.5;
-      drawOverlaysAt(ctx, [o], at, W, H);
-    }
+    // Draw after the template's fonts are ready (else the fallback font shows).
+    void ensureFonts(usedFonts(r.overlays)).then(() => { if (alive) paint(ctx, c, t.colors, r.overlays, total); });
+    return () => { alive = false; };
   }, [t]);
   return <canvas ref={ref} width={180} height={320} className="aspect-[9/16] w-full" data-testid="template-thumb" />;
+}
+
+/** Gradient background + the template items. */
+function paint(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement, colors: Template["colors"], overlays: ReturnType<Template["build"]>["overlays"], total: number) {
+  const W = c.width, H = c.height;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, colors[0]);
+  g.addColorStop(1, colors[1]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  // Show each item as it looks once it has appeared (items that come later
+  // are drawn at their own time); skip the closing call-to-action.
+  for (const o of overlays) {
+    if (o.start >= total - 3) continue;
+    const at = o.start <= 2.6 && o.end > 2.6 ? 2.6 : o.start + 1.5;
+    drawOverlaysAt(ctx, [o], at, W, H);
+  }
 }

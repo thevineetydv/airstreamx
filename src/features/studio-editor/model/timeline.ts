@@ -72,7 +72,9 @@ export function clipFromAsset(asset: MediaAsset): Clip {
     outPoint: asset.duration,
     speed: 1,
     look: DEFAULT_LOOK,
-    fit: "fit",
+    // Blurred copy of the video fills the empty bars (landscape video on a
+    // 9:16 canvas). Same-shape video fills the frame, so nothing changes there.
+    fit: "blur",
     panX: 0.5,
     panY: 0.5,
     transitionOut: null,
@@ -103,6 +105,18 @@ export function removeClip(clips: Clip[], id: string): Clip[] {
 }
 
 /** Move a clip one step left (-1) or right (+1). */
+/** Move a clip to a new position (drag to reorder). */
+export function moveClipTo(clips: Clip[], id: string, to: number): Clip[] {
+  const from = clips.findIndex((c) => c.id === id);
+  if (from < 0) return clips;
+  const target = Math.max(0, Math.min(clips.length - 1, to));
+  if (target === from) return clips;
+  const next = clips.slice();
+  const [c] = next.splice(from, 1);
+  next.splice(target, 0, c);
+  return next;
+}
+
 export function moveClip(clips: Clip[], id: string, dir: -1 | 1): Clip[] {
   const i = clips.findIndex((c) => c.id === id);
   const j = i + dir;

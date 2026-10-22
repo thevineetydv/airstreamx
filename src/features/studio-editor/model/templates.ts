@@ -59,12 +59,12 @@ function text(
   tpl: string,
   w: { start: number; end: number },
   value: string,
-  o: Partial<Pick<TextOverlay, "x" | "y" | "scale" | "color" | "style">> & { anim?: Partial<Animations> },
+  o: Partial<Pick<TextOverlay, "x" | "y" | "scale" | "color" | "style" | "font">> & { anim?: Partial<Animations> },
 ): TextOverlay {
   return {
     id: newId("ov"), kind: "text", template: tpl, ...w,
     x: o.x ?? 0.5, y: o.y ?? 0.5, scale: o.scale ?? 1,
-    text: value, color: o.color ?? "#ffffff", style: o.style ?? "outline",
+    text: value, color: o.color ?? "#ffffff", style: o.style ?? "outline", font: o.font,
     anim: o.anim ? anim(o.anim) : undefined,
   };
 }
@@ -188,7 +188,7 @@ export const TEMPLATES: Template[] = [
         transition: { type: "zoom", duration: 0.4 },
         musicId: "festive-dhol", musicVolume: 0.55,
         overlays: [
-          text(id, win(T, 0, Math.max(4, T * 0.5)), `${val(v, "festival", "Festival").toUpperCase()} SALE`, { y: 0.13, scale: 1.35, color: "#facc15", anim: { in: "pop", loop: "pulse", out: "fade" } }),
+          text(id, win(T, 0, Math.max(4, T * 0.5)), `${val(v, "festival", "Festival").toUpperCase()} SALE`, { y: 0.13, scale: 1.35, color: "#facc15", font: "hindi", anim: { in: "pop", loop: "pulse", out: "fade" } }),
           { id: newId("ov"), kind: "sticker", template: id, ...win(T, 0.3, T), x: 0.15, y: 0.28, scale: 0.9, emoji: "🎉", anim: anim({ in: "pop", loop: "shake" }) },
           { id: newId("ov"), kind: "sticker", template: id, ...win(T, 0.6, T), x: 0.86, y: 0.28, scale: 0.9, emoji: "🪔", anim: anim({ in: "pop", loop: "float" }) },
           {
@@ -221,7 +221,7 @@ export const TEMPLATES: Template[] = [
         transition: { type: "dip", duration: 0.3 },
         musicId: "bazaar-bounce", musicVolume: 0.6,
         overlays: [
-          text(id, win(T, 0, 3), val(v, "hook", "NO EXCUSES").toUpperCase(), { y: 0.14, scale: 1.4, anim: { in: "pop", loop: "shake", out: "fade" } }),
+          text(id, win(T, 0, 3), val(v, "hook", "NO EXCUSES").toUpperCase(), { y: 0.14, scale: 1.4, font: "impact", anim: { in: "pop", loop: "shake", out: "fade" } }),
           text(id, win(T, 0.8, offerAt), val(v, "business"), { y: 0.5, scale: 1, color: "#facc15", anim: { in: "slideUp", out: "fade" } }),
           { id: newId("ov"), kind: "sticker", template: id, ...win(T, 0.5, T), x: 0.85, y: 0.62, scale: 0.9, emoji: "💯", anim: anim({ in: "pop", loop: "pulse" }) },
           {

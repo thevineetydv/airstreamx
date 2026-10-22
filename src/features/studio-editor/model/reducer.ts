@@ -1,7 +1,7 @@
 // Editor state reducer. Every action is a plain object so Phase 6
 // (undo/redo) can simply keep a history of states.
 
-import { clipFromAsset, moveClip, removeClip, splitAt, trimClip } from "./timeline";
+import { clipFromAsset, moveClip, moveClipTo, removeClip, splitAt, trimClip } from "./timeline";
 import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
@@ -18,6 +18,7 @@ export type EditorAction =
   | { type: "split"; at: number }
   | { type: "delete"; id: string }
   | { type: "move"; id: string; dir: -1 | 1 }
+  | { type: "moveTo"; id: string; index: number }
   | { type: "trim"; id: string; edge: "in" | "out"; value: number }
   | { type: "addOverlay"; overlay: Overlay }
   | { type: "updateOverlay"; id: string; patch: OverlayPatch }
@@ -44,7 +45,9 @@ export const initialEditorState: EditorState = {
   overlays: [],
   selectedOverlayId: null,
   audio: initialAudio,
-  aspect: "auto",
+  // Most creators post Shorts / Reels, so new projects start vertical.
+  // "Auto" (follow the first video) is still one tap away in Canvas.
+  aspect: "9:16",
   layers: [],
   selectedLayerId: null,
   images: {},
@@ -91,6 +94,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     }
     case "move":
       return { ...state, clips: moveClip(state.clips, action.id, action.dir) };
+    case "moveTo": {
+      const clips = moveClipTo(state.clips, action.id, action.index);
+      return clips === state.clips ? state : { ...state, clips, selectedClipId: action.id };
+    }
     case "trim": {
       const clip = state.clips.find((c) => c.id === action.id);
       const asset = clip ? state.assets[clip.assetId] : undefined;
