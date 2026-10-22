@@ -7,12 +7,13 @@
 // Phase 6a: undo / redo, drafts saved on the device (auto-save, open, delete).
 // Phase 6b: layers (picture-in-picture video / picture) and keyframe animation.
 // Phase 7: ready-made animations (in / out / loop), auto-keyframe switch, clear keyframes.
+// Phase 8: templates (Food review, Shop offer, Cafe intro, Festival sale, Gym promo, City vlog).
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { historyReducer, initHistory } from "./model/history";
 import { DraftsList, RelinkPanel } from "./draft/DraftsPanel";
@@ -37,6 +38,10 @@ import { isWebCodecsSupported } from "./media/support";
 import LayerPanel from "./layers/LayerPanel";
 import { animatedEdit, clearKeyframes, keyframeAt, neighbourKey, propsAt, toggleKeyframe, type Animatable, type AnimProps } from "./model/keyframes";
 import type { Animations } from "./model/presets";
+import TemplatePanel from "./templates/TemplatePanel";
+import type { Template } from "./model/templates";
+import { rememberValues } from "./model/overlays";
+import { loadLibrary } from "./audio/library";
 import { layerEnd, loadImage, MAX_VIDEO_LAYERS, newImageLayer, newVideoLayer, type Layer, type LayerPatch } from "./model/layers";
 
 const ExportPanel = lazy(() => import("./export/ExportPanel"));
@@ -151,6 +156,23 @@ export default function StudioEditorPage() {
     }
   };
 
+  // ── Templates (Phase 8) ──
+  const [templateOpen, setTemplateOpen] = useState<"start" | "editor" | null>(null);
+  /** Chosen on the start screen; applied right after the videos are imported. */
+  const pendingTemplate = useRef<{ t: Template; values: Record<string, string> } | null>(null);
+
+  const applyTemplate = async (t: Template, values: Record<string, string>, total: number) => {
+    rememberValues({ area: values.area, business: values.business ?? values.place ?? values.name, phone: values.phone });
+    const result = t.build(values, total);
+    // Music is optional: if the library can't load (offline), the rest still applies.
+    const music = result.musicId
+      ? await loadLibrary().then((list) => list.find((m) => m.id === result.musicId) ?? null).catch(() => null)
+      : null;
+    dispatch({ type: "applyTemplate", result, music });
+    setTemplateOpen(null);
+    seek(0);
+  };
+
   const importFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setError(null);
@@ -168,6 +190,14 @@ export default function StudioEditorPage() {
     }
     setImporting(null);
     if (added.length) dispatch({ type: "addAssets", assets: added });
+    // Template picked on the start screen: apply it now that the videos are in.
+    // (Separate undo step, so Undo removes the template but keeps the videos.)
+    const pending = pendingTemplate.current;
+    if (pending && added.length) {
+      pendingTemplate.current = null;
+      const total = duration + added.reduce((s, a) => s + a.duration, 0);
+      await applyTemplate(pending.t, pending.values, total);
+    }
     if (failed.length) setError(failed.join(" "));
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -546,6 +576,19 @@ export default function StudioEditorPage() {
             onSkip={() => void finishOpen(relink, new Map())}
             onCancel={() => setRelink(null)}
           />
+        ) : templateOpen === "start" ? (
+          <div className="max-h-full w-full max-w-md overflow-y-auto">
+            <TemplatePanel
+              mode="start"
+              busy={!!importing}
+              onApply={(t, values) => {
+                pendingTemplate.current = { t, values };
+                fileInputRef.current?.click();
+              }}
+              onClose={() => { pendingTemplate.current = null; setTemplateOpen(null); }}
+            />
+            {importing && <p className="pb-3 text-center text-xs text-gray-400">{importing}</p>}
+          </div>
         ) : (
           <div className="flex max-h-full w-full flex-col items-center gap-6 overflow-y-auto py-6">
             <button
@@ -558,6 +601,16 @@ export default function StudioEditorPage() {
               <span className="font-bold">{importing ?? (openingId ? "Opening draft…" : "Import video")}</span>
               <span className="text-xs text-gray-500">Pick one or more clips from your phone</span>
             </button>
+            {supported && (
+              <button
+                onClick={() => setTemplateOpen("start")}
+                disabled={!!importing || !!openingId}
+                className="-mt-3 flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                data-testid="start-template"
+              >
+                <Sparkles size={16} /> Start with a template
+              </button>
+            )}
             {supported && <DraftsList onOpen={(id) => void openSavedDraft(id)} busyId={openingId} />}
           </div>
         )}
@@ -640,7 +693,11 @@ export default function StudioEditorPage() {
 
           {/* Panels: full width on phones, a centred column on desktop */}
           <div className="mx-auto w-full max-w-2xl" data-testid="panel-column">
-          {edit?.kind === "aspect" ? (
+          {templateOpen === "editor" ? (
+            <div className="max-h-[46vh] overflow-y-auto">
+              <TemplatePanel mode="editor" onApply={(t, values) => void applyTemplate(t, values, duration)} onClose={() => setTemplateOpen(null)} />
+            </div>
+          ) : edit?.kind === "aspect" ? (
             <AspectPanel aspect={aspect} onChange={(a) => dispatch({ type: "setAspect", aspect: a })} onDone={() => setEdit(null)} />
           ) : transitionIndex !== null ? (
             <TransitionPanel
@@ -718,7 +775,8 @@ export default function StudioEditorPage() {
                   <AddChip icon={<Check size={16} />} label="Done" onClick={() => dispatch({ type: "select", id: null })} testId="tool-deselect" />
                 </div>
               ) : (
-              <div className="grid grid-cols-6 gap-1 px-2 pt-2 text-[10px] font-semibold">
+              <div className="grid grid-cols-7 gap-1 px-2 pt-2 text-[10px] font-semibold">
+                <AddChip icon={<Sparkles size={16} />} label="Template" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setTemplateOpen("editor"); }} testId="tool-template" />
                 <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
                 <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
                 <AddChip icon={<MapPin size={16} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />

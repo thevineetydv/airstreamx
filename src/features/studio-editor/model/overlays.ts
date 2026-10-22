@@ -21,6 +21,8 @@ interface OverlayBase {
   keyframes?: Keyframe[];
   /** Ready-made in / out / loop animations (Phase 7). */
   anim?: Animations;
+  /** Set when a template added this item, so applying another template replaces it. */
+  template?: string;
 }
 
 export type TextStyle = "outline" | "box";
@@ -68,9 +70,9 @@ export const STICKERS = ["🔥", "😍", "😂", "👍", "❤️", "⭐", "🎉"
 
 // ── Remembered values (per device) so a shop owner does not retype them every video ──
 const MEMO_KEY = "studio-editor:overlay-memo";
-interface Memo { area?: string; business?: string; phone?: string }
+export interface Memo { area?: string; business?: string; phone?: string }
 
-function readMemo(): Memo {
+export function readMemo(): Memo {
   try { return JSON.parse(localStorage.getItem(MEMO_KEY) || "{}") as Memo; } catch { return {}; }
 }
 export function rememberOverlay(o: Overlay) {
@@ -84,6 +86,15 @@ export function rememberOverlay(o: Overlay) {
     }
     localStorage.setItem(MEMO_KEY, JSON.stringify(memo));
   } catch { /* storage blocked: ignore */ }
+}
+
+/** Remember values typed into a template form (same store as the overlays). */
+export function rememberValues(v: Memo) {
+  try {
+    const memo = readMemo();
+    for (const k of ["area", "business", "phone"] as const) if (v[k]?.trim()) memo[k] = v[k]!.trim();
+    localStorage.setItem(MEMO_KEY, JSON.stringify(memo));
+  } catch { /* ignore */ }
 }
 
 /** A new overlay that starts at the playhead, with sensible defaults per kind. */

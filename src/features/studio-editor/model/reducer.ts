@@ -9,6 +9,8 @@ import type { AspectRatio } from "./look";
 import type { Clip } from "./types";
 import { clampKeyframes } from "./keyframes";
 import { layerEnd, type ImageAsset, type Layer, type LayerPatch } from "./layers";
+import { lookFor, type TemplateResult } from "./templates";
+import type { MusicTrackInfo } from "./audio";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -31,7 +33,9 @@ export type EditorAction =
   | { type: "updateLayer"; id: string; patch: LayerPatch }
   | { type: "removeLayer"; id: string }
   | { type: "selectLayer"; id: string | null }
-  | { type: "orderLayer"; id: string; dir: -1 | 1 };
+  | { type: "orderLayer"; id: string; dir: -1 | 1 }
+  /** Apply a template (Phase 8). Replaces items from an earlier template. */
+  | { type: "applyTemplate"; result: TemplateResult; music: MusicTrackInfo | null };
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -181,6 +185,28 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       const layers = state.layers.slice();
       [layers[i], layers[j]] = [layers[j], layers[i]];
       return { ...state, layers };
+    }
+    case "applyTemplate": {
+      const r = action.result;
+      const last = state.clips.length - 1;
+      return {
+        ...state,
+        // Items from an earlier template go; things the creator added by hand stay.
+        overlays: [...state.overlays.filter((o) => !o.template), ...r.overlays],
+        aspect: r.aspect,
+        clips: state.clips.map((c, i) => ({
+          ...c,
+          look: lookFor(r.filter),
+          fit: r.fit,
+          transitionOut: i < last ? r.transition : c.transitionOut,
+        })),
+        audio: action.music
+          ? { ...state.audio, music: { track: action.music, volume: r.musicVolume, fadeOut: true }, duckMusic: true }
+          : state.audio,
+        selectedClipId: null,
+        selectedOverlayId: null,
+        selectedLayerId: null,
+      };
     }
     default:
       return state;
