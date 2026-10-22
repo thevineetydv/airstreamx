@@ -14,6 +14,8 @@ interface Props {
   recording: boolean;
   selectedVoiceId: string | null;
   onChange: (patch: Partial<AudioSettings>) => void;
+  /** Line the edit up with the music. Resolves to the BPM, or null (no clear beat). */
+  onBeatSync: () => Promise<number | null>;
   onVoiceChange: (id: string, patch: Partial<Pick<VoiceOver, "volume">>) => void;
   onVoiceDelete: (id: string) => void;
   onRecord: () => void;
@@ -24,7 +26,16 @@ interface Props {
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 export default function AudioPanel(props: Props) {
-  const { audio, time, recording, selectedVoiceId, onChange, onVoiceChange, onVoiceDelete, onRecord, onStopRecord, onDone } = props;
+  const { audio, time, recording, selectedVoiceId, onChange, onBeatSync, onVoiceChange, onVoiceDelete, onRecord, onStopRecord, onDone } = props;
+  const [syncState, setSyncState] = useState<"idle" | "busy" | "none" | "error">("idle");
+  const beatSync = async () => {
+    setSyncState("busy");
+    try {
+      setSyncState((await onBeatSync()) === null ? "none" : "idle");
+    } catch {
+      setSyncState("error");
+    }
+  };
   const [tracks, setTracks] = useState<MusicTrackInfo[] | null>(null);
   const [libError, setLibError] = useState<string | null>(null);
   const [picking, setPicking] = useState(!audio.music);
@@ -113,7 +124,7 @@ export default function AudioPanel(props: Props) {
             <div className="flex items-center gap-2">
               <Music size={16} className="text-emerald-400" />
               <span className="flex-1 truncate font-semibold">{audio.music.track.title}</span>
-              <button onClick={() => setPicking(true)} className="rounded-full border border-white/15 px-3 py-1 text-xs">Change</button>
+              <button onClick={() => setPicking(true)} className="rounded-full border border-white/15 px-3 py-1 text-xs" data-testid="audio-music-change">Change</button>
               <button onClick={() => onChange({ music: null })} className="rounded-full p-1.5 text-red-400" aria-label="Remove music" data-testid="audio-music-remove">
                 <Trash2 size={16} />
               </button>
@@ -132,6 +143,25 @@ export default function AudioPanel(props: Props) {
             <div className="flex flex-wrap gap-2 text-xs">
               <Toggle on={audio.music.fadeOut} onClick={() => audio.music && onChange({ music: { ...audio.music, fadeOut: !audio.music.fadeOut } })} label="Fade out at end" />
               <Toggle on={audio.duckMusic} onClick={() => onChange({ duckMusic: !audio.duckMusic })} label="Lower during voice-over" />
+            </div>
+            <div className="flex items-center gap-2 border-t border-white/10 pt-2">
+              <button
+                onClick={() => void beatSync()}
+                disabled={syncState === "busy"}
+                className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                data-testid="beat-sync"
+              >
+                🥁 {syncState === "busy" ? "Finding beats…" : audio.music.beat ? "Sync again" : "Beat sync"}
+              </button>
+              <span className="flex-1 text-[11px] leading-tight text-gray-400" data-testid="beat-sync-status">
+                {syncState === "none"
+                  ? "This track has no clear beat (calm music), so nothing was moved."
+                  : syncState === "error"
+                    ? "Could not read the music. Try again."
+                    : audio.music.beat
+                      ? `Synced · ${Math.round(audio.music.beat.bpm)} BPM — cuts, text and ending are on the beat.`
+                      : "Puts cuts, text and the ending on the music's beat."}
+              </span>
             </div>
           </div>
         )}

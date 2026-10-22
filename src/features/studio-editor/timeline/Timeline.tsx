@@ -27,6 +27,10 @@ interface TimelineProps {
   onSelectOverlay: (id: string) => void;
   onOverlayTime: (id: string, start: number, end: number) => void;
   musicTitle: string | null;
+  /** Beat marks on the music bar (after Beat sync). */
+  musicBeats: { t: number; bar: boolean }[];
+  /** Where the video starts in the music track (seconds). */
+  musicOffset: number;
   voiceOvers: { id: string; start: number; duration: number }[];
   selectedVoiceId: string | null;
   /** "music" or a voice-over id. */
@@ -45,7 +49,7 @@ interface TimelineProps {
 export default function Timeline(props: TimelineProps) {
   const { clips, assets, selectedId, time, duration, pxPerSec, onSeek, onScrubStart, onSelect, onTrim } = props;
   const { overlays, selectedOverlayId, onSelectOverlay, onOverlayTime } = props;
-  const { musicTitle, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
+  const { musicTitle, musicBeats, musicOffset, voiceOvers, selectedVoiceId, onSelectAudio, onMoveVoice } = props;
   const { onSelectTransition, selectedTransition } = props;
   const { layers, images, selectedLayerId, onSelectLayer, onLayerPatch, onReorder } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -250,6 +254,8 @@ export default function Timeline(props: TimelineProps) {
           {(musicTitle || voiceOvers.length > 0) && (
             <AudioTrack
               musicTitle={musicTitle}
+              musicBeats={musicBeats}
+              musicOffset={musicOffset}
               voiceOvers={voiceOvers}
               selectedId={selectedVoiceId}
               pxPerSec={pxPerSec}
@@ -342,6 +348,7 @@ function OverlayTrack(props: {
           <div
             key={o.id}
             data-testid={`overlay-bar-${o.kind}`}
+            data-start={o.start.toFixed(3)}
             data-selected={selected}
             onClick={(e) => { e.stopPropagation(); onSelect(o.id); }}
             onPointerDown={startDrag(o, "move")}
@@ -522,6 +529,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
     <div
       data-testid={`clip-${index}`}
       data-clip-block
+      data-duration={clipDuration(clip).toFixed(3)}
       data-selected={selected}
       data-dragging={dragging}
       onClick={(e) => { e.stopPropagation(); onSelect(clip.id); }}
@@ -573,6 +581,8 @@ const ClipBlock = memo(function ClipBlock({ clip, index, asset, selected, pxPerS
 
 function AudioTrack(props: {
   musicTitle: string | null;
+  musicBeats: { t: number; bar: boolean }[];
+  musicOffset: number;
   voiceOvers: { id: string; start: number; duration: number }[];
   selectedId: string | null;
   pxPerSec: number;
@@ -580,7 +590,7 @@ function AudioTrack(props: {
   onSelect: (id: string) => void;
   onMove: (id: string, start: number) => void;
 }) {
-  const { musicTitle, voiceOvers, selectedId, pxPerSec, duration, onSelect, onMove } = props;
+  const { musicTitle, musicBeats, musicOffset, voiceOvers, selectedId, pxPerSec, duration, onSelect, onMove } = props;
   const voiceTop = musicTitle ? LANE_H : 0;
   const height = (musicTitle ? LANE_H : 0) + (voiceOvers.length ? LANE_H : 0);
 
@@ -614,8 +624,19 @@ function AudioTrack(props: {
           className="absolute left-0 flex items-center overflow-hidden rounded-md bg-emerald-700/80 px-1.5 text-[10px] font-semibold text-white"
           style={{ width: duration * pxPerSec, height: LANE_H - 4, top: 0 }}
           data-testid="audio-bar-music"
+          data-offset={musicOffset.toFixed(3)}
         >
-          <span className="sticky left-0 truncate">🎵 {musicTitle}</span>
+          {/* Beat marks: tall = bar start. */}
+          {musicBeats.map((b) => (
+            <span
+              key={b.t}
+              className={`pointer-events-none absolute bottom-0 w-px ${b.bar ? "h-full bg-white/60" : "h-1/3 bg-white/40"}`}
+              style={{ left: b.t * pxPerSec }}
+              data-testid="beat-marker"
+              data-t={b.t.toFixed(3)}
+            />
+          ))}
+          <span className="sticky left-0 z-[1] truncate">🎵 {musicTitle}</span>
         </div>
       )}
       {voiceOvers.map((v, i) => {

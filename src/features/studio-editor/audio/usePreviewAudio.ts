@@ -51,7 +51,7 @@ export function usePreviewAudio({ playing, time, total, audio, recording }: Opti
         src.buffer = buffer;
         src.loop = true;
         src.connect(gain);
-        src.start(startAt, offsetT % buffer.duration);
+        src.start(startAt, ((music.offset ?? 0) + offsetT) % buffer.duration);
         // Stop at the end of the video.
         src.stop(startAt + Math.max(0, total - offsetT));
         nodes.push(src);

@@ -18,6 +18,23 @@ export interface MusicSettings {
   volume: number;
   /** Fade the music out over the last FADE_OUT seconds of the video. */
   fadeOut: boolean;
+  /** Where in the track the video starts (seconds). Missing = 0. */
+  offset?: number;
+  /** Beat grid of the track, set by "Beat sync" (track seconds). */
+  beat?: MusicBeat;
+}
+
+export interface MusicBeat {
+  bpm: number;
+  beats: number[];
+  /** Index of the first bar start in `beats` (bars = every 4 beats). */
+  downbeat: number;
+}
+
+/** Track position for timeline time t (music loops). */
+export function musicPosition(m: MusicSettings, t: number, trackDuration: number): number {
+  const p = (m.offset ?? 0) + t;
+  return trackDuration > 0 ? p % trackDuration : p;
 }
 
 export interface VoiceOver {

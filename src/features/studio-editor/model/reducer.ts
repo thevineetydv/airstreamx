@@ -1,7 +1,7 @@
 // Editor state reducer. Every action is a plain object so Phase 6
 // (undo/redo) can simply keep a history of states.
 
-import { clipFromAsset, moveClip, moveClipTo, removeClip, splitAt, trimClip } from "./timeline";
+import { clipDuration, clipFromAsset, moveClip, moveClipTo, removeClip, splitAt, trimClip } from "./timeline";
 import type { EditorState, MediaAsset } from "./types";
 import type { Overlay, OverlayPatch } from "./overlays";
 import { initialAudio, type AudioSettings, type VoiceOver } from "./audio";
@@ -10,7 +10,9 @@ import type { Clip } from "./types";
 import { clampKeyframes } from "./keyframes";
 import { layerEnd, type ImageAsset, type Layer, type LayerPatch } from "./layers";
 import { lookFor, type TemplateResult } from "./templates";
-import type { MusicTrackInfo } from "./audio";
+import type { MusicBeat, MusicTrackInfo } from "./audio";
+import { syncToBeats } from "./beatsync";
+import { timelineBeats } from "../audio/beats";
 
 export type EditorAction =
   | { type: "addAssets"; assets: MediaAsset[] }
@@ -36,7 +38,24 @@ export type EditorAction =
   | { type: "selectLayer"; id: string | null }
   | { type: "orderLayer"; id: string; dir: -1 | 1 }
   /** Apply a template (Phase 8). Replaces items from an earlier template. */
-  | { type: "applyTemplate"; result: TemplateResult; music: MusicTrackInfo | null };
+  | { type: "applyTemplate"; result: TemplateResult; music: MusicTrackInfo | null; sync?: BeatSyncInput | null }
+  | ({ type: "beatSync" } & BeatSyncInput);
+
+/** Beat grid of the current music + where the video starts in the track. */
+export interface BeatSyncInput {
+  beat: MusicBeat;
+  offset: number;
+}
+
+/** Set the music start + beat grid, then line cuts / ending / items up with the beats. */
+function withBeatSync(state: EditorState, sync: BeatSyncInput): EditorState {
+  const music = state.audio.music;
+  if (!music) return state;
+  const total = state.clips.reduce((s, c) => s + clipDuration(c), 0);
+  const beats = timelineBeats(sync.beat, sync.offset, music.track.duration, total);
+  const r = syncToBeats(state.clips, state.overlays, state.assets, beats);
+  return { ...state, clips: r.clips, overlays: r.overlays, audio: { ...state.audio, music: { ...music, offset: sync.offset, beat: sync.beat } } };
+}
 
 export const initialEditorState: EditorState = {
   assets: {},
@@ -193,10 +212,12 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       [layers[i], layers[j]] = [layers[j], layers[i]];
       return { ...state, layers };
     }
+    case "beatSync":
+      return withBeatSync(state, action);
     case "applyTemplate": {
       const r = action.result;
       const last = state.clips.length - 1;
-      return {
+      const applied: EditorState = {
         ...state,
         // Items from an earlier template go; things the creator added by hand stay.
         overlays: [...state.overlays.filter((o) => !o.template), ...r.overlays],
@@ -214,6 +235,8 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         selectedOverlayId: null,
         selectedLayerId: null,
       };
+      // Same undo step: template + beat sync together.
+      return action.sync && applied.audio.music ? withBeatSync(applied, action.sync) : applied;
     }
     default:
       return state;

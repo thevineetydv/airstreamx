@@ -10,7 +10,7 @@
 // Phase 8: templates (Food review, Shop offer, Cafe intro, Festival sale, Gym promo, City vlog).
 // Loaded lazily on /studio/editor so the rest of the site stays light.
 
-import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
@@ -42,6 +42,8 @@ import TemplatePanel from "./templates/TemplatePanel";
 import type { Template } from "./model/templates";
 import { rememberValues } from "./model/overlays";
 import { loadLibrary } from "./audio/library";
+import { beatSyncFor } from "./audio/beatCache";
+import { timelineBeats } from "./audio/beats";
 import { layerEnd, loadImage, MAX_VIDEO_LAYERS, newImageLayer, newVideoLayer, type Layer, type LayerPatch } from "./model/layers";
 
 const ExportPanel = lazy(() => import("./export/ExportPanel"));
@@ -168,9 +170,28 @@ export default function StudioEditorPage() {
     const music = result.musicId
       ? await loadLibrary().then((list) => list.find((m) => m.id === result.musicId) ?? null).catch(() => null)
       : null;
-    dispatch({ type: "applyTemplate", result, music });
+    // Beat sync: cuts, ending and text on the beat; music starts at its liveliest part.
+    const sync = music ? await beatSyncFor(music, total).catch(() => null) : null;
+    dispatch({ type: "applyTemplate", result, music, sync });
     setTemplateOpen(null);
     seek(0);
+  };
+
+  // ── Beat sync (Phase 10) ──
+  const musicBeats = useMemo(() => {
+    const m = audio.music;
+    return m?.beat ? timelineBeats(m.beat, m.offset ?? 0, m.track.duration, duration) : [];
+  }, [audio.music, duration]);
+  /** Returns the BPM, or null when the track has no clear beat. */
+  const runBeatSync = async (): Promise<number | null> => {
+    const m = audio.music;
+    if (!m) return null;
+    pause();
+    const s = await beatSyncFor(m.track, duration);
+    if (!s) return null;
+    dispatch({ type: "beatSync", beat: s.beat, offset: s.offset });
+    seek(0);
+    return s.bpm;
   };
 
   const importFiles = async (files: FileList | null) => {
@@ -686,6 +707,8 @@ export default function StudioEditorPage() {
             onSelectOverlay={selectOverlayFromTimeline}
             onOverlayTime={setOverlayTime}
             musicTitle={audio.music?.track.title ?? null}
+            musicBeats={musicBeats}
+            musicOffset={audio.music?.offset ?? 0}
             voiceOvers={audio.voiceOvers.map((v) => ({ id: v.id, start: v.start, duration: v.buffer.duration }))}
             selectedVoiceId={audioOpen ? selectedVoiceId : null}
             onSelectAudio={onSelectAudio}
@@ -735,6 +758,7 @@ export default function StudioEditorPage() {
               recording={recorder.recording}
               selectedVoiceId={selectedVoiceId}
               onChange={setAudio}
+              onBeatSync={runBeatSync}
               onVoiceChange={(id, patch) => dispatch({ type: "updateVoiceOver", id, patch })}
               onVoiceDelete={(id) => dispatch({ type: "removeVoiceOver", id })}
               onRecord={() => void startRecording()}

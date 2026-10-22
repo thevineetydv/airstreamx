@@ -127,7 +127,7 @@ export async function mixTimeline(o: MixOptions): Promise<void> {
         node.buffer = musicBuffer;
         node.loop = true;
         node.connect(gain);
-        node.start(0, T0 % musicBuffer.duration);
+        node.start(0, ((audio.music?.offset ?? 0) + T0) % musicBuffer.duration);
       }
 
       // 3) Voice-overs.
