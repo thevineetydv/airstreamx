@@ -27,7 +27,7 @@ function autoColor(layerId: string): string | null {
 
 export default function GreenScreen({ layerId, chroma, onChange }: Props) {
   const is = (k: ChromaKey) => chroma?.color === k.color;
-  const chip = (on: boolean) => `rounded-full px-3 py-1 ${on ? "bg-red-600 text-white" : "bg-white/10 text-gray-300"}`;
+  const chip = (on: boolean) => `rounded-full px-3 py-2 ${on ? "bg-red-600 text-white" : "bg-white/10 text-gray-300"}`;
   const custom = chroma && !is(GREEN_KEY) && !is(BLUE_KEY);
   return (
     <div className="space-y-2 rounded-2xl bg-white/5 p-3" data-testid="green-screen">

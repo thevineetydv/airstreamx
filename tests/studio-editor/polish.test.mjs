@@ -42,6 +42,9 @@ function whiteCount(buf, y0, y1) {
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium" });
 const context = await browser.newContext({ viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, acceptDownloads: true });
 const page = await context.newPage();
+// These checks use style / font / animation / keyframe controls, which live
+// under "More options" + Pro mode since Phase 12: open both for the test.
+await context.addInitScript(() => localStorage.setItem("studio-editor-prefs", JSON.stringify({ more: true, pro: true })));
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(e.message));
 const firstThumb = (i) => page.getByTestId(`clip-${i}`).locator("img").first().getAttribute("src");

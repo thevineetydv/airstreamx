@@ -57,6 +57,9 @@ const isGreen = (r, g, b) => g > 120 && r < 110 && b < 110;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium" });
 const context = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, acceptDownloads: true });
 const page = await context.newPage();
+// These checks use style / font / animation / keyframe controls, which live
+// under "More options" + Pro mode since Phase 12: open both for the test.
+await context.addInitScript(() => localStorage.setItem("studio-editor-prefs", JSON.stringify({ more: true, pro: true })));
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(e.message));
 let n = 0;
@@ -137,9 +140,7 @@ try {
   execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", "1.5", "-i", out4, "-frames:v", "1", path.join(SHOTS, "p11-04-neon.png")]);
 
   // ── Brand kit ──
-  const tools = await page.getByTestId("add-tools").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, n: el.children.length }));
-  check("Tool row has 8 tools and scrolls sideways", tools.n === 8, `${tools.n} tools, ${tools.sw}/${tools.cw}px`);
-  await page.getByTestId("tool-brand").scrollIntoViewIfNeeded();
+  await page.getByTestId("tool-more").click();
   await page.getByTestId("tool-brand").click();
   await page.getByTestId("brand-logo-input").setInputFiles([LOGO]);
   await page.getByTestId("brand-logo-preview").waitFor();
@@ -151,7 +152,7 @@ try {
   check("Logo added as a layer", (await page.locator('[data-testid="layer-bar-image"]').count()) === 2);
   check("The new logo layer is selected (to move it)", await page.getByTestId("layer-panel").isVisible());
   await page.getByTestId("layer-done").click();
-  await page.getByTestId("tool-brand").scrollIntoViewIfNeeded();
+  await page.getByTestId("tool-more").click();
   await page.getByTestId("tool-brand").click();
   await page.screenshot({ path: `${SHOTS}/p11-05-brand-kit.png` });
   await page.getByTestId("brand-done").click();
@@ -176,7 +177,7 @@ try {
   await page.getByTestId("clip-0").waitFor({ timeout: 30000 });
   await page.getByTestId("layer-bar-image").waitFor({ timeout: 10000 });
   check("After reload: template gets the saved logo", (await page.locator('[data-testid="layer-bar-image"]').count()) === 1);
-  await page.getByTestId("tool-brand").scrollIntoViewIfNeeded();
+  await page.getByTestId("tool-more").click();
   await page.getByTestId("tool-brand").click();
   check("After reload: logo + colour still saved", (await page.getByTestId("brand-logo-preview").isVisible()) && (await page.getByTestId("brand-color").count()) === 1);
   check("Logo button shows it is already on", await page.getByTestId("brand-add-logo").isDisabled());

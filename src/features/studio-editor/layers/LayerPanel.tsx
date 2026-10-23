@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import KeyframeControls, { type KeyframeProps } from "../overlays/KeyframeControls";
 import AnimationPicker from "../overlays/AnimationPicker";
 import GreenScreen from "./GreenScreen";
+import MoreOptions from "../overlays/MoreOptions";
 import type { Animations } from "../model/presets";
 import { layerEnd, MAX_LAYER_SCALE, MIN_LAYER_SCALE, type Layer, type LayerPatch } from "../model/layers";
 import { formatTime } from "../model/timeline";
@@ -24,7 +25,7 @@ interface Props {
 
 export default function LayerPanel({ layer: l, name, index, count, onChange, onOrder, onDelete, onDone, anim, presets }: Props) {
   return (
-    <div className="max-h-[44vh] space-y-3 overflow-y-auto px-3 py-3 text-sm" data-testid="layer-panel">
+    <div className="space-y-3 px-3 py-3 text-sm" data-testid="layer-panel">
       <div className="flex items-center justify-between gap-2">
         <h3 className="min-w-0 truncate font-bold text-white">{l.kind === "video" ? "🎬" : "🖼"} {name}</h3>
         <div className="flex shrink-0 items-center gap-1">
@@ -37,7 +38,6 @@ export default function LayerPanel({ layer: l, name, index, count, onChange, onO
 
       <GreenScreen layerId={l.id} chroma={l.chroma} onChange={(chroma) => onChange({ chroma })} />
 
-      <AnimationPicker anim={presets.anim} isText={false} onChange={presets.onChange} onPreview={presets.onPreview} />
       <KeyframeControls {...anim} scaleMin={MIN_LAYER_SCALE} scaleMax={MAX_LAYER_SCALE} />
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -78,6 +78,9 @@ export default function LayerPanel({ layer: l, name, index, count, onChange, onO
         {formatTime(l.start)} → {formatTime(layerEnd(l))}
         <span className="text-gray-500"> · drag on the video to move, drag the bar to change timing</span>
       </p>
+      <MoreOptions label="animation">
+        <AnimationPicker anim={presets.anim} isText={false} onChange={presets.onChange} onPreview={presets.onPreview} />
+      </MoreOptions>
     </div>
   );
 }

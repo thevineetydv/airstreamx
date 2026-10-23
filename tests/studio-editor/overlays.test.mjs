@@ -54,6 +54,9 @@ const context = await browser.newContext({
   viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, acceptDownloads: true,
 });
 const page = await context.newPage();
+// These checks use style / font / animation / keyframe controls, which live
+// under "More options" + Pro mode since Phase 12: open both for the test.
+await context.addInitScript(() => localStorage.setItem("studio-editor-prefs", JSON.stringify({ more: true, pro: true })));
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(e.message));
 
@@ -114,12 +117,14 @@ try {
   await page.getByTestId("overlay-done").click();
 
   // ── Area tag ──
+  await page.getByTestId("tool-more").click();
   await page.getByTestId("tool-area").click();
   await page.getByTestId("overlay-area").fill("Hazratganj, Lucknow");
   await page.screenshot({ path: `${SHOTS}/p2-02-area.png` });
   await page.getByTestId("overlay-done").click();
 
   // ── Local Deal ──
+  await page.getByTestId("tool-more").click();
   await page.getByTestId("tool-deal").click();
   await page.getByTestId("deal-offer").fill("Buy 1 Get 1");
   await page.getByTestId("deal-business").fill("Sharma Chaat Corner");

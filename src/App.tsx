@@ -172,13 +172,13 @@ function AppContent() {
 
           <main
             className={`flex flex-1 w-full
-              ${isEditorPage ? "h-[100dvh]" : (isFullscreen || isShortsPage) ? "h-screen" : "h-[calc(100vh-64px)]"}
+              ${isEditorPage ? "h-[100dvh] max-h-[100dvh] min-h-0" : (isFullscreen || isShortsPage) ? "h-screen" : "h-[calc(100vh-64px)]"}
               ${isWatchPage || isLivePage || isFullBleed ? "px-0 py-0" : "px-4 md:px-6 py-4"}
               ${!isWatchPage && !isLivePage && !isEditorPage ? "pb-20 md:pb-4" : ""}
               overflow-hidden`}
           >
             <section
-              className={`flex-1 min-w-0 ${
+              className={`flex-1 min-w-0 min-h-0 ${
                 isFullBleed ? "overflow-hidden" : "overflow-y-auto custom-scrollbar"
               }`}
             >

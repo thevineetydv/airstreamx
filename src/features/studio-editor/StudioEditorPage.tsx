@@ -13,7 +13,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, BadgeCheck, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, BadgeCheck, Check, CloudOff, MoreHorizontal, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { historyReducer, initHistory } from "./model/history";
 import { DraftsList, RelinkPanel } from "./draft/DraftsPanel";
@@ -163,6 +163,7 @@ export default function StudioEditorPage() {
   // ── Brand kit (Phase 11) ──
   const [brand, setBrand] = useState<Brand>(readBrand);
   const [brandOpen, setBrandOpen] = useState(false);
+  const [moreTools, setMoreTools] = useState(false);
   /** Saved logo as a picture layer, top-right, for the whole video. */
   const addBrandLogo = async (b: Brand, total = duration, select = true) => {
     const file = await logoFile(b).catch(() => null);
@@ -244,7 +245,6 @@ export default function StudioEditorPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const selectedIndex = clips.findIndex((c) => c.id === selectedClipId);
 
   // Trim a clip and park the playhead on the dragged edge so the preview shows that frame.
   const clipsRef = useRef(clips);
@@ -269,18 +269,7 @@ export default function StudioEditorPage() {
     pause();
     dispatch({ type: "delete", id: selectedClipId });
   };
-  const move = (dir: -1 | 1) => {
-    if (!selectedClipId) return;
-    pause();
-    dispatch({ type: "move", id: selectedClipId, dir });
-    // Keep the playhead on the moved clip.
-    const nextIndex = selectedIndex + dir;
-    if (nextIndex >= 0 && nextIndex < clips.length) {
-      const moved = clips.slice();
-      [moved[selectedIndex], moved[nextIndex]] = [moved[nextIndex], moved[selectedIndex]];
-      seek(clipStarts(moved)[nextIndex] + 0.001);
-    }
-  };
+
 
   // ── Overlays ──
   const selectedOverlay = overlays.find((o) => o.id === selectedOverlayId) ?? null;
@@ -532,6 +521,8 @@ export default function StudioEditorPage() {
   const selectedClip = clips.find((c) => c.id === selectedClipId) ?? null;
   const editClip = edit?.kind === "clip" ? clips.find((c) => c.id === edit.id) ?? null : null;
   const transitionIndex = edit?.kind === "transition" && edit.index < clips.length - 1 ? edit.index : null;
+  /** A settings panel is open → the timeline gets shorter to leave it room. */
+  const panelOpen = brandOpen || templateOpen === "editor" || !!edit || audioOpen || !!selectedLayer || !!selectedOverlay;
 
   const selectTransition = (i: number) => {
     openEdit({ kind: "transition", index: i });
@@ -563,7 +554,7 @@ export default function StudioEditorPage() {
         {hasClips && (
           <button
             onClick={() => openEdit({ kind: "aspect" })}
-            className="flex items-center gap-1 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold"
+            className="flex items-center gap-1 rounded-full border border-white/15 px-3 py-2 text-xs font-semibold"
             data-testid="open-aspect"
           >
             <RectangleHorizontal size={14} /> {aspect === "auto" ? `Auto (${stage.width > stage.height ? "16:9" : "9:16"})` : aspect}
@@ -589,7 +580,8 @@ export default function StudioEditorPage() {
       )}
 
       {/* Preview */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
+      {/* Preview: takes the free space, never less than ~28% of the screen. */}
+      <div className={`relative flex flex-1 items-center justify-center bg-zinc-950 ${hasClips ? "min-h-[28dvh]" : "min-h-0"}`}>
         {hasClips ? (
           <PreviewStage
             videoRefs={videoRefs}
@@ -692,9 +684,12 @@ export default function StudioEditorPage() {
       />
 
       {hasClips && (
-        <div className="shrink-0 border-t border-white/10 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]">
+        // Bottom area: play row + timeline keep their size, the panel column
+        // gets what is left and scrolls inside — the page itself never scrolls,
+        // so the header (Export / Undo) and the tools always stay on screen.
+        <div className="flex min-h-0 shrink flex-col border-t border-white/10 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]" data-testid="bottom-area">
           {/* Play row */}
-          <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex shrink-0 items-center justify-between px-3 py-1.5">
             <span className="w-24 text-xs tabular-nums text-gray-300" data-testid="time-label">
               {formatTime(time)} / {formatTime(duration)}
             </span>
@@ -712,6 +707,7 @@ export default function StudioEditorPage() {
           </div>
 
           <Timeline
+            compact={panelOpen}
             clips={clips}
             assets={assets}
             selectedId={selectedClipId}
@@ -744,7 +740,7 @@ export default function StudioEditorPage() {
           />
 
           {/* Panels: full width on phones, a centred column on desktop */}
-          <div className="mx-auto w-full max-w-2xl" data-testid="panel-column">
+          <div className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto overscroll-contain" data-testid="panel-column">
           {brandOpen ? (
             <BrandPanel
               brand={brand}
@@ -754,7 +750,7 @@ export default function StudioEditorPage() {
               onClose={() => setBrandOpen(false)}
             />
           ) : templateOpen === "editor" ? (
-            <div className="max-h-[46vh] overflow-y-auto">
+            <div>
               <TemplatePanel mode="editor" onApply={(t, values) => void applyTemplate(t, values, duration)} onClose={() => setTemplateOpen(null)} />
             </div>
           ) : edit?.kind === "aspect" ? (
@@ -837,24 +833,31 @@ export default function StudioEditorPage() {
                   <AddChip icon={<Check size={16} />} label="Done" onClick={() => dispatch({ type: "select", id: null })} testId="tool-deselect" />
                 </div>
               ) : (
-              // Scrolls sideways on small phones (8 tools).
-              <div className="flex gap-1 overflow-x-auto px-2 pt-2 text-[10px] font-semibold [scrollbar-width:none] [&>button]:min-w-[3.4rem] [&>button]:flex-1" data-testid="add-tools">
-                <AddChip icon={<Sparkles size={16} />} label="Template" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setTemplateOpen("editor"); }} testId="tool-template" />
-                <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
-                <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
-                <AddChip icon={<MapPin size={16} />} label="Area" onClick={() => addOverlay("area")} testId="tool-area" />
-                <AddChip icon={<Tag size={16} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
-                <AddChip icon={<Music size={16} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
-                <AddChip icon={<LayersIcon size={16} />} label="Layer" onClick={() => layerInputRef.current?.click()} testId="tool-layer" />
-                <AddChip icon={<BadgeCheck size={16} />} label="Brand" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setBrandOpen(true); }} testId="tool-brand" />
+              // Main tools; the less common ones sit behind "More".
+              <div className="grid grid-cols-5 gap-1.5 px-2 pt-2 text-[11px] font-semibold" data-testid="add-tools">
+                {!moreTools ? (
+                  <>
+                    <AddChip icon={<Sparkles size={18} />} label="Template" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setTemplateOpen("editor"); }} testId="tool-template" />
+                    <AddChip icon={<Type size={18} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
+                    <AddChip icon={<Smile size={18} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
+                    <AddChip icon={<Music size={18} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
+                    <AddChip icon={<MoreHorizontal size={18} />} label="More" onClick={() => setMoreTools(true)} testId="tool-more" />
+                  </>
+                ) : (
+                  <>
+                    <AddChip icon={<MapPin size={18} />} label="Area" onClick={() => { setMoreTools(false); addOverlay("area"); }} testId="tool-area" />
+                    <AddChip icon={<Tag size={18} />} label="Deal" onClick={() => { setMoreTools(false); addOverlay("deal"); }} testId="tool-deal" />
+                    <AddChip icon={<LayersIcon size={18} />} label="Layer" onClick={() => { setMoreTools(false); layerInputRef.current?.click(); }} testId="tool-layer" />
+                    <AddChip icon={<BadgeCheck size={18} />} label="Brand" onClick={() => { setMoreTools(false); pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setBrandOpen(true); }} testId="tool-brand" />
+                    <AddChip icon={<ArrowLeft size={18} />} label="Back" onClick={() => setMoreTools(false)} testId="tool-back" />
+                  </>
+                )}
               </div>
               )}
-              {/* Clip tools */}
-              <div className="grid grid-cols-5 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
+              {/* Clip tools (reorder = long-press + drag on the timeline) */}
+              <div className="grid grid-cols-3 gap-1 px-2 py-1.5 text-[11px] text-gray-300">
                 <ToolButton icon={<Scissors size={20} />} label="Split" onClick={splitHere} testId="tool-split" />
                 <ToolButton icon={<Trash2 size={20} />} label="Delete" onClick={deleteSelected} disabled={!selectedClipId} testId="tool-delete" />
-                <ToolButton icon={<ChevronLeft size={20} />} label="Move left" onClick={() => move(-1)} disabled={selectedIndex <= 0} testId="tool-left" />
-                <ToolButton icon={<ChevronRight size={20} />} label="Move right" onClick={() => move(1)} disabled={selectedIndex < 0 || selectedIndex >= clips.length - 1} testId="tool-right" />
                 <ToolButton icon={<Plus size={20} />} label="Add clip" onClick={() => fileInputRef.current?.click()} disabled={!!importing} testId="tool-add" />
               </div>
             </>
@@ -891,7 +894,7 @@ function AddChip(props: { icon: React.ReactNode; label: string; onClick: () => v
     <button
       onClick={props.onClick}
       data-testid={props.testId}
-      className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/10 py-1.5 text-white active:bg-white/20"
+      className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-xl bg-white/10 py-1.5 text-white active:bg-white/20"
     >
       {props.icon}
       {props.label}

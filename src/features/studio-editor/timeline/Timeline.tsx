@@ -10,6 +10,8 @@ import { layerEnd, MIN_LAYER, type ImageAsset, type Layer, type LayerPatch } fro
 import type { Keyframe } from "../model/keyframes";
 
 interface TimelineProps {
+  /** Shorter timeline while a panel is open (lanes scroll inside). */
+  compact?: boolean;
   clips: Clip[];
   assets: Record<string, MediaAsset>;
   selectedId: string | null;
@@ -117,6 +119,20 @@ export default function Timeline(props: TimelineProps) {
   const expectedScroll = useRef(-1);
   const [half, setHalf] = useState(0);
 
+  // The selected item's lane may be scrolled out of the (height-capped)
+  // timeline: bring it into view vertically (never touches the time position).
+  const selectedItem = selectedOverlayId ?? selectedLayerId;
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || !selectedItem) return;
+    const bar = sc.querySelector<HTMLElement>(`[data-item-id="${selectedItem}"]`);
+    if (!bar) return;
+    const br = bar.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    const rulerH = 20; // sticky ruler covers the top
+    if (br.top < sr.top + rulerH) sc.scrollTop -= sr.top + rulerH - br.top + 4;
+    else if (br.bottom > sr.bottom) sc.scrollTop += br.bottom - sr.bottom + 4;
+  }, [selectedItem, props.compact]);
+
   // Half of the visible width = the padding that lets t=0 and t=end reach the centre line.
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -166,12 +182,15 @@ export default function Timeline(props: TimelineProps) {
         ref={scrollRef}
         onScroll={handleScroll}
         onPointerDown={onScrubStart}
-        className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // Many items = many lanes: they scroll up/down inside the timeline,
+        // so the timeline never pushes the tools / panels off the screen.
+        className="overflow-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ maxHeight: props.compact ? "min(20dvh, 150px)" : "min(27dvh, 200px)" }}
         data-testid="timeline-scroll"
       >
         <div style={{ paddingLeft: half, paddingRight: half }} className="w-max">
           {/* Ruler */}
-          <div className="relative h-5" style={{ width: duration * pxPerSec }}>
+          <div className="sticky top-0 z-[15] h-5 bg-[#0b0b0b]" style={{ width: duration * pxPerSec }}>
             {ticks.map((t) => (
               <span
                 key={t}
@@ -204,7 +223,7 @@ export default function Timeline(props: TimelineProps) {
                   <div className="relative z-20 w-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); onSelectTransition(i); }}
-                      className={`absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border text-[11px] font-bold shadow ${
+                      className={`absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border text-xs font-bold shadow ${
                         selectedTransition === i
                           ? "border-white bg-red-600 text-white"
                           : clip.transitionOut && clip.transitionOut.type !== "none"
@@ -348,6 +367,7 @@ function OverlayTrack(props: {
           <div
             key={o.id}
             data-testid={`overlay-bar-${o.kind}`}
+            data-item-id={o.id}
             data-start={o.start.toFixed(3)}
             data-selected={selected}
             onClick={(e) => { e.stopPropagation(); onSelect(o.id); }}
@@ -456,6 +476,7 @@ function LayerTrack(props: {
           <div
             key={l.id}
             data-testid={`layer-bar-${l.kind}`}
+            data-item-id={l.id}
             data-selected={selected}
             onClick={(e) => { e.stopPropagation(); onSelect(l.id); }}
             onPointerDown={startDrag(l, "move")}

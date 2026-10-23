@@ -104,7 +104,17 @@ try {
   await page.screenshot({ path: `${SHOTS}/03-trimmed.png` });
 
   // 5. Move the first clip to the right (portrait clip first now).
-  await page.getByTestId("tool-right").click();
+  // (Phase 12: no Move buttons — long-press the clip and drag it.)
+  {
+    const a = await page.getByTestId("clip-0").boundingBox();
+    const b = await page.getByTestId("clip-1").boundingBox();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(550);
+    await page.mouse.move(b.x + b.width * 0.85, a.y + a.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
   check("Move right keeps 2 clips", (await page.locator('[data-testid^="clip-"]').count()) === 2);
 
   // 6. Play from start for ~1.2s.
