@@ -59,7 +59,7 @@ export function ClipPanel({ clip, asset, tab, onTab, onChange, onApplyLookToAll,
   const sourceLen = clip.outPoint - clip.inPoint;
 
   return (
-    <div className="max-h-[46vh] space-y-3 overflow-y-auto px-3 py-3" data-testid="clip-panel">
+    <div className="space-y-3 px-3 py-3" data-testid="clip-panel">
       <Header title="Edit clip" onDone={onDone} testId="clip-done" />
       <div className="flex gap-1.5">
         <Chip on={tab === "speed"} onClick={() => onTab("speed")} testId="clip-tab-speed">Speed</Chip>

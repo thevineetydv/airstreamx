@@ -4,6 +4,7 @@
 
 import { ChevronLeft, ChevronRight, Diamond } from "lucide-react";
 import type { AnimProps } from "../model/keyframes";
+import { usePrefs } from "../model/prefs";
 
 export interface KeyframeProps {
   values: AnimProps;
@@ -23,6 +24,9 @@ export interface KeyframeProps {
 }
 
 export default function KeyframeControls(p: KeyframeProps) {
+  // Keyframe tools only in Pro mode — or when this item already has keyframes,
+  // so they can still be seen and cleared.
+  const { pro } = usePrefs();
   return (
     <div className="space-y-2" data-testid="keyframe-controls">
       <label className="flex items-center gap-3 text-xs text-gray-400">
@@ -46,6 +50,8 @@ export default function KeyframeControls(p: KeyframeProps) {
         />
         <span className="w-9 text-right tabular-nums">{Math.round(p.values.opacity * 100)}%</span>
       </label>
+      {(pro || p.keyCount > 0) && (
+      <>
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400">Animate</span>
         <button onClick={p.onPrev ?? undefined} disabled={!p.onPrev} className="rounded-full p-1.5 hover:bg-white/10 disabled:opacity-30" aria-label="Previous keyframe" data-testid="key-prev">
@@ -87,6 +93,8 @@ export default function KeyframeControls(p: KeyframeProps) {
             ? "Auto ON: moving or resizing anywhere adds a keyframe there."
             : "Auto OFF: on a ◆ you edit that keyframe; elsewhere the whole animation moves together."}
       </p>
+      </>
+      )}
     </div>
   );
 }

@@ -56,10 +56,10 @@ export default function AudioPanel(props: Props) {
     const panel = panelRef.current;
     const item = selectedVoiceId ? voiceRefs.current[selectedVoiceId] : null;
     if (!panel || !item) return;
-    const top = item.offsetTop; // panel is the offsetParent (position: relative)
-    if (top < panel.scrollTop || top + item.offsetHeight > panel.scrollTop + panel.clientHeight) {
-      panel.scrollTop = Math.max(0, top - 8);
-    }
+    // The panel column is the scroller (Phase 12 layout).
+    const sc = panel.closest<HTMLElement>('[data-testid="panel-column"]') ?? panel;
+    const ir = item.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    if (ir.top < sr.top || ir.bottom > sr.bottom) sc.scrollTop += ir.top - sr.top - 8;
   }, [selectedVoiceId]);
 
   const toggleSample = (t: MusicTrackInfo) => {
@@ -80,7 +80,7 @@ export default function AudioPanel(props: Props) {
   };
 
   return (
-    <div ref={panelRef} className="relative max-h-[46vh] space-y-4 overflow-y-auto px-3 py-3 text-sm" data-testid="audio-panel">
+    <div ref={panelRef} className="relative space-y-4 px-3 py-3 text-sm" data-testid="audio-panel">
       <div className="sticky -top-3 z-10 -mx-3 -mt-3 flex items-center justify-between bg-[#0b0b0b] px-3 py-2">
         <h3 className="font-bold text-white">Audio</h3>
         <button onClick={onDone} disabled={recording} className="rounded-full bg-white/10 px-4 py-1.5 font-semibold disabled:opacity-40" data-testid="audio-done">
@@ -94,7 +94,7 @@ export default function AudioPanel(props: Props) {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Original sound</span>
           <button
             onClick={() => onChange({ originalMuted: !audio.originalMuted })}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${audio.originalMuted ? "bg-red-600 text-white" : "bg-white/10"}`}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs ${audio.originalMuted ? "bg-red-600 text-white" : "bg-white/10"}`}
             data-testid="audio-mute-original"
           >
             {audio.originalMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}

@@ -57,6 +57,9 @@ function highDb(file) {
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium" });
 const context = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, acceptDownloads: true });
 const page = await context.newPage();
+// These checks use style / font / animation / keyframe controls, which live
+// under "More options" + Pro mode since Phase 12: open both for the test.
+await context.addInitScript(() => localStorage.setItem("studio-editor-prefs", JSON.stringify({ more: true, pro: true })));
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(e.message));
 

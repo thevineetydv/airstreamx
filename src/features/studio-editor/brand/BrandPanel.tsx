@@ -24,7 +24,7 @@ export default function BrandPanel({ brand, onChange, onAddLogo, hasLogoLayer, o
   };
 
   return (
-    <div className="max-h-[46vh] space-y-4 overflow-y-auto px-3 py-3 text-sm" data-testid="brand-panel">
+    <div className="space-y-4 px-3 py-3 text-sm" data-testid="brand-panel">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-white">🏷️ Brand kit</h3>
         <button onClick={onClose} className="rounded-full bg-white/10 px-4 py-1.5 font-semibold" data-testid="brand-done">Done</button>
