@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Bell } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import type Hls from "hls.js";
+import type Hls from "hls.js/light";
 import ShortsSection from "../components/ShortsSection";
 import SponsoredBanner from "../components/SponsoredBanner";
 import { API_URL } from "../utils/constants";
@@ -328,7 +328,7 @@ function useVideoPreview(videoUrl: string | undefined) {
 
       if (videoUrl.endsWith(".m3u8")) {
         // Loaded on-demand — only desktop hover users ever pay this cost.
-        const { default: HlsCtor } = await import("hls.js");
+        const { default: HlsCtor } = await import("hls.js/light");
 
         if (HlsCtor.isSupported()) {
           const hls = new HlsCtor({
