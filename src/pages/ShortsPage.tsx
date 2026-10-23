@@ -609,13 +609,14 @@ function ShortPlayer({
   /* ── Pillarbox check for wide videos ──
      Uses the auto-generated frame thumbnail (not a custom thumbnail, which
      may not be a frame of the video). Unknown result = show whole video. */
-  const frameThumb = short.thumbnails_base_url ? `${short.thumbnails_base_url}/thumb_001.jpg` : short.thumbnail;
+  const isFrameThumb = !!short.thumbnails_base_url;
+  const frameThumb = isFrameThumb ? `${short.thumbnails_base_url}/thumb_001.jpg` : short.thumbnail;
   useEffect(() => {
     if (videoAspect === null || videoAspect <= 0.75) return;
     let alive = true;
-    detectPillarbox(frameThumb, videoAspect).then((r) => { if (alive) setPillarbox(r); });
+    detectPillarbox(frameThumb, videoAspect, isFrameThumb).then((r) => { if (alive) setPillarbox(r); });
     return () => { alive = false; };
-  }, [frameThumb, videoAspect]);
+  }, [frameThumb, videoAspect, isFrameThumb]);
 
   /* ── Load / destroy HLS ──
      NOTE: crossOrigin="anonymous" is only needed for the ambient-glow canvas
