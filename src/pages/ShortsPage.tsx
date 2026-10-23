@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Hls from "hls.js/light";
 import { abrStartConfig, rememberBandwidth } from "../utils/abr";
+import { detectPillarbox } from "../utils/pillarbox";
 import { warmHls } from "../utils/hlsWarmup";
 import { getAuth } from "firebase/auth";
 import { API_URL } from "../utils/constants";
@@ -53,6 +54,8 @@ interface Short {
   avatar_url?: string;
   channel_name?: string;
   watermark_url?: string;
+  /** Folder of auto-generated frame thumbnails (…/thumb_001.jpg) */
+  thumbnails_base_url?: string;
   created_at: string;
 }
 
@@ -583,7 +586,11 @@ function ShortPlayer({
   // Wide videos (landscape, 4:3, square) are shown whole with a blurred
   // backdrop, like YouTube Shorts. Cropping them to fill the 9:16 frame cut
   // off the sides — e.g. news headlines lost their last letters.
-  const [fitWhole, setFitWhole] = useState(false);
+  // Exception: a portrait clip exported inside a landscape frame with black
+  // side bars ("pillarbox") is filled instead, otherwise it looks tiny.
+  const [videoAspect, setVideoAspect] = useState<number | null>(null);
+  const [pillarbox, setPillarbox] = useState<boolean | null>(null);
+  const fitWhole = videoAspect !== null && videoAspect > 0.75 && pillarbox !== true;
   const [showHook, setShowHook] = useState(true);
   const [showFlash, setShowFlash] = useState<"play" | "pause" | null>(null);
   const [showDesc, setShowDesc] = useState(false);
@@ -599,6 +606,17 @@ function ShortPlayer({
     watermark_url: short.watermark_url,
   });
 
+  /* ── Pillarbox check for wide videos ──
+     Uses the auto-generated frame thumbnail (not a custom thumbnail, which
+     may not be a frame of the video). Unknown result = show whole video. */
+  const frameThumb = short.thumbnails_base_url ? `${short.thumbnails_base_url}/thumb_001.jpg` : short.thumbnail;
+  useEffect(() => {
+    if (videoAspect === null || videoAspect <= 0.75) return;
+    let alive = true;
+    detectPillarbox(frameThumb, videoAspect).then((r) => { if (alive) setPillarbox(r); });
+    return () => { alive = false; };
+  }, [frameThumb, videoAspect]);
+
   /* ── Load / destroy HLS ──
      NOTE: crossOrigin="anonymous" is only needed for the ambient-glow canvas
      sampling feature. Setting it unconditionally forces the browser to CORS-
@@ -609,7 +627,7 @@ function ShortPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
-    setLoading(true); setProgress(0); setBuffered(0); setVideoError(false); setFitWhole(false);
+    setLoading(true); setProgress(0); setBuffered(0); setVideoError(false); setVideoAspect(null); setPillarbox(null);
 
     if (ambientMode) video.crossOrigin = "anonymous";
     else video.removeAttribute("crossorigin");
@@ -812,7 +830,7 @@ function ShortPlayer({
   }}
         onLoadedMetadata={e => {
           const v = e.currentTarget;
-          if (v.videoWidth && v.videoHeight) setFitWhole(v.videoWidth / v.videoHeight > 0.75);
+          if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
         }}
         playsInline
         muted={muted}
