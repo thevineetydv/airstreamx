@@ -893,7 +893,8 @@ useEffect(() => {
 
   const user = getAuth().currentUser;
 
-  if (user) {
+  // No behavioural tracking on made-for-kids videos (COPPA / DPDP s.9(3))
+  if (user && !current.is_made_for_kids) {
     recordWatch(current, user);
   }
 
@@ -913,7 +914,7 @@ useEffect(() => {
     if (!video || !playerRef.current) return;
 
     const user = getAuth().currentUser;
-    if (!user) return;
+    if (!user || video.is_made_for_kids) return;
 
     const playerState = playerRef.current.getState?.() || {};
     const currentTime = playerState.currentTime || 0;

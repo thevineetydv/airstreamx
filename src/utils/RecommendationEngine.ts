@@ -87,10 +87,19 @@ function saveGuestProfile(p: GuestProfile): void {
 
 async function postEvent(payload: Record<string, unknown>): Promise<void> {
   try {
+    const u = getAuth().currentUser;
+    if (!u) return; // events are only stored for signed-in users
+    // The server should take identity from the verified token. uid/email stay
+    // in the body for now so events keep working until the backend switches
+    // to req.user.uid; remove them after that ships.
     await fetch(`${API_URL}/api/events`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${await u.getIdToken()}`,
+      },
       body: JSON.stringify(payload),
+      keepalive: true,
     });
   } catch (e) {
     console.warn("[rec] event post failed:", e);

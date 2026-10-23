@@ -138,12 +138,8 @@ export function useAppLogic(): AppLogic {
     }
   };
 
-  useEffect(() => {
-    fetchVideos();
-    // ✅ Use longer polling interval to reduce network activity
-    const interval = setInterval(fetchVideos, 60_000); // 60s instead of 30s
-    return () => clearInterval(interval);
-  }, [token]); // re-fetch when auth state changes
+  // Removed: App-wide fetch of the full /videos list every 60s. Nothing in
+  // AppContent reads `videos`; pages fetch their own data.
 
   // ── Upload Handler ────────────────────────────
 

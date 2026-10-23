@@ -27,57 +27,71 @@ export function useRealtimeNotifications(
   callbackRef.current = onVideoReady;
 
   useEffect(() => {
-    let eventSource: EventSource | null = null;
+    let abort: AbortController | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
     const close = () => {
       if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-      eventSource?.close();
-      eventSource = null;
+      abort?.abort();
+      abort = null;
     };
 
-    // EventSource doesn't support custom headers, so the auth token
-    // travels as a query param (verifyFirebaseToken checks req.query.token
-    // for this route).
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      retryTimer = setTimeout(() => connect(getAuth().currentUser), 15_000);
+    };
+
+    // fetch() instead of EventSource so the token goes in the Authorization
+    // header, not the URL (URLs end up in Cloudflare/nginx/pm2 access logs).
     const connect = async (user: User | null) => {
       close();
-      if (!user || cancelled) return; // not logged in — nothing to subscribe to
+      if (!user || cancelled) return;
       let token: string;
       try { token = await user.getIdToken(); } catch { return; }
       if (cancelled) return;
 
-      const es = new EventSource(`${API_URL}/api/events/stream?token=${encodeURIComponent(token)}`);
-      eventSource = es;
+      const ctrl = new AbortController();
+      abort = ctrl;
+      try {
+        const res = await fetch(`${API_URL}/api/events/stream`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+          signal: ctrl.signal,
+          cache: "no-store",
+        });
+        if (!res.ok || !res.body) { scheduleRetry(); return; }
 
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data) as VideoReadyEvent | { type: "connected" };
-          if (data.type === "video-ready") {
-            callbackRef.current(data.videoId, data.title);
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+          let sep: number;
+          while ((sep = buf.indexOf("\n\n")) !== -1) {
+            const frame = buf.slice(0, sep);
+            buf = buf.slice(sep + 2);
+            const data = frame
+              .split("\n")
+              .filter((l) => l.startsWith("data:"))
+              .map((l) => l.slice(5).trimStart())
+              .join("\n");
+            if (!data) continue; // heartbeat comment
+            try {
+              const evt = JSON.parse(data) as VideoReadyEvent | { type: "connected" };
+              if (evt.type === "video-ready") callbackRef.current(evt.videoId, evt.title);
+            } catch { /* ignore bad JSON */ }
           }
-        } catch {
-          // Heartbeat comments never reach here; guard against bad JSON anyway
         }
-      };
-
-      es.onerror = () => {
-        // The browser retries by itself after a network blip, but gives up
-        // for good after an HTTP error (e.g. 401 once the 1-hour token in the
-        // URL has expired). In that case reconnect with a fresh token.
-        if (es.readyState === EventSource.CLOSED && !cancelled) {
-          retryTimer = setTimeout(() => connect(getAuth().currentUser), 15_000);
-        }
-      };
+        scheduleRetry(); // server closed the stream
+      } catch {
+        if (!ctrl.signal.aborted) scheduleRetry();
+      }
     };
 
-    // Previously this ran once on mount, when Firebase usually hasn't
-    // restored the session yet — so after any page refresh the stream was
-    // never opened. Follow the auth state instead (also handles login/logout).
     const unsubscribe = onIdTokenChanged(getAuth(), (user) => {
-      // Token refreshes fire this too; only reconnect when there's no live stream
       if (!user) { close(); return; }
-      if (!eventSource || eventSource.readyState === EventSource.CLOSED) connect(user);
+      if (!abort) connect(user);
     });
 
     return () => {
