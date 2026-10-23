@@ -5,11 +5,16 @@
 // file is landscape, but the picture is portrait — so the player should
 // fill the screen (crop the bars away) instead of showing the whole frame.
 //
-// How: the auto-generated thumbnail (a real frame of the video) is drawn to
-// a small canvas and its left/right edge columns are checked for black.
-// Needs the thumbnail host to allow cross-origin reads (CORS). If it does
-// not, or anything else is unclear, the answer is `null` = "unknown" and
-// the player keeps its normal behaviour.
+// Two cases:
+//  1. Padded by our own upload worker (all portrait videos processed before
+//     the Oct 2026 worker fix): the HLS file is landscape but the
+//     auto-generated thumbnail, made from the original upload, is portrait.
+//     Detected from the image size alone — no CORS needed.
+//  2. Bars baked into the upload by the creator: the frame thumbnail is
+//     drawn to a small canvas and its left/right edge columns are checked
+//     for black. Needs the thumbnail host to allow cross-origin reads.
+// Anything unclear returns `null` = "unknown" and the player keeps its
+// normal behaviour.
 
 /** Result of analysing one frame. */
 export interface PillarboxResult {
@@ -76,45 +81,64 @@ export function analyzePillarbox(
 const cache = new Map<string, Promise<boolean | null>>();
 const SAMPLE_WIDTH = 64;
 
+function loadImage(src: string, cors: boolean): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    const timer = setTimeout(() => resolve(null), 5000);
+    img.onload = () => { clearTimeout(timer); resolve(img); };
+    img.onerror = () => { clearTimeout(timer); resolve(null); };
+    img.src = src;
+  });
+}
+
 /**
- * Is the video behind `thumbUrl` a portrait clip with black side bars?
- * `videoAspect` (width / height of the video file) guards against
- * thumbnails that are not a plain frame of the video (custom or cropped
- * thumbnails): if the image shape differs from the video, returns null.
+ * Is the video behind `thumbUrl` a portrait clip inside a landscape frame?
+ * `videoAspect` = width / height of the video file.
+ * `isFrame` = the thumbnail is the auto-generated frame (made from the
+ * original upload), not a creator's custom thumbnail.
  */
-export function detectPillarbox(thumbUrl: string | undefined, videoAspect: number): Promise<boolean | null> {
+export function detectPillarbox(
+  thumbUrl: string | undefined,
+  videoAspect: number,
+  isFrame = false
+): Promise<boolean | null> {
   if (!thumbUrl || !(videoAspect > 0)) return Promise.resolve(null);
-  const key = `${thumbUrl}|${videoAspect.toFixed(2)}`;
+  const key = `${thumbUrl}|${videoAspect.toFixed(2)}|${isFrame ? 1 : 0}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const p = new Promise<boolean | null>((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    const timer = setTimeout(() => resolve(null), 5000);
-    img.onerror = () => { clearTimeout(timer); resolve(null); };
-    img.onload = () => {
-      clearTimeout(timer);
-      try {
-        const imgAspect = img.naturalWidth / img.naturalHeight;
-        if (!imgAspect || Math.abs(imgAspect - videoAspect) / videoAspect > 0.08) return resolve(null);
-        const w = SAMPLE_WIDTH;
-        const h = Math.max(8, Math.round(w / imgAspect));
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return resolve(null);
-        ctx.drawImage(img, 0, 0, w, h);
-        const res = analyzePillarbox(ctx.getImageData(0, 0, w, h).data, w, h);
-        resolve(res ? res.pillarbox : null);
-      } catch {
-        resolve(null); // tainted canvas (no CORS) or other failure
-      }
-    };
-    // Separate cache entry from the <img> tags, which load without CORS
-    img.src = `${thumbUrl}${thumbUrl.includes("?") ? "&" : "?"}cors=1`;
-  });
+  const p = (async (): Promise<boolean | null> => {
+    // Size check — plain load, works without CORS (and reuses the cache)
+    const plain = await loadImage(thumbUrl, false);
+    if (!plain || !plain.naturalWidth || !plain.naturalHeight) return null;
+    const imgAspect = plain.naturalWidth / plain.naturalHeight;
+
+    // Case 1: portrait original, landscape HLS file -> padded by the worker
+    if (isFrame && videoAspect > 1 && imgAspect < 0.85) return true;
+
+    // Thumbnail shape differs from the video in any other way -> can't tell
+    if (Math.abs(imgAspect - videoAspect) / videoAspect > 0.08) return null;
+
+    // Case 2: look at the pixels (separate URL so the CORS request is not
+    // answered from the non-CORS cache entry)
+    const img = await loadImage(`${thumbUrl}${thumbUrl.includes("?") ? "&" : "?"}cors=1`, true);
+    if (!img) return null;
+    try {
+      const w = SAMPLE_WIDTH;
+      const h = Math.max(8, Math.round(w / imgAspect));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+      const res = analyzePillarbox(ctx.getImageData(0, 0, w, h).data, w, h);
+      return res ? res.pillarbox : null;
+    } catch {
+      return null; // tainted canvas (no CORS)
+    }
+  })();
   cache.set(key, p);
   return p;
 }
