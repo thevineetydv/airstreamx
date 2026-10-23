@@ -91,7 +91,7 @@ try {
   await page.getByTestId("tool-text").click();
   await page.getByTestId("overlay-panel").waitFor();
   await page.getByTestId("overlay-text").fill("Namaste Lucknow");
-  await page.getByTestId("overlay-style").click();
+  await page.getByTestId("text-style-box").click();
   const before = await overlayCentre();
   check("Text drawn on preview", !!before);
 

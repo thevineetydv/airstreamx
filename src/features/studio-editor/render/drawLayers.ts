@@ -4,6 +4,7 @@
 import type { VideoSample } from "mediabunny";
 import { animatedAt } from "../model/presets";
 import { layerEnd, layerRect, type Layer, type MediaSize } from "../model/layers";
+import { keyedImage } from "./chroma";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -30,7 +31,14 @@ export function drawLayer(
     ctx.roundRect(r.x, r.y, r.w, r.h, Math.min(r.w, r.h) * LAYER_RADIUS);
     ctx.clip();
   }
-  if ("drawWithFit" in source) {
+  if (layer.chroma) {
+    // Green screen: key a copy of the layer, then draw it.
+    const keyed = keyedImage(r.w, r.h, layer.chroma, (c, w, h) => {
+      if ("drawWithFit" in source) source.drawWithFit(c, { fit: "fill" });
+      else c.drawImage(source, 0, 0, w, h);
+    });
+    if (keyed) ctx.drawImage(keyed, r.x, r.y, r.w, r.h);
+  } else if ("drawWithFit" in source) {
     // A video frame: let mediabunny apply the file's rotation, scaled into the layer box.
     ctx.translate(r.x, r.y);
     ctx.scale(r.w / W, r.h / H);
