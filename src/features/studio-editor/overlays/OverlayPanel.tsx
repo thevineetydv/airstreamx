@@ -5,14 +5,29 @@ import KeyframeControls, { type KeyframeProps } from "./KeyframeControls";
 import AnimationPicker from "./AnimationPicker";
 import type { Animations } from "../model/presets";
 import {
-  MAX_SCALE, MIN_SCALE, STICKERS, TEXT_COLORS,
-  type Overlay, type OverlayPatch,
+  MAX_SCALE, MIN_SCALE, STICKERS, TEXT_COLORS, TEXT_STYLE_LABELS,
+  type Overlay, type OverlayPatch, type TextStyle,
 } from "../model/overlays";
 import { formatTime } from "../model/timeline";
 import { cssFamily, FONT_LABELS, FONT_SAMPLE, type TextFont } from "../render/fonts";
 import { DEFAULT_TEXT } from "../model/overlays";
+import { TITLE_STYLES, type TitleStyle } from "../model/titles";
+import type { CSSProperties } from "react";
 
 const FONTS: TextFont[] = ["default", "hindi", "impact", "hand"];
+const STYLES: TextStyle[] = ["outline", "box", "shadow", "neon", "plain"];
+const ACCENTS = ["#000000", "#ffffff", "#dc2626", "#facc15", "#ec4899", "#2563eb"];
+
+/** Rough CSS look of a quick style, for its button. */
+function titlePreviewCss(t: TitleStyle): CSSProperties {
+  const p = t.patch;
+  const css: CSSProperties = { fontFamily: cssFamily(p.font ?? "default"), fontWeight: p.font === "default" || !p.font ? 800 : undefined, color: p.color };
+  if (p.style === "box") css.background = p.accent ?? "rgba(0,0,0,0.62)";
+  if (p.style === "outline") css.WebkitTextStroke = `1px ${p.accent ?? "#000"}`;
+  if (p.style === "shadow") css.textShadow = "1px 2px 3px rgba(0,0,0,0.9)";
+  if (p.style === "neon") css.textShadow = `0 0 6px ${p.accent}, 0 0 12px ${p.accent}`;
+  return css;
+}
 
 interface Props {
   overlay: Overlay;
@@ -25,6 +40,8 @@ interface Props {
   anim: Omit<KeyframeProps, "scaleMin" | "scaleMax">;
   /** Ready-made animations (Phase 7). */
   presets: { anim: Animations | undefined; onChange: (a: Animations) => void; onPreview: (tab: "in" | "out" | "loop") => void };
+  /** Brand kit colours (shown first in the colour pickers). */
+  brandColors: string[];
 }
 
 const input =
@@ -37,7 +54,9 @@ const TITLES: Record<Overlay["kind"], string> = {
   deal: "Local Deal banner",
 };
 
-export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEnd, onDelete, onDone, anim, presets }: Props) {
+export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEnd, onDelete, onDone, anim, presets, brandColors }: Props) {
+  const palette = [...new Set([...brandColors, ...TEXT_COLORS])];
+  const accents = [...new Set([...brandColors, ...ACCENTS])];
   return (
     <div className="max-h-[42vh] space-y-3 overflow-y-auto px-3 py-3" data-testid="overlay-panel">
       <div className="flex items-center justify-between">
@@ -54,6 +73,24 @@ export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEn
 
       {o.kind === "text" && (
         <>
+          {/* Quick styles: font + colours + animation in one tap. */}
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]" data-testid="title-styles">
+            {TITLE_STYLES.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  const { anim: a, ...rest } = t.patch;
+                  onChange({ ...rest, accent: rest.accent });
+                  if (a) presets.onChange(a);
+                }}
+                className="shrink-0 rounded-xl bg-white/10 px-3 py-1.5 text-sm"
+                style={titlePreviewCss(t)}
+                data-testid={`title-${t.id}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <textarea
             value={o.text}
             // New text: focus it and select "Your text", so typing replaces it.
@@ -65,24 +102,57 @@ export default function OverlayPanel({ overlay: o, onChange, onSetStart, onSetEn
             className={input}
             data-testid="overlay-text"
           />
-          <div className="flex items-center gap-2">
-            {TEXT_COLORS.map((c) => (
+          {/* Colour of the letters: brand colours first. */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]" data-testid="text-colors">
+            {palette.map((c) => (
               <button
                 key={c}
                 onClick={() => onChange({ color: c })}
                 aria-label={`Colour ${c}`}
-                className={`h-7 w-7 rounded-full border-2 ${o.color === c ? "border-red-500" : "border-white/20"}`}
+                className={`relative h-7 w-7 shrink-0 rounded-full border-2 ${o.color === c ? "border-red-500" : "border-white/20"}`}
                 style={{ background: c }}
-              />
+                data-testid={`text-color-${c.slice(1)}`}
+              >
+                {brandColors.includes(c) && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black bg-white" title="Brand colour" />}
+              </button>
             ))}
-            <button
-              onClick={() => onChange({ style: o.style === "box" ? "outline" : "box" })}
-              className="ml-auto rounded-full border border-white/15 px-3 py-1 text-xs"
-              data-testid="overlay-style"
-            >
-              {o.style === "box" ? "Box ✓" : "Box"}
-            </button>
           </div>
+          {/* Style + its colour */}
+          <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]" role="radiogroup" aria-label="Text style">
+            {STYLES.map((st) => (
+              <button
+                key={st}
+                onClick={() => onChange({ style: st })}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs ${o.style === st ? "bg-red-600 text-white" : "bg-white/10 text-gray-300"}`}
+                aria-pressed={o.style === st}
+                data-testid={`text-style-${st}`}
+              >
+                {TEXT_STYLE_LABELS[st]}
+              </button>
+            ))}
+          </div>
+          {o.style !== "plain" && (
+            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+              <span className="shrink-0 text-[11px] text-gray-400">{TEXT_STYLE_LABELS[o.style]} colour</span>
+              <button
+                onClick={() => onChange({ accent: undefined })}
+                className={`h-6 shrink-0 rounded-full border-2 px-2 text-[10px] ${!o.accent ? "border-red-500" : "border-white/20"}`}
+                data-testid="accent-auto"
+              >
+                Auto
+              </button>
+              {accents.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => onChange({ accent: c })}
+                  aria-label={`${TEXT_STYLE_LABELS[o.style]} colour ${c}`}
+                  className={`h-6 w-6 shrink-0 rounded-full border-2 ${o.accent === c ? "border-red-500" : "border-white/20"}`}
+                  style={{ background: c }}
+                  data-testid={`accent-${c.slice(1)}`}
+                />
+              ))}
+            </div>
+          )}
           <div className="flex gap-1.5" role="radiogroup" aria-label="Font">
             {FONTS.map((f) => {
               const on = (o.font ?? "default") === f;

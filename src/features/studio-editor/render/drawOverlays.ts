@@ -65,13 +65,13 @@ function layout(ctx: Ctx, o: Overlay & { reveal?: number }, W: number, H: number
       const lines = wrap(ctx, o.text || " ", W * 0.86);
       const lh = fs * 1.22;
       const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
-      const pad = o.style === "box" ? fs * 0.45 : fs * 0.1;
+      const pad = o.style === "box" ? fs * 0.45 : o.style === "neon" ? fs * 0.3 : fs * 0.1;
       const rect = placeBox(cx, cy, textW + pad * 2, lines.length * lh + pad * 2, W, H);
       return {
         rect,
         draw: () => {
           if (o.style === "box") {
-            ctx.fillStyle = "rgba(0,0,0,0.62)";
+            ctx.fillStyle = o.accent ?? "rgba(0,0,0,0.62)";
             roundRect(ctx, rect.x, rect.y, rect.w, rect.h, fs * 0.35);
             ctx.fill();
           }
@@ -94,11 +94,26 @@ function layout(ctx: Ctx, o: Overlay & { reveal?: number }, W: number, H: number
             ctx.textAlign = partial ? "left" : "center";
             if (o.style === "outline") {
               ctx.lineWidth = fs * 0.14;
-              ctx.strokeStyle = o.color === "#000000" ? "#ffffff" : "rgba(0,0,0,0.85)";
+              ctx.strokeStyle = o.accent ?? (o.color === "#000000" ? "#ffffff" : "rgba(0,0,0,0.85)");
               ctx.strokeText(shown, sx, ly);
+            }
+            ctx.save();
+            if (o.style === "shadow") {
+              ctx.shadowColor = o.accent ?? "rgba(0,0,0,0.85)";
+              ctx.shadowBlur = fs * 0.22;
+              ctx.shadowOffsetX = fs * 0.06;
+              ctx.shadowOffsetY = fs * 0.08;
+            } else if (o.style === "neon") {
+              // Glow in the accent colour, drawn twice so it is bright enough.
+              ctx.shadowColor = o.accent ?? o.color;
+              ctx.shadowBlur = fs * 0.55;
+              ctx.fillStyle = o.color;
+              ctx.fillText(shown, sx, ly);
+              ctx.shadowBlur = fs * 0.2;
             }
             ctx.fillStyle = o.color;
             ctx.fillText(shown, sx, ly);
+            ctx.restore();
           });
         },
       };

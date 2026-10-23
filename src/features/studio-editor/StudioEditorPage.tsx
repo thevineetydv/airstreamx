@@ -13,7 +13,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
+  ArrowLeft, BadgeCheck, Check, CloudOff, Layers as LayersIcon, Loader2, Redo2, Sparkles, Undo2, ChevronLeft, ChevronRight, Crop, Film, Gauge, MapPin, Music, Palette, Pause, Play, Plus, RectangleHorizontal, Scissors, Smile, Tag, Trash2, Type, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { historyReducer, initHistory } from "./model/history";
 import { DraftsList, RelinkPanel } from "./draft/DraftsPanel";
@@ -42,6 +42,8 @@ import TemplatePanel from "./templates/TemplatePanel";
 import type { Template } from "./model/templates";
 import { rememberValues } from "./model/overlays";
 import { loadLibrary } from "./audio/library";
+import BrandPanel from "./brand/BrandPanel";
+import { logoFile, readBrand, type Brand } from "./model/brand";
 import { beatSyncFor } from "./audio/beatCache";
 import { timelineBeats } from "./audio/beats";
 import { layerEnd, loadImage, MAX_VIDEO_LAYERS, newImageLayer, newVideoLayer, type Layer, type LayerPatch } from "./model/layers";
@@ -158,6 +160,24 @@ export default function StudioEditorPage() {
     }
   };
 
+  // ── Brand kit (Phase 11) ──
+  const [brand, setBrand] = useState<Brand>(readBrand);
+  const [brandOpen, setBrandOpen] = useState(false);
+  /** Saved logo as a picture layer, top-right, for the whole video. */
+  const addBrandLogo = async (b: Brand, total = duration, select = true) => {
+    const file = await logoFile(b).catch(() => null);
+    if (!file || layersRef.current.some((l) => l.brand)) return;
+    const image = await loadImage(file);
+    const layer = { ...newImageLayer(image.id, 0, total), start: 0, end: total, x: 0.86, y: 0.08, scale: 0.2, opacity: 0.92, brand: true };
+    dispatch({ type: "addLayer", layer, image });
+    if (!select) dispatch({ type: "selectLayer", id: null });
+  };
+
+  // Selecting something on the timeline closes the brand panel.
+  useEffect(() => {
+    if (selectedOverlayId || selectedClipId || selectedLayerId) setBrandOpen(false);
+  }, [selectedOverlayId, selectedClipId, selectedLayerId]);
+
   // ── Templates (Phase 8) ──
   const [templateOpen, setTemplateOpen] = useState<"start" | "editor" | null>(null);
   /** Chosen on the start screen; applied right after the videos are imported. */
@@ -174,6 +194,7 @@ export default function StudioEditorPage() {
     const sync = music ? await beatSyncFor(music, total).catch(() => null) : null;
     dispatch({ type: "applyTemplate", result, music, sync });
     setTemplateOpen(null);
+    if (brand.logo && brand.logoOnTemplates) await addBrandLogo(brand, total, false);
     seek(0);
   };
 
@@ -724,7 +745,15 @@ export default function StudioEditorPage() {
 
           {/* Panels: full width on phones, a centred column on desktop */}
           <div className="mx-auto w-full max-w-2xl" data-testid="panel-column">
-          {templateOpen === "editor" ? (
+          {brandOpen ? (
+            <BrandPanel
+              brand={brand}
+              onChange={setBrand}
+              onAddLogo={() => void addBrandLogo(brand)}
+              hasLogoLayer={layers.some((l) => l.brand)}
+              onClose={() => setBrandOpen(false)}
+            />
+          ) : templateOpen === "editor" ? (
             <div className="max-h-[46vh] overflow-y-auto">
               <TemplatePanel mode="editor" onApply={(t, values) => void applyTemplate(t, values, duration)} onClose={() => setTemplateOpen(null)} />
             </div>
@@ -794,6 +823,7 @@ export default function StudioEditorPage() {
               }}
               onDelete={() => dispatch({ type: "removeOverlay", id: selectedOverlay.id })}
               onDone={closeOverlayPanel}
+              brandColors={brand.colors}
             />
           ) : (
             <>
@@ -807,7 +837,8 @@ export default function StudioEditorPage() {
                   <AddChip icon={<Check size={16} />} label="Done" onClick={() => dispatch({ type: "select", id: null })} testId="tool-deselect" />
                 </div>
               ) : (
-              <div className="grid grid-cols-7 gap-1 px-2 pt-2 text-[10px] font-semibold">
+              // Scrolls sideways on small phones (8 tools).
+              <div className="flex gap-1 overflow-x-auto px-2 pt-2 text-[10px] font-semibold [scrollbar-width:none] [&>button]:min-w-[3.4rem] [&>button]:flex-1" data-testid="add-tools">
                 <AddChip icon={<Sparkles size={16} />} label="Template" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setTemplateOpen("editor"); }} testId="tool-template" />
                 <AddChip icon={<Type size={16} />} label="Text" onClick={() => addOverlay("text")} testId="tool-text" />
                 <AddChip icon={<Smile size={16} />} label="Sticker" onClick={() => addOverlay("sticker")} testId="tool-sticker" />
@@ -815,6 +846,7 @@ export default function StudioEditorPage() {
                 <AddChip icon={<Tag size={16} />} label="Deal" onClick={() => addOverlay("deal")} testId="tool-deal" />
                 <AddChip icon={<Music size={16} />} label="Audio" onClick={() => { pause(); openAudio(); }} testId="tool-audio" />
                 <AddChip icon={<LayersIcon size={16} />} label="Layer" onClick={() => layerInputRef.current?.click()} testId="tool-layer" />
+                <AddChip icon={<BadgeCheck size={16} />} label="Brand" onClick={() => { pause(); setAudioOpen(false); setEdit(null); dispatch({ type: "selectOverlay", id: null }); setBrandOpen(true); }} testId="tool-brand" />
               </div>
               )}
               {/* Clip tools */}

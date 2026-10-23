@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import KeyframeControls, { type KeyframeProps } from "../overlays/KeyframeControls";
 import AnimationPicker from "../overlays/AnimationPicker";
+import GreenScreen from "./GreenScreen";
 import type { Animations } from "../model/presets";
 import { layerEnd, MAX_LAYER_SCALE, MIN_LAYER_SCALE, type Layer, type LayerPatch } from "../model/layers";
 import { formatTime } from "../model/timeline";
@@ -33,6 +34,8 @@ export default function LayerPanel({ layer: l, name, index, count, onChange, onO
           <button onClick={onDone} className="rounded-full bg-white/10 px-4 py-1.5 font-semibold" data-testid="layer-done">Done</button>
         </div>
       </div>
+
+      <GreenScreen layerId={l.id} chroma={l.chroma} onChange={(chroma) => onChange({ chroma })} />
 
       <AnimationPicker anim={presets.anim} isText={false} onChange={presets.onChange} onPreview={presets.onPreview} />
       <KeyframeControls {...anim} scaleMin={MIN_LAYER_SCALE} scaleMax={MAX_LAYER_SCALE} />

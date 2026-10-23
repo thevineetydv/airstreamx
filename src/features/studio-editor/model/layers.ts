@@ -6,6 +6,7 @@
 import type { Keyframe } from "./keyframes";
 import type { Animations } from "./presets";
 import { newId } from "./timeline";
+import type { ChromaKey } from "../render/chroma";
 
 export interface ImageAsset {
   id: string;
@@ -32,6 +33,10 @@ interface LayerBase {
   keyframes?: Keyframe[];
   /** Ready-made in / out / loop animations (Phase 7). */
   anim?: Animations;
+  /** Green screen: remove this colour (Phase 11). */
+  chroma?: ChromaKey;
+  /** Brand logo layer (added from the brand kit). */
+  brand?: boolean;
 }
 
 export interface VideoLayer extends LayerBase {

@@ -16,6 +16,7 @@ import { clipEnds, clipStarts, frameLayers } from "../model/timeline";
 import { clipVideoCss, transitionCss } from "../render/drawClip";
 import type { CSSProperties } from "react";
 import { ensureFonts, usedFonts } from "../render/fonts";
+import { applyChromaKey, type ChromaKey } from "../render/chroma";
 
 interface Props {
   videoRefs: readonly [RefObject<HTMLVideoElement | null>, RefObject<HTMLVideoElement | null>];
@@ -293,6 +294,7 @@ function LayerView(props: {
 }) {
   const { layer, url, size, time, box, playing, muted, selected } = props;
   const ref = useRef<HTMLVideoElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const active = layerActive(layer, time);
 
   useEffect(() => {
@@ -328,9 +330,62 @@ function LayerView(props: {
     outline: selected && active ? "2px dashed #fff" : undefined,
     outlineOffset: 3,
   };
-  return layer.kind === "video" ? (
-    <video ref={ref} src={url} playsInline preload="auto" style={style} data-testid="preview-layer" data-layer-id={layer.id} />
-  ) : (
-    <img src={url} alt="" draggable={false} style={style} data-testid="preview-layer" data-layer-id={layer.id} />
+  const keyed = !!layer.chroma;
+  // Green screen: the real <video>/<img> stays invisible (it still plays and
+  // decodes); a canvas on top shows the keyed copy.
+  const sourceStyle: CSSProperties = keyed ? { ...style, opacity: 0, outline: undefined } : style;
+  return (
+    <>
+      {layer.kind === "video" ? (
+        <video ref={ref} src={url} playsInline preload="auto" style={sourceStyle} data-testid="preview-layer" data-layer-id={layer.id} />
+      ) : (
+        <img ref={imgRef} src={url} alt="" draggable={false} style={sourceStyle} data-testid="preview-layer" data-layer-id={layer.id} />
+      )}
+      {keyed && active && (
+        <KeyedCanvas
+          source={layer.kind === "video" ? ref : imgRef}
+          chroma={layer.chroma!}
+          style={style}
+          w={r.w}
+          h={r.h}
+          live={layer.kind === "video"}
+        />
+      )}
+    </>
   );
+}
+
+/** Canvas that keeps showing the keyed (green removed) copy of a video/img. */
+function KeyedCanvas(props: {
+  source: RefObject<HTMLVideoElement | null> | RefObject<HTMLImageElement | null>;
+  chroma: ChromaKey;
+  style: CSSProperties;
+  w: number;
+  h: number;
+  live: boolean;
+}) {
+  const { source, chroma, style, w, h, live } = props;
+  const ref = useRef<HTMLCanvasElement>(null);
+  // Small internal size: keying is per-pixel work on the phone's CPU.
+  const scale = Math.min(Math.min(window.devicePixelRatio || 1, 2), 480 / Math.max(w, h, 1));
+  const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+  useEffect(() => {
+    let raf = 0;
+    const draw = () => {
+      const c = ref.current, src = source.current;
+      const ctx = c?.getContext("2d", { willReadFrequently: true });
+      const ready = src && (src instanceof HTMLVideoElement ? src.readyState >= 2 : src.complete && src.naturalWidth > 0);
+      if (c && ctx && src && ready) {
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.drawImage(src, 0, 0, c.width, c.height);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        applyChromaKey(img.data, chroma);
+        ctx.putImageData(img, 0, 0);
+      }
+      if (live || !ready) raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [source, chroma, live, cw, ch]);
+  return <canvas ref={ref} width={cw} height={ch} style={style} data-testid="preview-layer-keyed" />;
 }

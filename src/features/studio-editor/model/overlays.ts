@@ -26,7 +26,9 @@ interface OverlayBase {
   template?: string;
 }
 
-export type TextStyle = "outline" | "box";
+export type TextStyle = "outline" | "box" | "shadow" | "neon" | "plain";
+
+export const TEXT_STYLE_LABELS: Record<TextStyle, string> = { outline: "Outline", box: "Box", shadow: "Shadow", neon: "Neon", plain: "Plain" };
 
 /** Text a new text item starts with (selected on focus, so typing replaces it). */
 export const DEFAULT_TEXT = "Your text";
@@ -36,6 +38,8 @@ export interface TextOverlay extends OverlayBase {
   text: string;
   color: string;
   style: TextStyle;
+  /** Colour of the outline / box / shadow / glow. Missing = the style's default. */
+  accent?: string;
   /** Missing = "default" (older drafts). */
   font?: TextFont;
 }
